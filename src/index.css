@@ -1,0 +1,125 @@
+@import "tailwindcss";
+@source "./index.html";
+@source "./src/**/*.{js,ts,jsx,tsx}";
+
+
+/* =============================
+   Design Tokens (Notion-inspired)
+   ============================= */
+:root {
+  /* Colors */
+  --bg: #fafafa;           /* page */
+  --surface: #ffffff;      /* cards, panels */
+  --muted: #f3f3f3;        /* subtle fills */
+  --border: #e6e6e6;       /* hairline */
+  --text: #111111;         /* primary text */
+  --text-muted: #6b7280;   /* secondary */
+  --accent: #111111;       /* primary accent (notion-like black) */
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+
+  /* Radius */
+  --radius: 12px;          /* rounded for cards */
+  --radius-sm: 8px;        /* controls */
+
+  /* Typography */
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+  --leading: 1.4;
+}
+
+.dark {
+  --bg: #0f1113;
+  --surface: #121417;
+  --muted: #1a1d21;
+  --border: #22262a;
+  --text: #f3f4f6;
+  --text-muted: #9aa3af;
+  --accent: #f3f4f6;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+@layer base {
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-sans); line-height: var(--leading);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  * { border-color: var(--border); }
+
+  h1 { @apply text-2xl font-semibold tracking-tight; }
+  h2 { @apply text-xl font-semibold tracking-tight; }
+  h3 { @apply text-lg font-semibold; }
+  @media (min-width: 768px) {
+    h1 { @apply text-3xl; }
+    h2 { @apply text-2xl; }
+  }
+}
+
+@layer components {
+  /* Layout */
+  .container-page { @apply mx-auto max-w-6xl px-4; }
+
+  /* Cards & surfaces */
+  .card { background: var(--surface); box-shadow: var(--shadow-sm); border: 1px solid var(--border); border-radius: var(--radius); @apply p-4 transition hover:shadow-md; }
+  /* Card accent (barra colore a sinistra per stato) */
+  .card-accent { position: relative; }
+  .card-accent::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; border-top-left-radius: var(--radius); border-bottom-left-radius: var(--radius); }
+  .card-accent--bozza::before { background: #9ca3af; }
+  .card-accent--inviato::before { background: #3b82f6; }
+  .card-accent--accettato::before { background: #10b981; }
+  .card-accent--rifiutato::before { background: #ef4444; }
+  .card-accent--scaduto::before { background: #f59e0b; }
+
+  /* Soft badges (per countdown/scadenza) */
+  .badge-soft { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs border; background: var(--muted); color: var(--text-muted); }
+  .badge-soft-warn { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+  .badge-soft-danger { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .separator { @apply h-px bg-gray-200; }
+
+  /* Buttons */
+  .btn { @apply inline-flex items-center gap-2 text-sm font-medium rounded-[var(--radius-sm)] px-3 py-2 transition; }
+  .btn-primary { background: #000; color: white; }
+  .btn-primary:hover { @apply opacity-90; }
+  .btn-ghost { @apply hover:bg-gray-100; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); }
+
+  /* Inputs */
+  .input { @apply w-full rounded-[var(--radius-sm)] border px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/10; }
+  .textarea { @apply w-full rounded-[var(--radius-sm)] border px-3 py-2 text-sm bg-white resize-y min-h-[120px] focus:outline-none focus:ring-2 focus:ring-gray-900/10; }
+
+  /* Make selects look identical to .input and add a custom chevron */
+  .select, select.input {
+    @apply w-full rounded-[var(--radius-sm)] border px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-900/10;
+    appearance: none;          /* remove native arrow */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 1rem 1rem;
+    padding-right: 2rem;       /* room for the chevron */
+    /* minimalist chevron (black) */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111111' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M6 9l6 6 6-6'/%3e%3c/svg%3e");
+  }
+  .select:focus, select.input:focus { @apply ring-2 ring-gray-900/10; }
+  .select:disabled, select.input:disabled { @apply opacity-60 cursor-not-allowed; background-color: #f9fafb; }
+  select.input::-ms-expand { display: none; }
+
+  /* Badges & Chips */
+  .badge { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border; background: var(--muted); color: var(--text-muted); border-color: var(--border); }
+  .chip { @apply inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm cursor-pointer select-none hover:bg-gray-50; }
+  .chip-active { @apply bg-gray-900 text-white border-gray-900; }
+
+  /* Status badges */
+  .badge-bozza { @apply bg-gray-100 text-gray-800 border-gray-200; }
+  .badge-inviato { @apply bg-blue-100 text-blue-800 border-blue-200; }
+  .badge-accettato { @apply bg-green-100 text-green-800 border-green-200; }
+  .badge-rifiutato { @apply bg-red-100 text-red-800 border-red-200; }
+  .badge-scaduto { @apply bg-orange-100 text-orange-800 border-orange-200; }
+
+  /* Tooling */
+  .kbd { @apply inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium bg-white shadow-sm; }
+}
