@@ -34,7 +34,7 @@ export type QuotePDFProps = {
 };
 
 const s = StyleSheet.create({
-  page: { padding: 36, fontSize: 10, color: "#111" },
+  page: { padding: 38, fontSize: 10, color: "#111" },
   row: { flexDirection: "row" },
   col: { flexGrow: 1 },
   h1: { fontSize: 32, fontWeight: 700, marginBottom: 4 },
@@ -43,7 +43,7 @@ const s = StyleSheet.create({
   label: { color: "#555" },
   box: { borderWidth: 1, borderStyle: "solid", borderColor: "#e6e6e6", borderRadius: 6, padding: 8 },
   table: { borderWidth: 1, borderStyle: "solid", borderColor: "#e6e6e6", borderRadius: 6, marginTop: 8 },
-  tr: { flexDirection: "row", borderBottomWidth: 1, borderStyle: "solid", borderColor: "#e6e6e6" },
+  tr: { flexDirection: "row", borderBottomWidth: 1, borderStyle: "solid", borderColor: "#e0e0e0" },
   th: { flex: 1, fontWeight: 700, fontSize: 10, padding: 8, backgroundColor: "#f7f7f7" },
   td: { flex: 1, padding: 8 },
   right: { textAlign: "right" as const },
@@ -52,19 +52,19 @@ const s = StyleSheet.create({
   companyDetails: { fontSize: 9, color: '#555', lineHeight: 1.4 },
   sep: { height: 8 },
   footerNote: { marginTop: 14, fontSize: 9, color: "#555" },
-  block: { marginTop: 10 },
+  block: { marginTop: 6 },
 
   // --- STILI CARD "DETTAGLIO VOCI" ---
   itemCard: {
-    backgroundColor: "#f8f8fa",
+    backgroundColor: "#f5f6f8",
     borderRadius: 8,
     padding: 14,
-    marginBottom: 12,
+    marginBottom: 20,
     flexDirection: "row",
   },
   itemPhotoWrap: {
-    width: 90,
-    height: 90,
+    width: 95,
+    height: 95,
     backgroundColor: '#ffffff',
     borderRadius: 6,
     alignItems: "center",
@@ -106,15 +106,16 @@ const s = StyleSheet.create({
   },
   hr: {
     height: 1,
-    backgroundColor: '#e5e5e5',
-    marginVertical: 8,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 12,
   },
   detailGrid: {
     // Container for key-value pairs
   },
   detailRow: {
     flexDirection: 'row',
-    marginBottom: 3,
+    marginBottom: 2,
+    marginTop: 6,
   },
   detailLabel: {
     width: '45%', // Fixed width for labels
@@ -442,18 +443,16 @@ export default function QuotePDF(props: QuotePDFProps) {
             itemsSafe.map((it: any, i: number) => {
               const pairs = detailPairs(it);
               const title = String(it?.kind || "Voce").toUpperCase();
-              const qty = `Q.tà ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : "1"}`;
+              const qty = `Quantità ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : "1"}`;
               const description = describeItem(it);
               const pairCount = pairs.length;
-              const ahead = Math.min(56, 24 + pairCount * 6); // dynamic safe space in pt
-              const minH = 84 + Math.min(72, pairCount * 10); // conservative min-height so layout is predictable
+              const minH = 60 + Math.min(36, pairCount * 6);
 
               return (
                 <View
+                  wrap={false}
                   key={`card-${it?.id || it?.kind || "k"}-${i}`}
                   style={[s.itemCard, { minHeight: minH }]}
-                  wrap={false}
-                  minPresenceAhead={ahead}
                 >
                   <View style={s.itemPhotoWrap}>
                     <Image src={imageFor(it?.kind)} style={s.photo} />

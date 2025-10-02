@@ -1,6 +1,6 @@
 //src/ui/Editor.tsx
 import { useParams, Link } from 'react-router-dom'
-import { useEffect, useRef, useState, useMemo } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ArrowLeft, Eye, Copy, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -137,6 +137,10 @@ useEffect(() => {
 
   // PDF Preview (open in new tab)
   async function openPdfPreview() {
+    if (!quote) {
+      toast.error('Preventivo non caricato');
+      return;
+    }
     try {
       // Lazy import only on click (evita dipendenze e render loop)
       const [{ pdf }, qpdf] = await Promise.all([

@@ -1,5 +1,5 @@
 // src/components/editor/pricing/surface.ts
-import type { QuoteItem } from '@/domain/items'
+import type { QuoteItem } from '../../../domain/items'
 
 export const surfaceMq = (w?: number, h?: number) => {
   if (!w || !h || w <= 0 || h <= 0) return 0
@@ -14,12 +14,6 @@ export const rowTotal = (it: QuoteItem) => {
 
   if (mode === 'total') {
     return round2(it.price_total ?? 0)
-  }
-
-  if (mode === 'per_pezzo') {
-    const unit = (it as any).price_per_piece ?? 0
-    const qty = it.qty ?? 1
-    return round2(unit * qty)
   }
 
   // default: per m²
