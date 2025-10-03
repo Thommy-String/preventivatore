@@ -2,11 +2,13 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ArrowLeft, Eye, Copy, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileText, User, Building, Copy, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
+
+import { uploadQuoteItemImage } from '../lib/uploadImages'
 
 // Store & Quote items
 import { useQuoteStore } from '../stores/useQuoteStore'
@@ -14,6 +16,7 @@ import type { QuoteItem } from '../features/quotes/types'
 import { registry } from '../features/quotes/registry'
 import { euro } from '../features/quotes/utils/pricing'
 import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal'
+import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 
 // Types for the Quote header (DB)
 type Quote = {
@@ -43,6 +46,7 @@ type TermsSettings = { validity_label?: string | null, conditions?: string | nul
 import { ItemCard } from '../features/quotes/components/ItemCard'
 import { ItemModal } from '../features/quotes/modals/ItemModal'
 
+
 const PROFILE_SYSTEMS = [
   "WDS 76 MD",
   "WDS 76 AD",
@@ -51,6 +55,16 @@ const PROFILE_SYSTEMS = [
   "ULTRA 70",
   "ULTRA 60",
 ] as const;
+
+// Convert a Blob to a data URL (browser-safe, no Buffer)
+function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result));
+    fr.onerror = (e) => reject(e);
+    fr.readAsDataURL(blob);
+  });
+}
 
 export default function Editor() {
   const { id } = useParams()
@@ -83,15 +97,15 @@ export default function Editor() {
   // piva local state
   const [piva, setPiva] = useState<string>("")
 
-useEffect(() => {
-  if (!quote) return
-  const n = quote.notes || ""
-  const mP = n.match(/P\.IVA:\s*([^;]+)(;|$)/i)
-  if (mP) {
-    const next = mP[1].trim()
-    if (next !== piva) setPiva(next)
-  }
-}, [quote?.id])
+  useEffect(() => {
+    if (!quote) return
+    const n = quote.notes || ""
+    const mP = n.match(/P\.IVA:\s*([^;]+)(;|$)/i)
+    if (mP) {
+      const next = mP[1].trim()
+      if (next !== piva) setPiva(next)
+    }
+  }, [quote?.id])
 
   function upsertNotes(nextPiva: string) {
     const newNotes = nextPiva ? `P.IVA: ${nextPiva}` : ''
@@ -122,18 +136,37 @@ useEffect(() => {
     // deep clone to avoid accidental mutations while editing
     setDraft(JSON.parse(JSON.stringify(it)))
   }
-  function saveDraft() {
-    if (!draft) return
-    if (editingId) {
-      replaceItem(editingId, { ...draft, id: editingId })
-      toast.success('Voce aggiornata')
-    } else {
-      addItem(draft)
-      toast.success('Voce aggiunta')
+  async function saveDraft() {
+  if (!draft) return
+  let toSave: any = { ...draft }
+
+  // Se nel draft è presente un file scelto dall'utente, effettua l'upload e sostituisci image_url con l'URL pubblico
+  const pickedFile: File | undefined = (toSave as any).__pickedFile
+  if (pickedFile && quote?.id) {
+    try {
+      const publicUrl = await uploadQuoteItemImage(pickedFile, quote.id)
+      toSave.image_url = publicUrl
+    } catch (err: any) {
+      toast.error(err?.message || 'Errore upload immagine')
+    } finally {
+      // rimuovi i marker interni non serializzabili
+      // @ts-ignore
+      delete toSave.__pickedFile
+      // @ts-ignore
+      delete toSave.__previewUrl
     }
-    setDraft(null)
-    setEditingId(null)
   }
+
+  if (editingId) {
+    replaceItem(editingId, { ...toSave, id: editingId })
+    toast.success('Voce aggiornata')
+  } else {
+    addItem(toSave)
+    toast.success('Voce aggiunta')
+  }
+  setDraft(null)
+  setEditingId(null)
+}
 
   // PDF Preview (open in new tab)
   async function openPdfPreview() {
@@ -142,26 +175,62 @@ useEffect(() => {
       return;
     }
     try {
-      // Lazy import only on click (evita dipendenze e render loop)
+      // 1) Prepara gli items per il PDF: per le finestre genera PNG on-the-fly come data URL
+      const itemsForPdf = await Promise.all(
+        items.map(async (it: any) => {
+          const { __previewUrl, __pickedFile, ...clean } = it ?? {};
+
+          // Se la voce ha una configurazione finestra, rasterizza l'SVG -> PNG e usa un data URL
+          if (clean?.options?.gridWindow) {
+            try {
+              const blob = await gridWindowToPngBlob(clean.options.gridWindow, 640, 640);
+              const dataUrl = await blobToDataURL(blob); // data:image/png;base64,...
+              clean.image_url = dataUrl;
+            } catch (e) {
+              console.warn("Rasterizzazione finestra → PNG fallita", e);
+              // fallback: se c’era un URL http(s) valido lo manteniamo, altrimenti nessuna immagine
+              const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+              const isHttp = /^https?:\/\//i.test(raw);
+              const isData = /^data:image\//i.test(raw);
+              clean.image_url = (isHttp || isData) ? raw : undefined;
+            }
+          } else {
+            // Voci NON finestra: consenti solo http(s) o data URL; MAI blob:
+            const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+            const isHttp = /^https?:\/\//i.test(raw);
+            const isData = /^data:image\//i.test(raw);
+            clean.image_url = (isHttp || isData) ? raw : undefined;
+          }
+
+          return clean;
+        })
+      );
+
+      // 2) Lazy import del PDF
       const [{ pdf }, qpdf] = await Promise.all([
         import('@react-pdf/renderer'),
         import('../pdf/QuotePDF')
-      ])
+      ]);
       if (!qpdf?.default) {
-        toast.error('Componente PDF mancante')
-        return
+        toast.error('Componente PDF mancante');
+        return;
       }
 
-      // Totali per categoria dalla UI nella forma attesa da QuotePDF (catTotals)
+      // 3) Totali e meta
       const catTotals = manualTotals.map(r => ({
         label: r.label || '-',
         amount: Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0,
-      }))
+      }));
+      const totalExcluded = catTotals.reduce((s, r) => s + (r.amount || 0), 0);
 
-      // Totale imponibile (IVA esclusa) derivato dalle righe manuali
-      const totalExcluded = catTotals.reduce((s, r) => s + (r.amount || 0), 0)
+      const extractedVat =
+        (quote.customer_type === 'azienda')
+          ? (
+              (piva && piva.trim())
+              || (quote.notes?.match(/P\.IVA:\s*([^;]+)(;|$)/i)?.[1]?.trim() ?? null)
+            )
+          : null;
 
-      // Dati PIATTI esattamente come richiesti da QuotePDF.tsx
       const data = {
         companyLogoUrl: branding?.logo_url ?? null,
         quoteNumber: quote.number ?? null,
@@ -175,21 +244,26 @@ useEffect(() => {
           address: quote.job_address || null,
           email: quote.customer_email || null,
           phone: quote.customer_phone || null,
+          vat: extractedVat,
         },
-        // 👇 nomi delle prop allineati a QuotePDF
         catTotals,
         totalExcluded,
-        validityLabel: terms?.validity_label || null,
+        validityDays: quote.validity_days ?? 15,
+        validityLabel: (terms?.validity_label && terms.validity_label.trim())
+          ? terms.validity_label
+          : `VALIDITÀ OFFERTA: ${quote.validity_days ?? 15} giorni`,
         terms: terms?.conditions || null,
-        items,
-      }
 
-      const element = <qpdf.default {...data} />
-      const blob = await pdf(element).toBlob()
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+        // passa gli items già normalizzati (no blob:)
+        items: itemsForPdf,
+      };
+
+      const element = <qpdf.default {...data} />;
+      const blob = await pdf(element).toBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
     } catch (e: any) {
-      toast.error(e?.message || 'Errore apertura PDF')
+      toast.error(e?.message || 'Errore apertura PDF');
     }
   }
 
@@ -236,19 +310,27 @@ useEffect(() => {
 
   useEffect(() => {
     if (!quote) return
-    const payload = JSON.parse(JSON.stringify(items))
+    // Sanitize items before persisting: drop transient fields and any blob: URLs
+    const payload = (items as any[]).map((it) => {
+      if (!it || typeof it !== 'object') return it
+      const { __pickedFile, __previewUrl, ...rest } = it as any
+      if (typeof rest.image_url === 'string' && rest.image_url.startsWith('blob:')) {
+        delete rest.image_url
+      }
+      return rest
+    })
     debouncedSave({ items_json: payload } as any)
   }, [items])
 
-// --- Autosave helpers ---
-function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
-  if (!quote) return
-  // Prevent needless loops if the same value is set repeatedly
-  // Handles primitives stored in Quote; for objects/arrays, extend as needed.
-  if ((quote as any)[key] === value) return
-  setQuote({ ...quote, [key]: value })
-  debouncedSave({ [key]: value } as Partial<Quote>)
-}
+  // --- Autosave helpers ---
+  function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
+    if (!quote) return
+    // Prevent needless loops if the same value is set repeatedly
+    // Handles primitives stored in Quote; for objects/arrays, extend as needed.
+    if ((quote as any)[key] === value) return
+    setQuote({ ...quote, [key]: value })
+    debouncedSave({ [key]: value } as Partial<Quote>)
+  }
 
   const debouncedSave = useDebouncedCallback(async (patch: Partial<Quote>) => {
     if (!quote) return
@@ -288,7 +370,17 @@ function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
             {quote.number} <span className="text-gray-500 font-normal">· {quote.customer_name ?? '—'}</span>
           </h1>
           <div className="flex items-center gap-2">
-            <Badge className={`badge badge-${quote.status}`}>{quote.status}</Badge>
+            <select
+              className="input !py-1 !h-7 w-25 text-sm"
+              value={quote.status}
+              onChange={(e) => updateField('status', e.target.value as any)}
+            >
+              <option value="bozza">Bozza</option>
+              <option value="inviato">Inviato</option>
+              <option value="accettato">Accettato</option>
+              <option value="rifiutato">Rifiutato</option>
+              <option value="scaduto">Scaduto</option>
+            </select>
             {quote.created_at && (
               <span className="text-sm text-gray-500">Creato {new Date(quote.created_at).toLocaleString()}</span>
             )}
@@ -299,10 +391,14 @@ function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
           <div className="text-xs text-gray-500">Totale documento</div>
           <div className="text-2xl font-bold tracking-tight">{euro(totalExcluded)}</div>
           <div className="flex items-center justify-end gap-2">
-            <Button onClick={() => setPickerOpen(true)}><Plus size={16} /> Aggiungi</Button>
-            <Button variant="outline" onClick={onDuplicateQuote}><Copy size={16} /> Duplica</Button>
-            <Button variant="outline" onClick={openPdfPreview}>
-              <Eye size={16} /> Anteprima
+            <Button
+              className="bg-gray-800 text-white hover:bg-gray-900"
+              onClick={openPdfPreview}
+            >
+              <FileText size={16} /> PDF
+            </Button>
+            <Button variant="outline" onClick={onDuplicateQuote}>
+              <Copy size={16} /> Duplica
             </Button>
           </div>
         </div>
@@ -318,12 +414,12 @@ function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
                 type="button"
                 className={`px-3 py-1.5 text-sm ${(quote.customer_type ?? 'privato') === 'privato' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => updateField('customer_type', 'privato')}
-              >Privato</button>
+              ><User size={14} /> Privato</button>
               <button
                 type="button"
                 className={`px-3 py-1.5 text-sm border-l ${(quote.customer_type ?? 'privato') === 'azienda' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
                 onClick={() => updateField('customer_type', 'azienda')}
-              >Azienda</button>
+              ><Building size={14} /> Azienda</button>
             </div>
           </div>
 
@@ -418,7 +514,7 @@ function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
         </Card>
         <Card>
           <div className="text-xs font-medium text-gray-500 mb-2">Dati documento</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <div className="text-xs text-gray-500">Data emissione</div>
               <input
@@ -438,42 +534,60 @@ function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
               />
             </div>
             <div>
-              <div className="text-xs text-gray-500">Metri quadri totali</div>
-              <input
-                className="input"
-                type="number"
-                step="0.01"
-                value={quote.total_mq ?? ''}
-                onChange={(e) => updateField('total_mq', e.target.value === '' ? null : Number(e.target.value))}
-              />
+              <div>
+                <div className="text-xs text-gray-500">Validità offerta (giorni)</div>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  value={quote.validity_days ?? 15}
+                  onChange={(e) => {
+                    const v = e.target.value === '' ? 15 : Math.max(1, parseInt(e.target.value || '15', 10));
+                    updateField('validity_days', v as any);
+                  }}
+                />
+              </div>
+
+              <div>
+                <div className="text-xs text-gray-500">IVA</div>
+                <select
+                  className="input"
+                  value={quote.vat ?? '22'}
+                  onChange={(e) => updateField('vat', (e.target.value as any))}
+                >
+                  <option value="22">22%</option>
+                  <option value="10">10%</option>
+                  <option value="4">4%</option>
+                </select>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Sistema profilo generale</div>
+                <select
+                  className="input"
+                  value={
+                    quote.profile_system && (PROFILE_SYSTEMS as readonly string[]).includes(quote.profile_system)
+                      ? (quote.profile_system as string)
+                      : ''
+                  }
+                  onChange={(e) => updateField('profile_system', e.target.value === '' ? null : (e.target.value as any))}
+                >
+                  <option value="">— Seleziona —</option>
+                  {PROFILE_SYSTEMS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-gray-500">Sistema profilo generale</div>
-              <select
-                className="input"
-                value={
-                  quote.profile_system && (PROFILE_SYSTEMS as readonly string[]).includes(quote.profile_system)
-                    ? (quote.profile_system as string)
-                    : ''
-                }
-                onChange={(e) => updateField('profile_system', e.target.value === '' ? null : (e.target.value as any))}
-              >
-                <option value="">— Seleziona —</option>
-                {PROFILE_SYSTEMS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
+
           </div>
-          <div className="mt-2 text-sm text-gray-600">Validità: {quote.validity_days} giorni · IVA {quote.vat}%</div>
         </Card>
       </div>
 
       {/* Riepilogo costi (manuale) */}
       <Card>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h2>Riepilogo costi</h2>
-          <Button variant="ghost" onClick={addTotalRow}><Plus size={16} /> Aggiungi riga</Button>
+          <Button variant="ghost" onClick={addTotalRow}><Plus size={16} /> Aggiungi costo</Button>
         </div>
 
         {manualTotals.length === 0 ? (
@@ -481,30 +595,49 @@ function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
             Aggiungi le voci di costo per categoria (es. “Finestre”, “Zanzariere”, “Montaggio”…).
           </div>
         ) : (
-          <div className="mt-4 space-y-2">
-            {manualTotals.map(row => (
-              <div key={row.id} className="grid grid-cols-[minmax(180px,260px)_140px_44px] gap-2 items-center">
-                <input
-                  className="input"
-                  placeholder="Es. Finestre / Portoncino cantina / Montaggio…"
-                  value={row.label}
-                  onChange={(e) => updateRow(row.id, { label: e.target.value })}
-                />
-                <input
-                  className="input text-right"
-                  type="number" step="0.01" min="0"
-                  value={row.amount}
-                  onChange={(e) => updateRow(row.id, { amount: Number(e.target.value || 0) })}
-                />
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="h-9 w-9 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                    aria-label="Rimuovi riga"
-                    onClick={() => removeRow(row.id)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+          <div className="mt-4 space-y-3">
+            {manualTotals.map((row) => (
+              <div
+                key={row.id}
+                className="rounded-lg border p-3 bg-white/60"
+              >
+                <div className="space-y-2">
+                  {/* Top row: Title + Delete (inline on mobile) */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="input flex-1 min-w-0"
+                      placeholder="Es. Finestre / Portoncino cantina / Montaggio…"
+                      value={row.label}
+                      onChange={(e) => updateRow(row.id, { label: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                      aria-label="Rimuovi riga"
+                      onClick={() => removeRow(row.id)}
+                      title="Rimuovi"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  {/* Amount (second row) */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 sm:flex-none sm:w-40">
+                      <input
+                        className="input w-full text-right"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        value={row.amount}
+                        onChange={(e) =>
+                          updateRow(row.id, { amount: Number(e.target.value || 0) })
+                        }
+                      />
+                    </div>
+                    <span className="hidden sm:inline text-sm text-gray-500">€</span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -522,7 +655,7 @@ function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
         <div className="flex items-center justify-between">
           <h2>Voci del preventivo</h2>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setPickerOpen(true)}><Plus size={16} /> Aggiungi</Button>
+            <Button variant="ghost" onClick={() => setPickerOpen(true)}><Plus size={16} />  Aggiungi voce</Button>
           </div>
         </div>
 

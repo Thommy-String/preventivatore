@@ -1,5 +1,5 @@
 import type { QuoteKind, QuoteItem } from "./types"
-import type { WindowItem, ScorrevoleItem, CassonettoItem, ZanzarieraItem, PersianaItem, TapparellaItem } from "./types"
+import type { WindowItem, ScorrevoleItem, CassonettoItem, ZanzarieraItem, PersianaItem, TapparellaItem, CustomItem } from "./types"
 import type { ItemFormProps } from "./forms/types"
 import finestraIcon from "../../assets/images/finestra.png"
 import cassonettoIcon from "../../assets/images/cassonetto.png"
@@ -22,72 +22,138 @@ export type RegistryEntry<T extends QuoteItem = QuoteItem> = {
 }
 
 export const registry: Record<QuoteKind, RegistryEntry<any>> = {
-    finestra: {
-        label: "Finestra",
-        icon: finestraIcon,
-        makeDefaults: (): WindowItem => ({
-            id: crypto.randomUUID(),
-            kind: 'finestra',
-            width_mm: 1200,
-            height_mm: 1500,
-            qty: 1,
-            price_mode: 'per_mq',
-            price_per_mq: 300,
-            price_total: null,
-            color: null,
-            glass: null,
-            hinges_color: null,
-            uw: null,
-            profile_system: null,
-            notes: null,
-            custom_fields: []
-        }),
-        Form: WindowForm
-    },
-    portafinestra: {
-        label: "Porta finestra",
-        icon: portaFinestraIcon,
-        makeDefaults: (): WindowItem => ({
-            id: crypto.randomUUID(),
-            kind: 'portafinestra',
-            width_mm: 1200,
-            height_mm: 2300,
-            qty: 1,
-            price_mode: 'per_mq',
-            price_per_mq: 350,
-            price_total: null,
-            color: null,
-            glass: null,
-            hinges_color: null,
-            uw: null,
-            profile_system: null,
-            notes: null,
-            custom_fields: []
-        }),
-        Form: WindowForm
-    },
-    scorrevole: {
-        label: "Scorrevole",
-        icon: scorrevoleIcon,
-        makeDefaults: (): ScorrevoleItem => ({
-            id: crypto.randomUUID(),
-            kind: 'scorrevole',
-            width_mm: 1800,
-            height_mm: 2100,
-            qty: 1,
-            price_mode: 'per_mq',
-            price_per_mq: 350,
-            price_total: null,
-            color: null,
-            glass: null,
-            hinges_color: null,
-            uw: null,
-            profile_system: null,
-            notes: null,
-            custom_fields: []
-        }),
-        Form: WindowForm
-    },
+  finestra: {
+    label: "Finestra",
+    icon: finestraIcon,
+    makeDefaults: (): WindowItem => ({
+      id: crypto.randomUUID(),
+      kind: 'finestra',
+      width_mm: 1200,
+      height_mm: 1500,
+      qty: 1,
+      price_mode: 'per_mq',
+      price_per_mq: 300,
+      price_total: null,
+      color: null,
+      glass: null,
+      hinges_color: null,
+      uw: null,
+      profile_system: null,
+      notes: null,
+      reference: '',
+      custom_fields: [],
+      // 🔽 nuovo: modello a griglia base 2 ante (50/50) apre sx + apre dx
+      options: {
+        gridWindow: {
+          width_mm: 1200,
+          height_mm: 1500,
+          frame_mm: 60,
+          mullion_mm: 40,
+          glazing: 'doppio',
+          showDims: false,
+          rows: [
+            {
+              height_ratio: 1,
+              cols: [
+                { width_ratio: 0.5, leaf: { state: 'apre_sx' } },
+                { width_ratio: 0.5, leaf: { state: 'apre_dx' } },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+    // Form: WindowAdvancedForm, // ← quando pronto
+    Form: WindowForm,
+  },
+   portafinestra: {
+    label: "Porta finestra",
+    icon: portaFinestraIcon,
+    makeDefaults: (): WindowItem => ({
+      id: crypto.randomUUID(),
+      kind: 'portafinestra',
+      width_mm: 1200,
+      height_mm: 2300,
+      qty: 1,
+      price_mode: 'per_mq',
+      price_per_mq: 350,
+      price_total: null,
+      color: null,
+      glass: null,
+      hinges_color: null,
+      uw: null,
+      profile_system: null,
+      notes: null,
+      reference: '',
+      custom_fields: [],
+      // 🔽 2 ante sopra (50/50), nessun sottoluce di default
+      options: {
+        gridWindow: {
+          width_mm: 1200,
+          height_mm: 2300,
+          frame_mm: 60,
+          mullion_mm: 40,
+          glazing: 'doppio',
+          showDims: false,
+          rows: [
+            {
+              height_ratio: 1,
+              cols: [
+                { width_ratio: 0.5, leaf: { state: 'apre_sx' } },
+                { width_ratio: 0.5, leaf: { state: 'apre_dx' } },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+    // Form: WindowAdvancedForm,
+    Form: WindowForm,
+  },
+   scorrevole: {
+    label: "Scorrevole",
+    icon: scorrevoleIcon,
+    makeDefaults: (): ScorrevoleItem => ({
+      id: crypto.randomUUID(),
+      kind: 'scorrevole',
+      width_mm: 1800,
+      height_mm: 2100,
+      qty: 1,
+      price_mode: 'per_mq',
+      price_per_mq: 350,
+      price_total: null,
+      color: null,
+      glass: null,
+      hinges_color: null,
+      uw: null,
+      profile_system: null,
+      notes: null,
+      reference: '',
+      custom_fields: [],
+      // 🔽 preset 2 ante scorrevoli (simboli di apertura li gestiremo nel renderer)
+      options: {
+        gridWindow: {
+          width_mm: 1800,
+          height_mm: 2100,
+          frame_mm: 60,
+          mullion_mm: 40,
+          glazing: 'doppio',
+          showDims: false,
+          rows: [
+            {
+              height_ratio: 1,
+              cols: [
+                { width_ratio: 0.5, leaf: { state: 'apre_sx' } },
+                { width_ratio: 0.5, leaf: { state: 'apre_dx' } },
+              ],
+            },
+          ],
+        },
+      },
+    }),
+    // Form: WindowAdvancedForm,
+    Form: WindowForm,
+  },
     cassonetto: {
         label: "Cassonetto",
         icon: cassonettoIcon,
@@ -100,10 +166,11 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
             price_mode: 'total',
             price_total: 0,
             notes: null,
+            reference: '',
             custom_fields: [],
             material: 'PVC',
             depth_mm: null,
-            extension_mm: null,
+            celino_mm: null,
         }),
         Form: CassonettoForm // placeholder finché non creiamo CassonettoForm
     },
@@ -135,6 +202,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
             deceleratore: true,
 
             notes: null,
+            reference: '',
             custom_fields: [],
         }),
         Form: ZanzarieraForm
@@ -153,6 +221,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
             price_total: 0,
             price_per_mq: null,
             notes: null,
+            reference: '',
             custom_fields: [],
             // campi specifici Persiana
             material: 'Alluminio',
@@ -177,6 +246,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
             price_total: 0,
             price_per_mq: null,
             notes: null,
+            reference: '',
             custom_fields: [],
             // campi specifici Tapparella
             material: 'PVC',
@@ -187,7 +257,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
     custom: {
         label: "Voce personalizzata",
         icon: finestraIcon,
-        makeDefaults: () => ({
+        makeDefaults: (): CustomItem => ({
             id: crypto.randomUUID(),
             kind: 'custom',
             width_mm: 1000,
@@ -197,6 +267,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
             price_total: 0,
             price_per_mq: null,
             notes: null,
+            reference: '',
             custom_fields: [],
             title: 'Voce personalizzata'
         }),

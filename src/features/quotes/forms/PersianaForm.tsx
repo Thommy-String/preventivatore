@@ -108,6 +108,18 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
           onChange={(e) => set("color", e.target.value || null)}
         />
       </section>
+
+      {/* Riferimento */}
+      <section className="space-y-2">
+        <div className="text-xs font-medium text-gray-500">Riferimento</div>
+        <input
+          className="input"
+          type="text"
+          placeholder="es. Bagno piccolo, Salotto..."
+          value={d.reference ?? ''}
+          onChange={(e) => set('reference', e.target.value)}
+        />
+      </section>
     </div>
   )
 }

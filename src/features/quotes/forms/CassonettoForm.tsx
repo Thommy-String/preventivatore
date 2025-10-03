@@ -79,6 +79,18 @@ export function CassonettoForm({ draft, onChange, set }: ItemFormProps<Cassonett
         </div>
       </section>
 
+      {/* Riferimento */}
+      <section className="space-y-2">
+        <div className="text-xs font-medium text-gray-500">Riferimento</div>
+        <input
+          className="input"
+          type="text"
+          placeholder="es. Bagno piccolo, Salotto..."
+          value={d.reference ?? ''}
+          onChange={(e) => set('reference', e.target.value)}
+        />
+      </section>
+
       {/* Quantità */}
       <section className="space-y-2">
         <div className="text-xs font-medium text-gray-500">Quantità</div>
