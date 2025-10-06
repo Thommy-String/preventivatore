@@ -1,4 +1,3 @@
-//src/features/quotes/window/WindowSvg.tsx
 import * as React from "react";
 
 // --- Tipi ---
@@ -61,14 +60,15 @@ function isSatin(glazing: GridWindowConfig["glazing"]) {
 // --- Componenti di Disegno ---
 
 function OpeningGlyph({ x, y, w, h, state, stroke, strokeWidth }: { x: number; y: number; w: number; h: number; state: LeafState; stroke: string; strokeWidth: number }) {
-    const dash = `${strokeWidth * 4} ${strokeWidth * 4}`;
+    const dash = `${strokeWidth * 5} ${strokeWidth * 5}`;
 
     const drawVasistas = () => <polyline points={`${x},${y + h} ${x + w / 2},${y} ${x + w},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;
-// VERSIONE NUOVA (CORRETTA)
-const drawApreSx = () => <polyline points={`${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;
-const drawApreDx = () => <polyline points={`${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;    const drawArrow = (direction: 'left' | 'right') => {
-        const arrowHeight = Math.min(h * 0.2, 40);
-        const arrowWidth = arrowHeight * 1.5;
+    // VERSIONE NUOVA (CORRETTA)
+    const drawApreSx = () => <polyline points={`${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;
+    const drawApreDx = () => <polyline points={`${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;
+    const drawArrow = (direction: 'left' | 'right') => {
+        const arrowHeight = Math.min(h * 0.5, 100);
+        const arrowWidth = arrowHeight * 3;
         const midY = y + h / 2;
         const midX = x + w / 2;
         const startX = direction === 'left' ? midX + arrowWidth / 2 : midX - arrowWidth / 2;
@@ -100,7 +100,7 @@ const drawApreDx = () => <polyline points={`${x},${y} ${x + w},${y + h / 2} ${x}
 }
 
 // --- Renderer SVG Principale ---
-export default function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
+function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     const safe = cfg ?? makeFallbackCfg();
 
     const { width_mm, height_mm, rows, frame_mm, mullion_mm, glazing } = safe;
@@ -112,17 +112,30 @@ export default function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSv
     const usableH = innerH - totalRowsGapY;
     const totalRowRatios = sum(rows.map(r => r.height_ratio));
 
-    // Scala dinamica per font e spessori
-    const avgDim = (width_mm + height_mm) / 2;
-    const strokeWidth = Math.max(0.5, Math.min(2.5, avgDim / 800));
-    const fontSize = Math.max(10, Math.min(40, avgDim / 50));
-    const textPadding = fontSize * 1.2;
+    // --- Scala dinamica basata sul lato corto (per quote sempre vicine) ---
+    const baseDim = Math.max(60, Math.min(width_mm, height_mm)); // usa il lato corto, con un minimo
+    const strokeWidth = Math.max(1.0, Math.min(5.0, baseDim / 400)); const fontSize = Math.max(9, Math.min(24, baseDim / 28));
+    const textPadding = fontSize * 1.15;
+
+    // --- Spazio fisso per quote vicino al bordo dell'oggetto ---
+    const labelGap = Math.max(10, Math.min(22, baseDim / 18)); // distanza costante “vicina”
+    const padTop = Math.max(6, fontSize * 0.5);
+    const padRight = Math.max(6, fontSize * 0.5);
+    const padBottom = labelGap + fontSize * 1.1; // spazio per la quota L in basso
+    const padLeft = labelGap + fontSize * 1.1; // spazio per la quota H a sinistra
 
     const glassColor = glassFill(glazing);
     const satinPatternId = React.useMemo(() => `satin-dots-${Math.random().toString(36).slice(2, 8)}`, []);
 
     return (
-        <svg viewBox={`0 0 ${width_mm} ${height_mm}`} width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Anteprima finestra">
+        <svg
+            viewBox={`${-padLeft} ${-padTop} ${width_mm + padLeft + padRight} ${height_mm + padTop + padBottom}`}
+            width="100%"
+            height="100%"
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label="Anteprima finestra"
+        >
             <defs>
                 <pattern id={satinPatternId} patternUnits="userSpaceOnUse" width={strokeWidth * 8} height={strokeWidth * 8}>
                     <rect x="0" y="0" width={strokeWidth * 8} height={strokeWidth * 8} fill="transparent" />
@@ -187,11 +200,20 @@ export default function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSv
             {/* Disegno Quote */}
             {safe.showDims && (
                 <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#374151', fontSize }}>
-                    <text x={width_mm / 2} y={-textPadding / 2}>{`L ${Math.round(width_mm)}`}</text>
-                    <text x={-textPadding / 2} y={height_mm / 2} transform={`rotate(-90, ${-textPadding / 2}, ${height_mm / 2})`}>{`H ${Math.round(height_mm)}`}</text>
+                    {/* Larghezza: sempre labelGap sotto il bordo inferiore dell'oggetto */}
+                    <text x={width_mm / 2} y={height_mm + labelGap}>{`L ${Math.round(width_mm)}`}</text>
+                    {/* Altezza: sempre labelGap a sinistra del bordo sinistro, ruotata */}
+                    <text
+                        x={-labelGap}
+                        y={height_mm / 2}
+                        transform={`rotate(-90, ${-labelGap}, ${height_mm / 2})`}
+                    >
+                        {`H ${Math.round(height_mm)}`}
+                    </text>
                 </g>
             )}
         </svg>
     );
 }
-
+export default WindowSvg;
+export { WindowSvg };

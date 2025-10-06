@@ -1,4 +1,4 @@
-import * as React from "react";
+//src/features/quotes/cassonetto/CassonettoSvg.tsx
 
 // --- Tipi ---
 export interface CassonettoConfig {
@@ -74,31 +74,7 @@ export default function CassonettoSvg({ cfg, stroke = "#222" }: CassonettoSvgPro
           />
         )}
 
-        {/* === Quote del Disegno === */}
-        <g style={textStyle} textAnchor="middle" strokeWidth="0.5">
-          {/* Quote Larghezza e Altezza */}
-          <line x1={-10} y1={0} x2={-10} y2={height_mm} />
-          <text x={-fontSize * 1.5} y={height_mm / 2} transform={`rotate(-90, ${-fontSize * 1.5}, ${height_mm/2})`}>{height_mm}</text>
-          
-          <line x1={0} y1={height_mm + 15} x2={width_mm} y2={height_mm + 15} />
-          <text x={width_mm / 2} y={height_mm + fontSize * 1.8}>{width_mm}</text>
-
-          {/* Quota Profondità */}
-          {depth_mm && (
-            <g transform={`translate(${width_mm}, ${height_mm})`}>
-                <line x1={0} y1={15} x2={dx} y2={15-dy} />
-                <text x={dx / 2} y={-dy / 2 + 30} transform={`skewX(-30)`}>{depth_mm}</text>
-            </g>
-          )}
-
-           {/* Quota Celino */}
-           {celino_mm && celino_mm > 0 && (
-            <g transform={`translate(${width_mm + dx}, ${height_mm - dy + 15})`}>
-                <line x1={0} y1={0} x2={cdx} y2={-cdy} />
-                <text x={cdx / 2} y={-cdy / 2 + 15} transform={`skewX(-30)`}>{celino_mm}</text>
-            </g>
-          )}
-        </g>
+        
       </g>
     </svg>
   );

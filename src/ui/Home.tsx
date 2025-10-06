@@ -10,9 +10,7 @@ import { Badge } from '../components/ui/Badge'
 import finestraIcon from '../assets/images/finestra.png'
 import portaFinestraIcon from '../assets/images/portaFinestra.png'
 import cassonettoIcon from '../assets/images/cassonetto.png'
-import persianaIcon from '../assets/images/persiana.png'
-import tapparellaIcon from '../assets/images/tapparella.png'
-import zanzarieraIcon from '../assets/images/zanzariera.png'
+
 
 // Types
  type QuoteRow = {
