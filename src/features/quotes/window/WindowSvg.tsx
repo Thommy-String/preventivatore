@@ -1,3 +1,4 @@
+//src/features/quotes/window/WindowSvg.tsx
 import * as React from "react";
 
 // --- Tipi ---

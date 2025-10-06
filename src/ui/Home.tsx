@@ -1,3 +1,4 @@
+//src/ui/Home.tsx
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -7,16 +8,212 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
-import finestraIcon from '../assets/images/finestra.png'
-import portaFinestraIcon from '../assets/images/portaFinestra.png'
-import cassonettoIcon from '../assets/images/cassonetto.png'
+
+
+// Anteprima preventivo: totale senza IVA e riepilogo per tipo
+// Anteprima preventivo: TOTALE (senza IVA) da manual_totals + charges - sconti
+// e CONTEGGIO per tipo da quotes.items_json (kind + qty)
+function QuotePreview({ quoteId }: { quoteId: string }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [data, setData] = useState<{
+    totalNet: number
+    counts: Record<string, number>
+  } | null>(null)
+
+  useEffect(() => {
+    let alive = true
+      ; (async () => {
+        try {
+          setLoading(true)
+          setError(null)
+
+          // 1) Leggi dal record della quote il SOMMARIO prezzi e gli ITEMS grezzi
+          const { data: q, error: eq } = await supabase
+            .from('quotes')
+            .select('id, manual_totals, items_json')
+            .eq('id', quoteId)
+            .maybeSingle()
+          if (eq) throw eq
+          if (!q) { if (alive) setData({ totalNet: 0, counts: {} }); return }
+
+          // 2) Prendi l’ULTIMA versione per collegare charges + sconti totali
+          const { data: v, error: ev } = await supabase
+            .from('quote_versions')
+            .select('id, created_at')
+            .eq('quote_id', quoteId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (ev) throw ev
+
+          // 3) Somma spese extra (trasporto/montaggio/smaltimento)
+          let extra = 0
+          if (v?.id) {
+            const { data: charges, error: ech } = await supabase
+              .from('quote_charges')
+              .select('amount')
+              .eq('quote_version_id', v.id)
+            if (ech) throw ech
+            extra = (charges ?? []).reduce((s, c) => s + Number(c?.amount ?? 0), 0)
+          }
+
+          // 4) Somma del SOMMARIO (manual_totals) – questi sono gli importi “di listino” netti
+          const manualTotals = Array.isArray(q.manual_totals) ? q.manual_totals : []
+          const manualSum = manualTotals.reduce((s: number, r: any) => {
+            const amt = Number(r?.amount ?? 0)
+            return s + (Number.isFinite(amt) ? amt : 0)
+          }, 0)
+
+          // 5) Applica SCONTI TOTALI (quote_totals) alla somma netta (manual + extra)
+          let net = manualSum + extra
+          if (v?.id) {
+            const { data: tot, error: et } = await supabase
+              .from('quote_totals')
+              .select('total_discount_pct, total_discount_abs')
+              .eq('quote_version_id', v.id)
+              .maybeSingle()
+            if (et) throw et
+            if (tot?.total_discount_pct) net *= (1 - Number(tot.total_discount_pct) / 100)
+            if (tot?.total_discount_abs) net -= Number(tot.total_discount_abs)
+          }
+          if (net < 0) net = 0
+
+          // 6) Conteggio per TIPO (kind) dagli items della quote (items_json)
+          const rawItems = Array.isArray(q.items_json) ? q.items_json : []
+          const counts: Record<string, number> = {}
+          for (const it of rawItems) {
+            const kind = typeof it?.kind === 'string' ? it.kind : 'altro'
+            const qty = Number(it?.qty ?? 1)
+            counts[kind] = (counts[kind] ?? 0) + (Number.isFinite(qty) ? qty : 0)
+          }
+
+          if (alive) setData({ totalNet: net, counts })
+        } catch (e: any) {
+          if (alive) setError(e.message || 'Errore caricamento anteprima')
+        } finally {
+          if (alive) setLoading(false)
+        }
+      })()
+    return () => { alive = false }
+  }, [quoteId])
+
+  if (loading) {
+    return (
+      <div className="mt-3 border-t pt-3 text-xs text-gray-500">
+        <div className="h-3 w-40 bg-gray-200 rounded animate-pulse" />
+      </div>
+    )
+  }
+  if (error) {
+    return <div className="mt-3 border-t pt-3 text-xs text-red-600">{error}</div>
+  }
+  if (!data) return null
+
+  const labelMap: Record<string, string> = {
+    finestra: 'Finestre',
+    cassonetto: 'Cassonetti',
+    zanzariera: 'Zanzariere',
+    persiana: 'Persiane',
+    tapparella: 'Tapparelle',
+    custom: 'Voci custom',
+    altro: 'Altro',
+  }
+
+  // Ordine elegante dei tipi in output
+  const order = ['finestra', 'porta_finestra', 'scorrevole', 'cassonetto', 'zanzariera', 'persiana', 'tapparella', 'custom', 'altro']
+  const parts = Object.entries(data.counts)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+
+  return (
+    <div className="mt-3 border-t pt-3 flex items-center justify-between text-xs text-gray-700">
+      {/* SINISTRA: chip con icone + conteggio */}
+      <div className="min-w-0 flex flex-wrap items-center gap-1.5">
+        {parts.length === 0 ? (
+          <span className="badge-soft">—</span>
+        ) : parts.map(([k, v]) => (
+          <span
+            key={k}
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 border border-gray-200 bg-white/60 shadow-sm"
+            title={labelMap[k] ?? k}
+          >
+            <KindIcon kind={k} />
+            <span className="truncate max-w-[14ch]">
+              {v} {(labelMap[k] ?? k)}
+            </span>
+          </span>
+        ))}
+      </div>
+
+      {/* DESTRA: totale senza IVA */}
+      <div className="ml-4 shrink-0 text-right">
+        <div className="uppercase tracking-wide text-[10px] text-gray-500">Totale (senza IVA)</div>
+        <div className="font-mono text-sm font-semibold">
+          € {data.totalNet.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Piccole icone inline per i tipi
+function KindIcon({ kind }: { kind: string }) {
+  const common = "inline-block align-[-2px]"
+  switch (kind) {
+    case 'finestra':
+      return (
+        <svg className={common} width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="12" y1="3" x2="12" y2="21" stroke="currentColor" strokeWidth="1.5" />
+          <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      )
+    case 'cassonetto':
+      return (
+        <svg className={common} width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+          <rect x="6.5" y="8.5" width="11" height="7" rx="1" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+      )
+    case 'zanzariera':
+      return (
+        <svg className={common} width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" strokeWidth="1" />
+        </svg>
+      )
+    case 'persiana':
+      return (
+        <svg className={common} width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <rect x="6" y="4" width="12" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M7 7h10M7 10h10M7 13h10M7 16h10" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+      )
+    case 'tapparella':
+      return (
+        <svg className={common} width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <rect x="5" y="4" width="14" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" />
+          <rect x="5" y="9" width="14" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" />
+          <rect x="5" y="14" width="14" height="4" rx="1" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      )
+    case 'custom':
+    default:
+      return (
+        <svg className={common} width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3l2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3z" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+      )
+  }
+}
 
 
 // Types
- type QuoteRow = {
+type QuoteRow = {
   id: string
   number: string
-  status: 'bozza'|'inviato'|'accettato'|'rifiutato'|'scaduto'
+  status: 'bozza' | 'inviato' | 'accettato' | 'rifiutato' | 'scaduto'
   customer_name: string | null
   job_address: string | null
   created_at: string | null
@@ -29,7 +226,7 @@ import cassonettoIcon from '../assets/images/cassonetto.png'
 }
 
 const PAGE_SIZE = 12
-const STATUS_ORDER: QuoteRow['status'][] = ['bozza','inviato','accettato','rifiutato','scaduto']
+const STATUS_ORDER: QuoteRow['status'][] = ['bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto']
 
 // Keep only the most recent quote for each reference_key; attach groupCount for badge.
 function groupByReferenceLatest(rows: QuoteRow[]): QuoteRow[] {
@@ -46,23 +243,24 @@ function groupByReferenceLatest(rows: QuoteRow[]): QuoteRow[] {
   }
   const result: QuoteRow[] = []
   for (const [, list] of byKey) {
-    list.sort((a,b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+    list.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
     const latest = list[0]
     const others = list.slice(1).map(x => x.number).filter(Boolean)
     result.push({ ...latest, groupCount: list.length, siblingsNumbers: others })
   }
   result.push(...noKey)
-  result.sort((a,b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+  result.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
   return result
 }
 
-function fmtDate(d: string){
+function fmtDate(d: string) {
   try {
     return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })
   } catch { return '' }
 }
 
-function statusColor(s: QuoteRow['status']){
+
+function statusColor(s: QuoteRow['status']) {
   switch (s) {
     case 'bozza': return '#9ca3af'
     case 'inviato': return '#3b82f6'
@@ -72,7 +270,20 @@ function statusColor(s: QuoteRow['status']){
   }
 }
 
-export default function Home(){
+function monthKey(d?: string | null){
+  if(!d) return 'no-date'
+  const dt = new Date(d)
+  if (Number.isNaN(dt.getTime())) return 'no-date'
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`
+}
+function monthLabel(d?: string | null){
+  if(!d) return 'Senza data'
+  const dt = new Date(d)
+  if (Number.isNaN(dt.getTime())) return 'Senza data'
+  return dt.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })
+}
+
+export default function Home() {
   const nav = useNavigate()
   const [loading, setLoading] = useState(false)
   const [items, setItems] = useState<QuoteRow[]>([])
@@ -81,6 +292,7 @@ export default function Home(){
   const [search, setSearch] = useState('')
   const [debounced, setDebounced] = useState('')
   const [filters, setFilters] = useState<Set<QuoteRow['status']>>(new Set())
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   // debounce search
@@ -89,10 +301,9 @@ export default function Home(){
     return () => clearTimeout(t)
   }, [search])
 
-  // hotkeys: N = nuovo, / = focus search
+  // hotkeys: / = focus search
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'n') { e.preventDefault(); handleNew() }
       if (e.key === '/') {
         const el = document.getElementById('dashboard-search') as HTMLInputElement | null
         if (el) { e.preventDefault(); el.focus() }
@@ -122,10 +333,10 @@ export default function Home(){
     return () => io.disconnect()
   }, [page, hasMore, loading])
 
-  async function loadPage(p = 1, reset = false){
+  async function loadPage(p = 1, reset = false) {
     try {
       setLoading(true)
-      const from = (p-1) * PAGE_SIZE
+      const from = (p - 1) * PAGE_SIZE
       const to = from + PAGE_SIZE - 1
 
       let query = supabase
@@ -151,7 +362,7 @@ export default function Home(){
         const base = reset ? arr : [...prev, ...arr]
         return groupByReferenceLatest(base)
       })
-    } catch (e:any) {
+    } catch (e: any) {
       console.error(e)
       toast.error(e.message || 'Errore caricamento preventivi')
     } finally {
@@ -159,13 +370,13 @@ export default function Home(){
     }
   }
 
-  function toggleFilter(s: QuoteRow['status']){
+  function toggleFilter(s: QuoteRow['status']) {
     const next = new Set(filters)
     next.has(s) ? next.delete(s) : next.add(s)
     setFilters(next)
   }
 
-  async function handleNew(){
+  async function handleNew() {
     try {
       setLoading(true)
       const { data, error } = await supabase.rpc('fn_create_quote', {
@@ -180,15 +391,78 @@ export default function Home(){
       const res = data?.[0]
       toast.success(`Bozza creata: ${res.quote_number}`)
       nav(`/quotes/${res.quote_id}`)
-    } catch (e:any) {
+    } catch (e: any) {
       toast.error(e.message || 'Errore creazione preventivo')
     } finally { setLoading(false) }
   }
 
+  async function handleDeleteQuote(q: QuoteRow) {
+    const confirmed = window.confirm(`Eliminare il preventivo ${q.number}? Questa azione è irreversibile.`)
+    if (!confirmed) return
+    try {
+      setDeletingId(q.id)
+
+      // 1) Trova le versioni di questo preventivo
+      const { data: versions, error: ev } = await supabase
+        .from('quote_versions')
+        .select('id')
+        .eq('quote_id', q.id)
+      if (ev) throw ev
+      const vIds = (versions ?? []).map(v => v.id)
+
+      // 2) Cancella elementi collegati alle versioni (se esistono)
+      if (vIds.length > 0) {
+        const delItems = supabase.from('quote_items').delete().in('quote_version_id', vIds)
+        const delCharges = supabase.from('quote_charges').delete().in('quote_version_id', vIds)
+        const delTotals = supabase.from('quote_totals').delete().in('quote_version_id', vIds)
+        const [e1, e2, e3] = await Promise.all([delItems, delCharges, delTotals])
+        if (e1.error) throw e1.error
+        if (e2.error) throw e2.error
+        if (e3.error) throw e3.error
+
+        const delVersions = await supabase.from('quote_versions').delete().eq('quote_id', q.id)
+        if (delVersions.error) throw delVersions.error
+      }
+
+      // 3) Cancella la quote
+      const delQuote = await supabase.from('quotes').delete().eq('id', q.id)
+      if (delQuote.error) throw delQuote.error
+
+      // 4) Aggiorna UI
+      setItems(prev => prev.filter(it => it.id !== q.id))
+      toast.success(`Preventivo ${q.number} eliminato`)
+    } catch (e: any) {
+      console.error(e)
+      toast.error(e.message || 'Errore durante l’eliminazione')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const headerCounts = useMemo(() => {
-    const map: Record<QuoteRow['status'], number> = { bozza:0, inviato:0, accettato:0, rifiutato:0, scaduto:0 }
+    const map: Record<QuoteRow['status'], number> = { bozza: 0, inviato: 0, accettato: 0, rifiutato: 0, scaduto: 0 }
     for (const it of items) map[it.status]++
     return map
+  }, [items])
+
+  const groupedByMonth = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; items: QuoteRow[] }>()
+    for (const it of items) {
+      const key = monthKey(it.created_at)
+      const label = monthLabel(it.created_at)
+      if (!map.has(key)) map.set(key, { key, label, items: [] })
+      map.get(key)!.items.push(it)
+    }
+    const arr = Array.from(map.values())
+    arr.sort((a, b) => {
+      if (a.key === 'no-date') return 1
+      if (b.key === 'no-date') return -1
+      return b.key.localeCompare(a.key)
+    })
+    for (const g of arr) {
+      g.items.sort((a,b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+    }
+    return arr
   }, [items])
 
   return (
@@ -227,7 +501,7 @@ export default function Home(){
         </div>
       </div>
 
-      {/* Lista */}
+      {/* Lista raggruppata per mese/anno */}
       {items.length === 0 && !loading ? (
         <Card className="text-center py-10 text-gray-600">
           Nessun preventivo trovato.
@@ -236,19 +510,36 @@ export default function Home(){
           </div>
         </Card>
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
-          {items.map(q => (
-            <CardQuote
-              key={q.id}
-              q={q}
-              onOpen={() => nav(`/quotes/${q.id}`)}
-              onDuplicate={() => toast.info('Duplica: in arrivo')}
-              onPdf={() => toast.info('PDF: in arrivo')}
-              onDelete={() => toast.info('Elimina: in arrivo')}
-              onFilterByReference={(ref) => setSearch(ref)}
-            />
+        <div className="space-y-6">
+          {groupedByMonth.map((group) => (
+            <div key={group.key} className="space-y-3">
+              <div className="sticky top-[96px] z-10 bg-[color:var(--bg)]/85 backdrop-blur border-b py-1">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold text-gray-800 capitalize">{group.label}</div>
+                  <div className="text-xs text-gray-500">{group.items.length} preventivi</div>
+                </div>
+              </div>
+              <div className="grid md:grid-cols-2 gap-4">
+                {group.items.map(q => (
+                  <CardQuote
+                    key={q.id}
+                    q={q}
+                    onOpen={() => nav(`/quotes/${q.id}`)}
+                    onDuplicate={() => toast.info('Duplica: in arrivo')}
+                    onPdf={() => toast.info('PDF: in arrivo')}
+                    onDelete={() => handleDeleteQuote(q)}
+                    onDeleteDisabled={deletingId === q.id}
+                    onFilterByReference={(ref) => setSearch(ref)}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
-          {loading && Array.from({length:4}).map((_,i) => <SkeletonCard key={`s-${i}`}/>) }
+          {loading && (
+            <div className="grid md:grid-cols-2 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`s-${i}`} />)}
+            </div>
+          )}
         </div>
       )}
 
@@ -258,38 +549,39 @@ export default function Home(){
   )
 }
 
-function daysLeft(created_at: string | null, validity_days: number){
-  if(!created_at) return null
+function daysLeft(created_at: string | null, validity_days: number) {
+  if (!created_at) return null
   const created = new Date(created_at)
   const expires = new Date(created)
   expires.setDate(created.getDate() + (validity_days || 0))
   const ms = expires.getTime() - Date.now()
-  const d = Math.ceil(ms / (1000*60*60*24))
+  const d = Math.ceil(ms / (1000 * 60 * 60 * 24))
   return d
 }
 
-function BadgeStatus({ s }: { s: QuoteRow['status'] }){
+function BadgeStatus({ s }: { s: QuoteRow['status'] }) {
   const cls = `badge badge-${s}`
   const label = s.charAt(0).toUpperCase() + s.slice(1)
   return <Badge className={cls}>{label}</Badge>
 }
 
 function CardQuote({
-  q, onOpen, onDuplicate, onPdf, onDelete, onFilterByReference
+  q, onOpen, onDuplicate, onPdf, onDelete, onDeleteDisabled = false, onFilterByReference
 }: {
   q: QuoteRow
   onOpen: () => void
   onDuplicate: () => void
   onPdf: () => void
   onDelete: () => void
+  onDeleteDisabled?: boolean
   onFilterByReference: (reference: string) => void
-}){
+}) {
   const left = daysLeft(q.created_at, q.validity_days)
   const accentClass = `card-accent card-accent--${q.status}`
-  const expiryBadgeClass = left == null ? 'badge-soft' : left < 0 ? 'badge-soft-danger' : left <= 3 ? 'badge-soft-warn' : 'badge-soft'
+  const expiryLabel = left == null ? '—' : left < 0 ? `Scaduto da ${Math.abs(left)}g` : `Scade tra ${left}g`
 
   return (
-    <Card className={`group ${accentClass} transition-transform will-change-transform hover:-translate-y-px`}>
+    <Card className={`group ${accentClass} transition-transform will-change-transform hover:-translate-y-px ${onDeleteDisabled ? 'opacity-60' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="cursor-pointer" onClick={onOpen}>
           {/* Numero piccolo e grassetto */}
@@ -307,27 +599,8 @@ function CardQuote({
               {q.reference ?? q.job_address}
             </div>
           )}
-          {/* Meta: stato, data, scadenza e badge gruppo */}
-          <div className="mt-1 flex items-center gap-2 text-xs text-gray-600">
-            <span className="inline-flex items-center gap-1">
-              <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColor(q.status) }} />
-              <BadgeStatus s={q.status} />
-            </span>
-            <span className={expiryBadgeClass}>
-              {left == null ? '—' : left < 0 ? `Scaduto da ${Math.abs(left)}g` : `Scade tra ${left}g`}
-            </span>
-            {q.groupCount && q.groupCount > 1 && (q.reference || q.job_address) && (
-              <button
-                className="badge-soft"
-                title={q.siblingsNumbers && q.siblingsNumbers.length ? `Altri: ${q.siblingsNumbers.join(', ')}` : 'Mostra tutti i preventivi con questo riferimento'}
-                onClick={(e) => { e.stopPropagation(); onFilterByReference((q.reference ?? q.job_address)!) }}
-              >
-                Altre {q.groupCount - 1}
-              </button>
-            )}
-          </div>
         </div>
-        <div className="shrink-0">
+        <div className={onDeleteDisabled ? 'opacity-50 pointer-events-none' : ''}>
           <QuoteActionsMenu
             onOpen={onOpen}
             onDuplicate={onDuplicate}
@@ -336,20 +609,38 @@ function CardQuote({
           />
         </div>
       </div>
-      {/* Anteprima: totale e voci principali (placeholder per futura implementazione) */}
-      <div className="mt-3 border-t pt-3 flex items-center justify-between text-xs text-gray-500">
-        <div className="truncate">Totale preventivo: <span className="font-mono">—</span></div>
-        <div className="truncate ml-4 flex items-center gap-1">
-          <img src={finestraIcon} alt="Finestra" className="w-[34px] h-[34px] object-contain" />
-          <img src={portaFinestraIcon} alt="Porta finestra" className="w-[34px] h-[34px] object-contain" />
-          <img src={cassonettoIcon} alt="Cassonetto" className="w-[34px] h-[34px] object-contain" />
+      {/* Meta footer: stato + scadenza (senza progress) */}
+      <div className="mt-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <StatusPill s={q.status} />
+          {q.groupCount && q.groupCount > 1 && (q.reference || q.job_address) && (
+            <button
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border border-gray-200 text-xs text-gray-600 bg-white/60 hover:bg-white"
+              title={q.siblingsNumbers && q.siblingsNumbers.length ? `Altri: ${q.siblingsNumbers.join(', ')}` : 'Mostra tutti i preventivi con questo riferimento'}
+              onClick={(e) => { e.stopPropagation(); onFilterByReference((q.reference ?? q.job_address)!) }}
+            >
+              Versioni {q.groupCount}
+            </button>
+          )}
         </div>
+        <div className="text-xs text-gray-600">{expiryLabel}</div>
       </div>
+      {/* Anteprima: totale e voci principali */}
+      <QuotePreview quoteId={q.id} />
     </Card>
   )
 }
+function StatusPill({ s }: { s: QuoteRow['status'] }){
+  const label = s.charAt(0).toUpperCase() + s.slice(1)
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/70 px-2 py-0.5 text-[11px]">
+      <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusColor(s) }} />
+      <span className="font-medium">{label}</span>
+    </span>
+  )
+}
 
-function SkeletonCard(){
+function SkeletonCard() {
   return (
     <Card className="animate-pulse">
       <div className="h-4 w-1/2 bg-gray-200 rounded" />

@@ -1,3 +1,4 @@
+//src/features/quotes/registry.tsx
 import type { QuoteKind, QuoteItem } from "./types"
 import type { WindowItem, CassonettoItem, ZanzarieraItem, PersianaItem, TapparellaItem, CustomItem } from "./types"
 import type { ItemFormProps } from "./forms/types"
