@@ -42,6 +42,19 @@ function normalizeCustomFields(cf: any): { label: string; value: string }[] | un
 function toPlainItem(it: any) {
   if (!it || typeof it !== "object") return null;
 
+  // Deriva vetro (glass) e stratigrafia vetro anche da campi annidati (options.gridWindow)
+  const nestedGlass =
+    (typeof it?.glass === "string" && it.glass.trim()) ? it.glass :
+    (typeof it?.options?.glass === "string" && it.options.glass.trim()) ? it.options.glass :
+    (typeof it?.options?.gridWindow?.glazing === "string" && it.options.gridWindow.glazing.trim()) ? it.options.gridWindow.glazing :
+    undefined;
+
+  const nestedGlassSpec =
+    (typeof it?.glass_spec === "string" && it.glass_spec.trim()) ? it.glass_spec :
+    (typeof it?.options?.glass_spec === "string" && it.options.glass_spec.trim()) ? it.options.glass_spec :
+    (typeof it?.options?.gridWindow?.glass_spec === "string" && it.options.gridWindow.glass_spec.trim()) ? it.options.gridWindow.glass_spec :
+    undefined;
+
   const base: any = {
     id: isStr(it.id) ? it.id : undefined,
     kind: isStr(it.kind) ? it.kind : "-",
@@ -64,7 +77,8 @@ function toPlainItem(it: any) {
     // comuni finestra/porta/scorrevole
     profile_system: isStr(it.profile_system) ? it.profile_system : undefined,
     color: isStr(it.color) ? it.color : undefined,
-    glass: isStr(it.glass) ? it.glass : undefined,
+    glass: isStr(nestedGlass) ? nestedGlass : undefined,
+    glass_spec: isStr(nestedGlassSpec) ? nestedGlassSpec : undefined,
     uw: isStr(it.uw) || isNum(it.uw) ? String(it.uw) : undefined,
 
     // zanzariera

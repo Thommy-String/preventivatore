@@ -6,8 +6,6 @@ export type PriceMode = 'per_mq' | 'per_pezzo' | 'total'
 
 export type QuoteKind =
   | 'finestra'
-  | 'portafinestra'
-  | 'scorrevole'
   | 'cassonetto'
   | 'zanzariera'
   | 'persiana'
@@ -75,27 +73,15 @@ export type BaseItem = {
   image_url?: string
 }
 
-/** Finestre/Portefinestre */
+/** Finestre */
 export type WindowItem = BaseItem & {
-  kind: 'finestra' | 'portafinestra'
+  kind: 'finestra'
   color?: string | null
   glass?: string | null
   hinges_color?: string | null
   uw?: number | null
   profile_system?: string | null
   /** Opzioni avanzate per disegno finestra */
-  options?: { gridWindow?: GridWindowConfig }
-}
-
-/** Scorrevole (stesse proprietà delle finestre) */
-export type ScorrevoleItem = BaseItem & {
-  kind: 'scorrevole'
-  color?: string | null
-  glass?: string | null
-  hinges_color?: string | null
-  uw?: number | null
-  profile_system?: string | null
-  /** Opzioni avanzate per disegno scorrevole */
   options?: { gridWindow?: GridWindowConfig }
 }
 
@@ -158,7 +144,6 @@ export type CustomItem = BaseItem & {
 
 export type QuoteItem =
   | WindowItem
-  | ScorrevoleItem
   | CassonettoItem
   | ZanzarieraItem
   | PersianaItem

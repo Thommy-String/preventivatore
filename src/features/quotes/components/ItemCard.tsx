@@ -4,6 +4,7 @@ import { surfaceMq } from "../utils/pricing"
 import { registry } from "../registry"
 import type { QuoteItem } from "../types"
 import WindowSvg from "../window/WindowSvg"
+import CassonettoSvg from "../cassonetto/CassonettoSvg"
 
 type Props = {
     item: QuoteItem
@@ -28,21 +29,31 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
             <div className="flex flex-col sm:flex-row gap-3">
                 {/* Thumbnail con quote L/H */}
                 <div className="relative w-[88px] h-[88px] sm:w-[110px] sm:h-[110px] shrink-0 rounded border bg-white flex items-center justify-center">
-                    {((it as any)?.options?.gridWindow)
-                      ? (
-                        <WindowSvg
-                          // keep the drawing contained in the same box; WindowSvg scales to px
-                          cfg={(it as any).options.gridWindow}
-                          width={80}
-                          height={80}
+                    {(
+                      // 1) Disegno live per FINESTRA con griglia
+                      (it.kind === 'finestra' && (it as any)?.options?.gridWindow)
+                    ) ? (
+                      <WindowSvg
+                        cfg={(it as any).options.gridWindow}
+                      />
+                    ) : (
+                      // 2) Disegno live per CASSONETTO (usa misure direttamente sull'item)
+                      it.kind === 'cassonetto' ? (
+                        <CassonettoSvg
+                          cfg={{
+                            width_mm: (it as any).width_mm ?? 1000,
+                            height_mm: (it as any).height_mm ?? 250,
+                            depth_mm: (it as any).depth_mm ?? null,
+                            celino_mm: (it as any).celino_mm ?? (it as any).extension_mm ?? null,
+                          }}
                         />
-                      )
-                      : (
+                      ) : (
+                        // 3) Fallback immagine (preview/data/public) o icona di default
                         thumbSrc
                           ? <img src={thumbSrc} alt={label} loading="lazy" className="max-w-[80%] max-h-[80%] object-contain" />
                           : null
                       )
-                    }
+                    )}
                     <div className="absolute bottom-1 left-0 right-0 text-center text-[11px] text-gray-700">
                         {typeof it.width_mm === 'number' ? `${it.width_mm} mm` : '—'}
                     </div>

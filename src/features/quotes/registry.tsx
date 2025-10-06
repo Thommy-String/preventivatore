@@ -1,11 +1,9 @@
 import type { QuoteKind, QuoteItem } from "./types"
-import type { WindowItem, ScorrevoleItem, CassonettoItem, ZanzarieraItem, PersianaItem, TapparellaItem, CustomItem } from "./types"
+import type { WindowItem, CassonettoItem, ZanzarieraItem, PersianaItem, TapparellaItem, CustomItem } from "./types"
 import type { ItemFormProps } from "./forms/types"
 import finestraIcon from "../../assets/images/finestra.png"
 import cassonettoIcon from "../../assets/images/cassonetto.png"
 import zanzarieraIcon from "../../assets/images/zanzariera.png"
-import portaFinestraIcon from "../../assets/images/portaFinestra.png"
-import scorrevoleIcon from "../../assets/images/scorrevole.png"
 import persianaIcon from "../../assets/images/persiana.png"
 import tapparellaIcon from "../../assets/images/tapparella.png"
 import { WindowForm } from "./forms/WindowForm"
@@ -63,95 +61,6 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
         },
       },
     }),
-    // Form: WindowAdvancedForm, // ← quando pronto
-    Form: WindowForm,
-  },
-   portafinestra: {
-    label: "Porta finestra",
-    icon: portaFinestraIcon,
-    makeDefaults: (): WindowItem => ({
-      id: crypto.randomUUID(),
-      kind: 'portafinestra',
-      width_mm: 1200,
-      height_mm: 2300,
-      qty: 1,
-      price_mode: 'per_mq',
-      price_per_mq: 350,
-      price_total: null,
-      color: null,
-      glass: null,
-      hinges_color: null,
-      uw: null,
-      profile_system: null,
-      notes: null,
-      reference: '',
-      custom_fields: [],
-      // 🔽 2 ante sopra (50/50), nessun sottoluce di default
-      options: {
-        gridWindow: {
-          width_mm: 1200,
-          height_mm: 2300,
-          frame_mm: 60,
-          mullion_mm: 40,
-          glazing: 'doppio',
-          showDims: false,
-          rows: [
-            {
-              height_ratio: 1,
-              cols: [
-                { width_ratio: 0.5, leaf: { state: 'apre_sx' } },
-                { width_ratio: 0.5, leaf: { state: 'apre_dx' } },
-              ],
-            },
-          ],
-        },
-      },
-    }),
-    // Form: WindowAdvancedForm,
-    Form: WindowForm,
-  },
-   scorrevole: {
-    label: "Scorrevole",
-    icon: scorrevoleIcon,
-    makeDefaults: (): ScorrevoleItem => ({
-      id: crypto.randomUUID(),
-      kind: 'scorrevole',
-      width_mm: 1800,
-      height_mm: 2100,
-      qty: 1,
-      price_mode: 'per_mq',
-      price_per_mq: 350,
-      price_total: null,
-      color: null,
-      glass: null,
-      hinges_color: null,
-      uw: null,
-      profile_system: null,
-      notes: null,
-      reference: '',
-      custom_fields: [],
-      // 🔽 preset 2 ante scorrevoli (simboli di apertura li gestiremo nel renderer)
-      options: {
-        gridWindow: {
-          width_mm: 1800,
-          height_mm: 2100,
-          frame_mm: 60,
-          mullion_mm: 40,
-          glazing: 'doppio',
-          showDims: false,
-          rows: [
-            {
-              height_ratio: 1,
-              cols: [
-                { width_ratio: 0.5, leaf: { state: 'apre_sx' } },
-                { width_ratio: 0.5, leaf: { state: 'apre_dx' } },
-              ],
-            },
-          ],
-        },
-      },
-    }),
-    // Form: WindowAdvancedForm,
     Form: WindowForm,
   },
     cassonetto: {
@@ -160,8 +69,8 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
         makeDefaults: (): CassonettoItem => ({
             id: crypto.randomUUID(),
             kind: 'cassonetto',
-            width_mm: 1000,
-            height_mm: 600,
+            width_mm: 900,
+            height_mm: 400,
             qty: 1,
             price_mode: 'total',
             price_total: 0,
@@ -169,7 +78,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
             reference: '',
             custom_fields: [],
             material: 'PVC',
-            depth_mm: null,
+            depth_mm: 300,
             celino_mm: null,
         }),
         Form: CassonettoForm // placeholder finché non creiamo CassonettoForm

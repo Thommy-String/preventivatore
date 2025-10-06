@@ -1,3 +1,4 @@
+//src/features/quotes/forms/WindowForm.tsx
 import React, { useState, useEffect } from "react";
 import type { ItemFormProps } from "./types";
 import type { WindowItem } from "../types";
@@ -442,12 +443,36 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                     {/* Input per Vetro e Riferimento */}
                     <div>
                         <label className="text-xs text-gray-500">Tipo Vetro</label>
-                        <select className="input" value={grid.glazing} onChange={(e) => handleGridChange({ glazing: e.target.value as any })}>
+                        <select
+                            className="input"
+                            value={grid.glazing}
+                            onChange={(e) => {
+                              const val = e.target.value as any;
+                              applyPatch({ glass: val as any }, { glazing: val as any });
+                            }}
+                        >
                             <option value="singolo">Singolo</option>
                             <option value="doppio">Doppio</option>
                             <option value="triplo">Triplo</option>
                             <option value="satinato">Satinato</option>
                         </select>
+                        <div className="mt-1 text-[11px] text-gray-500">
+                          Numero vetro: {grid.glazing === 'singolo' ? '1'
+                            : grid.glazing === 'doppio' ? '2'
+                            : grid.glazing === 'triplo' ? '3'
+                            : grid.glazing === 'satinato' ? 'satinato'
+                            : '-'}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">Stratigrafia vetro</label>
+                        <input
+                          className="input"
+                          type="text"
+                          placeholder="es. 4-14-4-12-33.1 LowE"
+                          value={(d as any).glass_spec ?? ''}
+                          onChange={(e) => applyPatch({ glass_spec: e.target.value })}
+                        />
                     </div>
                     <div>
                         <label className="text-xs text-gray-500">Riferimento</label>
@@ -504,7 +529,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                             type="number"
                             min="0"
                             step="0.01"
-                            placeholder="Es. 1.2"
+                            placeholder="Es. 1.3"
                             value={typeof (d as any).uw === 'number' ? String((d as any).uw) : ''}
                             onChange={(e) => {
                                 const raw = e.target.value;

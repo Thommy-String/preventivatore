@@ -1,111 +1,94 @@
-import type { CassonettoItem } from '../types'
-import type { ItemFormProps } from './types'
+import React, { useEffect } from 'react';
+import type { CassonettoItem } from '../types';
+import type { ItemFormProps } from './types';
 
-const MATERIALS = ['PVC', 'Alluminio coibentato', 'Legno coibentato'] as const
+const MATERIALS = ['PVC', 'Alluminio coibentato', 'Legno coibentato'] as const;
 
-export function CassonettoForm({ draft, onChange, set }: ItemFormProps<CassonettoItem>) {
-  if (!draft) return null
-  const d = draft
+export function CassonettoForm({ draft, onChange }: ItemFormProps<CassonettoItem>) {
+  if (!draft) return null;
+  const d = draft;
+
+  // Imposta valori di default se l'elemento è nuovo
+  useEffect(() => {
+    if (!d.width_mm && !d.height_mm && !d.depth_mm) {
+      onChange({
+        ...d,
+        width_mm: 1000,
+        height_mm: 250,
+        depth_mm: 250,
+      });
+    }
+  }, []); // Eseguito solo al primo render
+
+  const updateField = (key: keyof CassonettoItem, value: any) => {
+    onChange({ ...d, [key]: value });
+  };
+
   return (
     <div className="space-y-4">
-      {/* Materiale */}
-      <section className="space-y-2">
-        <div className="text-xs font-medium text-gray-500">Materiale</div>
-        <div>
-          <select
-            className="input"
-            value={(d.material ?? 'PVC') as string}
-            onChange={(e) => set('material', e.target.value as CassonettoItem['material'])}
-          >
-            {MATERIALS.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        </div>
-      </section>
-
       {/* Misure principali */}
       <section className="space-y-2">
         <div className="text-xs font-medium text-gray-500">Misure</div>
         <div className="grid grid-cols-3 gap-2 items-start">
           <div>
             <div className="text-xs text-gray-500">Larghezza (mm)</div>
-            <input
-              className="input"
-              type="number"
-              value={d.width_mm}
-              onChange={(e) => set('width_mm', Number(e.target.value) || 0)}
-            />
+            <input className="input" type="number" value={d.width_mm || ''} onChange={(e) => updateField('width_mm', Number(e.target.value) || null)} />
           </div>
           <div>
             <div className="text-xs text-gray-500">Altezza (mm)</div>
-            <input
-              className="input"
-              type="number"
-              value={d.height_mm}
-              onChange={(e) => set('height_mm', Number(e.target.value) || 0)}
-            />
+            <input className="input" type="number" value={d.height_mm || ''} onChange={(e) => updateField('height_mm', Number(e.target.value) || null)} />
           </div>
           <div>
             <div className="text-xs text-gray-500">Profondità (mm)</div>
-            <input
-              className="input"
-              type="number"
-              value={d.depth_mm ?? ''}
-              placeholder="es. 220"
-              onChange={(e) => set('depth_mm', e.target.value === '' ? null : Number(e.target.value))}
-            />
+            <input className="input" type="number" value={d.depth_mm ?? ''} onChange={(e) => updateField('depth_mm', e.target.value === '' ? null : Number(e.target.value))} />
           </div>
         </div>
       </section>
 
       {/* Celino */}
       <section className="space-y-2">
-        <div className="text-xs font-medium text-gray-500">Celino</div>
-        <div className="grid grid-cols-3 gap-2 items-start">
+        <div className="text-xs font-medium text-gray-500">Celino (Opzionale)</div>
+        <div className="grid grid-cols-2 gap-3 items-center">
           <div>
-            <div className="text-xs text-gray-500">Estensione celino (mm)</div>
-            <input
-              className="input"
-              type="number"
-              value={d.extension_mm ?? ''}
-              placeholder="es. 40"
-              onChange={(e) => set('extension_mm', e.target.value === '' ? null : Number(e.target.value))}
-            />
+            <div className="text-xs text-gray-500">Estensione (mm)</div>
+            <input className="input" type="number" value={(d as any).extension_mm ?? ''} onChange={(e) => updateField('extension_mm' as any, e.target.value === '' ? null : Number(e.target.value))} />
           </div>
-          <div className="col-span-2 self-end text-xs text-gray-500">
-            Valore opzionale: aggiunge profondità al cassonetto per coprire lo spessore muro.
+          <div className="text-xs text-gray-500">Aggiunge profondità per coprire il muro.</div>
+        </div>
+      </section>
+
+      {/* Dettagli */}
+      <section className="space-y-2">
+        <div className="text-xs font-medium text-gray-500">Dettagli</div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-500">Materiale</label>
+            <select className="input" value={d.material ?? 'PVC'} onChange={(e) => updateField('material', e.target.value as CassonettoItem['material'])} >
+              {MATERIALS.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Colore</label>
+            <input className="input" type="text" placeholder="Es. RAL 9016" value={d.color ?? ''} onChange={(e) => updateField('color', e.target.value)} />
           </div>
         </div>
       </section>
 
-      {/* Riferimento */}
+      {/* Quantità e Riferimento */}
       <section className="space-y-2">
-        <div className="text-xs font-medium text-gray-500">Riferimento</div>
-        <input
-          className="input"
-          type="text"
-          placeholder="es. Bagno piccolo, Salotto..."
-          value={d.reference ?? ''}
-          onChange={(e) => set('reference', e.target.value)}
-        />
-      </section>
-
-      {/* Quantità */}
-      <section className="space-y-2">
-        <div className="text-xs font-medium text-gray-500">Quantità</div>
-        <div className="grid grid-cols-3 gap-2 items-start">
-          <div>
-            <input
-              className="input"
-              type="number"
-              min={1}
-              value={d.qty}
-              onChange={(e) => set('qty', Math.max(1, Number(e.target.value) || 1))}
-            />
-          </div>
+        <div className="text-xs font-medium text-gray-500">Quantità e Riferimento</div>
+        <div className="grid grid-cols-2 gap-3">
+           <div>
+              <label className="text-xs text-gray-500">Pezzi</label>
+              <input className="input" type="number" min={1} value={d.qty} onChange={(e) => updateField('qty', Math.max(1, Number(e.target.value) || 1))} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Riferimento</label>
+              <input className="input" type="text" placeholder="es. Cucina" value={d.reference ?? ''} onChange={(e) => updateField('reference', e.target.value)} />
+            </div>
         </div>
       </section>
     </div>
-  )
+  );
 }
+

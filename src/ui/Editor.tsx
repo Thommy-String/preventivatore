@@ -8,7 +8,6 @@ import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 
-import { uploadQuoteItemImage } from '../lib/uploadImages'
 
 // Store & Quote items
 import { useQuoteStore } from '../stores/useQuoteStore'
@@ -17,6 +16,7 @@ import { registry } from '../features/quotes/registry'
 import { euro } from '../features/quotes/utils/pricing'
 import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal'
 import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
+import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
 
 // Types for the Quote header (DB)
 type Quote = {
@@ -76,12 +76,12 @@ export default function Editor() {
   const [saving, setSaving] = useState(false)
 
   // Riepilogo costi (manuale per categoria)
-  const [manualTotals, setManualTotals] = useState<{ id: string; label: string; amount: number }[]>([])
+  const [manualTotals, setManualTotals] = useState<{ id: string; label: string; amount: number; pieces?: number | null }[]>([])
 
   const addTotalRow = () =>
-    setManualTotals(r => [...r, { id: crypto.randomUUID(), label: '', amount: 0 }])
+    setManualTotals(r => [...r, { id: crypto.randomUUID(), label: '', amount: 0, pieces: null }])
 
-  const updateRow = (id: string, patch: Partial<{ label: string; amount: number }>) =>
+  const updateRow = (id: string, patch: Partial<{ label: string; amount: number; pieces?: number | null }>) =>
     setManualTotals(r => r.map(x => x.id === id ? { ...x, ...patch } : x))
 
   const removeRow = (id: string) =>
@@ -137,36 +137,64 @@ export default function Editor() {
     setDraft(JSON.parse(JSON.stringify(it)))
   }
   async function saveDraft() {
-  if (!draft) return
-  let toSave: any = { ...draft }
+    if (!draft) return
+    let toSave: any = { ...draft }
 
-  // Se nel draft è presente un file scelto dall'utente, effettua l'upload e sostituisci image_url con l'URL pubblico
-  const pickedFile: File | undefined = (toSave as any).__pickedFile
-  if (pickedFile && quote?.id) {
-    try {
-      const publicUrl = await uploadQuoteItemImage(pickedFile, quote.id)
-      toSave.image_url = publicUrl
-    } catch (err: any) {
-      toast.error(err?.message || 'Errore upload immagine')
-    } finally {
-      // rimuovi i marker interni non serializzabili
+    // --- Auto-genera PNG per Cassonetto (solo data URL, nessun upload) ---
+    if (!toSave.__pickedFile && String(toSave.kind).toLowerCase() === 'cassonetto') {
+      try {
+        const cfg = {
+          width_mm: Number(toSave.width_mm) || 0,
+          height_mm: Number(toSave.height_mm) || 0,
+          depth_mm: (toSave.depth_mm ?? null),
+          celino_mm: (toSave.celino_mm ?? toSave.extension_mm ?? null),
+        } as const;
+        if (cfg.width_mm > 0 && cfg.height_mm > 0) {
+          const blob = await cassonettoToPngBlob(cfg as any, 640, 640);
+          const dataUrl = await blobToDataURL(blob);
+          toSave.image_url = dataUrl;
+          // anteprima locale
+          // @ts-ignore
+          toSave.__previewUrl = dataUrl;
+        }
+      } catch (e) {
+        console.warn('Rasterizzazione cassonetto → PNG fallita', e);
+      }
+    }
+
+    // --- Se l’utente ha caricato un file: convertilo in data URL (niente upload) ---
+    const pickedFile: File | undefined = (toSave as any).__pickedFile
+    if (pickedFile) {
+      try {
+        const dataUrl = await blobToDataURL(pickedFile);
+        toSave.image_url = dataUrl;
+        // @ts-ignore
+        toSave.__previewUrl = dataUrl;
+      } catch (err: any) {
+        console.warn('Conversione file → data URL fallita', err);
+      } finally {
+        // rimuovi i marker non serializzabili
+        // @ts-ignore
+        delete toSave.__pickedFile
+      }
+    } else {
+      // in ogni caso non persistiamo il File
       // @ts-ignore
       delete toSave.__pickedFile
-      // @ts-ignore
-      delete toSave.__previewUrl
     }
-  }
 
-  if (editingId) {
-    replaceItem(editingId, { ...toSave, id: editingId })
-    toast.success('Voce aggiornata')
-  } else {
-    addItem(toSave)
-    toast.success('Voce aggiunta')
+    // Nota: __previewUrl può rimanere in memoria locale; la persistenza su DB lo rimuove già (vedi effetto items_json)
+
+    if (editingId) {
+      replaceItem(editingId, { ...toSave, id: editingId })
+      toast.success('Voce aggiornata')
+    } else {
+      addItem(toSave)
+      toast.success('Voce aggiunta')
+    }
+    setDraft(null)
+    setEditingId(null)
   }
-  setDraft(null)
-  setEditingId(null)
-}
 
   // PDF Preview (open in new tab)
   async function openPdfPreview() {
@@ -180,22 +208,46 @@ export default function Editor() {
         items.map(async (it: any) => {
           const { __previewUrl, __pickedFile, ...clean } = it ?? {};
 
-          // Se la voce ha una configurazione finestra, rasterizza l'SVG -> PNG e usa un data URL
+          // Gestione rasterizzazione e normalizzazione immagini per PDF
           if (clean?.options?.gridWindow) {
             try {
               const blob = await gridWindowToPngBlob(clean.options.gridWindow, 640, 640);
-              const dataUrl = await blobToDataURL(blob); // data:image/png;base64,...
+              const dataUrl = await blobToDataURL(blob);
               clean.image_url = dataUrl;
             } catch (e) {
-              console.warn("Rasterizzazione finestra → PNG fallita", e);
-              // fallback: se c’era un URL http(s) valido lo manteniamo, altrimenti nessuna immagine
+              console.warn('Rasterizzazione finestra → PNG fallita', e);
+              const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+              const isHttp = /^https?:\/\//i.test(raw);
+              const isData = /^data:image\//i.test(raw);
+              clean.image_url = (isHttp || isData) ? raw : undefined;
+            }
+          } else if (String(clean?.kind || '').toLowerCase() === 'cassonetto') {
+            try {
+              const cfg = {
+                width_mm: Number(clean.width_mm) || 0,
+                height_mm: Number(clean.height_mm) || 0,
+                depth_mm: (clean.depth_mm ?? null),
+                celino_mm: (clean.celino_mm ?? clean.extension_mm ?? null),
+              } as const;
+              if (cfg.width_mm > 0 && cfg.height_mm > 0) {
+                const blob = await cassonettoToPngBlob(cfg as any, 640, 640);
+                const dataUrl = await blobToDataURL(blob);
+                clean.image_url = dataUrl;
+              } else {
+                // fallback se misure mancanti
+                const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+                const isHttp = /^https?:\/\//i.test(raw);
+                const isData = /^data:image\//i.test(raw);
+                clean.image_url = (isHttp || isData) ? raw : undefined;
+              }
+            } catch (e) {
+              console.warn('Rasterizzazione cassonetto → PNG fallita', e);
               const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
               const isHttp = /^https?:\/\//i.test(raw);
               const isData = /^data:image\//i.test(raw);
               clean.image_url = (isHttp || isData) ? raw : undefined;
             }
           } else {
-            // Voci NON finestra: consenti solo http(s) o data URL; MAI blob:
             const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
             const isHttp = /^https?:\/\//i.test(raw);
             const isData = /^data:image\//i.test(raw);
@@ -220,6 +272,7 @@ export default function Editor() {
       const catTotals = manualTotals.map(r => ({
         label: r.label || '-',
         amount: Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0,
+        pieces: (typeof r.pieces === 'number' && isFinite(r.pieces) && r.pieces > 0) ? r.pieces : null,
       }));
       const totalExcluded = catTotals.reduce((s, r) => s + (r.amount || 0), 0);
 
@@ -623,6 +676,23 @@ export default function Editor() {
 
                   {/* Amount (second row) */}
                   <div className="flex items-center gap-2">
+                    {/* Pezzi opzionale */}
+                    <div className="w-20">
+                      <input
+                        className="input w-full text-right"
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        placeholder="pz."
+                        value={typeof row.pieces === 'number' ? row.pieces : ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          updateRow(row.id, { pieces: v === '' ? null : Math.max(0, parseInt(v || '0', 10)) })
+                        }}
+                      />
+                    </div>
+
+                    {/* Importo */}
                     <div className="flex-1 sm:flex-none sm:w-40">
                       <input
                         className="input w-full text-right"

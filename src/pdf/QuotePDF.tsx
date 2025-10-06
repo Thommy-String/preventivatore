@@ -10,9 +10,10 @@ import zanzarieraImg from "../assets/images/zanzariera.png";
 import cassonettoImg from "../assets/images/cassonetto.png";
 import persianaImg from "../assets/images/persiana.png";
 import tapparellaImg from "../assets/images/tapparella.png";
+import xInfissiLogo from "../assets/images/x-infissi-logo.png";
 
 // Accept both shapes: `{category, amount}` or `{label, amount}`
-export type CategoryTotalInput = { category?: string | null; label?: string | null; amount?: number | null }
+export type CategoryTotalInput = { category?: string | null; label?: string | null; amount?: number | null; pieces?: number | null }
 
 type Customer = { name?: string | null; address?: string | null; email?: string | null; phone?: string | null; vat?: string | null };
 
@@ -49,7 +50,7 @@ const s = StyleSheet.create({
     td: { flex: 1, padding: 8 },
     right: { textAlign: "right" as const },
     small: { fontSize: 9, color: "#555" },
-    logo: { width: 90, height: 32, objectFit: "contain", marginBottom: 6 },
+    logo: { width: 140, height: 55, objectFit: "contain", marginBottom: 0 , marginTop: -20},
     companyDetails: { fontSize: 9, color: '#555', lineHeight: 1.4 },
     sep: { height: 8 },
     footerNote: { marginTop: 14, fontSize: 9, color: "#555" },
@@ -60,46 +61,42 @@ const s = StyleSheet.create({
         backgroundColor: "#f5f6f8",
         borderRadius: 8,
         padding: 14,
-        marginBottom: 20,
+        marginBottom: 10,
         flexDirection: "row",
     },
     itemPhotoWrap: {
-        width: 180,
-        height: 180,
-        backgroundColor: '#ffffff',
+        width: 170,
+        height: 170,
+        backgroundColor: 'transparent',
         borderRadius: 6,
         alignItems: "center",
         justifyContent: "center",
         padding: 6,
         position: "relative",
-        borderWidth: 1,
-        borderColor: '#eee',
         marginRight: 12,
     },
     dimW: {
         position: "absolute",
-        bottom: -12,
+        bottom: -18,
         left: 0,
         right: 0,
         textAlign: "center",
-        fontSize: 12,
+        fontSize: 8,
         color: "#333",
-        backgroundColor: "#ffffffaa",
         paddingVertical: 3
     },
     dimHWrap: {
         position: "absolute",
         top: 0,
         bottom: 0,
-        left: -12,
+        left: -20,
         alignItems: "center",
         justifyContent: "center"
     },
     dimH: {
-        fontSize: 12,
+        fontSize: 8,
         color: "#333",
         transform: "rotate(-90deg)",
-        backgroundColor: "#ffffffaa",
         paddingVertical: 3,
         paddingHorizontal: 3
     },
@@ -133,7 +130,7 @@ const s = StyleSheet.create({
     itemDescription: {
         fontSize: 9,
         color: '#666',
-        marginBottom: 8,
+        marginBottom: 4,
     },
     itemRef: {
         fontSize: 9,
@@ -164,6 +161,10 @@ const s = StyleSheet.create({
         fontWeight: 500,
         color: '#111'
     },
+    piecesNote: {
+        color: "#777",
+        fontSize: 9,
+    },
 });
 
 function euro(n?: number | null) {
@@ -187,6 +188,9 @@ function normalizeTotals(input?: CategoryTotalInput[] | null) {
     return arr.map((r) => ({
         category: safeText(r?.label ?? r?.category ?? "", "-"),
         amount: (typeof r?.amount === "number" && Number.isFinite(r.amount)) ? r.amount : 0,
+        pieces: (typeof (r as any)?.pieces === "number" && Number.isFinite((r as any).pieces) && (r as any).pieces > 0)
+            ? (r as any).pieces
+            : null,
     }));
 }
 
@@ -257,28 +261,26 @@ function detailPairs(it: any): Array<[string, string]> {
                 const qty = Number(it.qty);
                 const total = Number.isFinite(qty) ? areaM2 * qty : areaM2;
                 const aTot = total.toFixed(2);
-                pairs.push(["Superficie (totale)", `${aTot} m²`]);
+                pairs.push(["Superficie totale", `${aTot} m²`]);
             }
             const ps = pickFirst(it, ["profile_system", "system_profile"]); if (ps) pairs.push(["Sistema profilo", String(ps)])
             const col = pickFirst(it, ["color", "colore", "profilo_colore"]); if (col) pairs.push(["Colore", String(col)])
             // --- Custom glazing/uw logic ---
-            const glazing = pickFirst(it, ["glass","vetro","glazing"]);
-            if (glazing) pairs.push(["Vetro", String(glazing)]);
-            const glassNum = (() => {
-              const s = String(glazing || "").toLowerCase().trim();
-              if (s === "singolo") return "1";
-              if (s === "doppio") return "2";
-              if (s === "triplo") return "3";
-              if (s === "satinato") return "satinato";
-              return undefined;
-            })();
-            if (glassNum) pairs.push(["Numero vetro", glassNum]);
+            const glazing = pickFirst(it, ["glass", "vetro", "glazing"]);
+            if (glazing) {
+                // Mostra solo "Vetro" (singolo/doppio/triplo/satinato). Niente "Numero vetro".
+                pairs.push(["Vetro", String(glazing)]);
+            }
             const uwRaw = pickFirst(it, ["uw"]);
             if (uwRaw !== undefined && uwRaw !== null && String(uwRaw).trim() !== "") {
-              const uwNum = Number(uwRaw);
-              const uwStr = Number.isFinite(uwNum) ? `<= ${uwNum} W/m²K` : `<= ${String(uwRaw)} W/m²K`;
-              pairs.push(["Uw", uwStr]);
+                const uwNum = Number(uwRaw);
+                const uwStr = Number.isFinite(uwNum) ? `<= ${uwNum} W/m²K` : `<= ${String(uwRaw)} W/m²K`;
+                pairs.push(["Uw", uwStr]);
             }
+
+            const gspec = pickFirst(it, ["glass_spec", "vetro_stratigrafia", "stratigrafia_vetro"]);
+            if (gspec) pairs.push(["Stratigrafia vetro", String(gspec)]);
+
             // ---
             const cern = pickFirst(it, ["hinge_color", "colore_cerniere"]); if (cern) pairs.push(["Colore cerniere", String(cern)])
             break
@@ -350,7 +352,10 @@ function detailPairs(it: any): Array<[string, string]> {
             spalletta_mm: "Celino", extension_mm: "Celino",
             lamelle_type: "Lamelle", lamelle: "Lamelle",
             con_telaio: "Telaio",
-            hinge_color: "Colore cerniere", hinges_color: "Colore cerniere"
+            hinge_color: "Colore cerniere", hinges_color: "Colore cerniere",
+            glass_spec: "Stratigrafia vetro",
+            vetro_stratigrafia: "Stratigrafia vetro",
+            stratigrafia_vetro: "Stratigrafia vetro",
         }
         const label = pretty[k] || k
         if (!shownKeys.has(label.toLowerCase())) {
@@ -391,28 +396,28 @@ export default function QuotePDF(props: QuotePDFProps) {
 
     // Superficie totale (somma di tutte le voci con misure), in m²
     const totalM2 = itemsSafe.reduce((acc: number, it: any) => {
-      const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-      const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-      const q = Number(it?.qty ?? 1);
-      if (Number.isFinite(w) && Number.isFinite(h)) {
-        const m2 = (w * h) / 1_000_000;
-        return acc + (Number.isFinite(q) ? m2 * q : m2);
-      }
-      return acc;
+        const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
+        const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
+        const q = Number(it?.qty ?? 1);
+        if (Number.isFinite(w) && Number.isFinite(h)) {
+            const m2 = (w * h) / 1_000_000;
+            return acc + (Number.isFinite(q) ? m2 * q : m2);
+        }
+        return acc;
     }, 0);
 
     // Superficie solo finestre (finestra, portafinestra, scorrevole)
     const windowsM2 = itemsSafe.reduce((acc: number, it: any) => {
-      const kind = String(it?.kind || "").toLowerCase();
-      if (!["finestra","portafinestra","scorrevole"].includes(kind)) return acc;
-      const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-      const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-      const q = Number(it?.qty ?? 1);
-      if (Number.isFinite(w) && Number.isFinite(h)) {
-        const m2 = (w * h) / 1_000_000;
-        return acc + (Number.isFinite(q) ? m2 * q : m2);
-      }
-      return acc;
+        const kind = String(it?.kind || "").toLowerCase();
+        if (!["finestra", "portafinestra", "scorrevole"].includes(kind)) return acc;
+        const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
+        const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
+        const q = Number(it?.qty ?? 1);
+        if (Number.isFinite(w) && Number.isFinite(h)) {
+            const m2 = (w * h) / 1_000_000;
+            return acc + (Number.isFinite(q) ? m2 * q : m2);
+        }
+        return acc;
     }, 0);
 
     const totals = normalizeTotals(catTotals);
@@ -442,13 +447,14 @@ export default function QuotePDF(props: QuotePDFProps) {
                         {companyLogoUrl && companyLogoUrl.trim() ? (
                             <Image src={companyLogoUrl} style={s.logo} />
                         ) : (
-                            <Text style={s.h1}>X INFISSI</Text>
+                            <Image src={xInfissiLogo} style={s.logo} />
                         )}
                         <Text style={s.companyDetails}>
-                            X INFISSI S.R.L.{"\n"}
-                            Via Esempio 123, 20100 Milano (MI){"\n"}
-                            P.IVA IT01234567890 · +39 02 1234 5678{"\n"}
-                            info@xinfissi.it · www.xinfissi.it
+                            X S.R.L.{"\n"}
+                            P.IVA 04062850120{"\n"}
+                            sede legale - Saronno (VA) 21047{"\n"}
+                            Via San Giuseppe, 95{"\n"}
+                            info@xinfissi.it · www.xinfissi.it · +39 02 1234 5678
                         </Text>
                     </View>
                     <View style={{ width: 300, marginTop: 0 }}>
@@ -471,7 +477,6 @@ export default function QuotePDF(props: QuotePDFProps) {
                 {/* Dati documento */}
                 <View style={s.block}>
                     <Text style={s.h2}>Offerta n° {safeText(quoteNumber, "-")}</Text>
-                    <Text style={s.small}>Superficie finestre: {windowsM2.toFixed(2)} m²</Text>
                     <View style={[s.box]}>
                         <View style={s.row}>
                             <View style={{ flex: 1, paddingRight: 8 }}>
@@ -507,13 +512,24 @@ export default function QuotePDF(props: QuotePDFProps) {
                         </View>
                         {totals.length > 0 ? (
                             totals.map((r, i) => {
-                                const k = `row-${safeText(r.category, '-')}-${Number.isFinite(r.amount) ? r.amount : 0}-${i}`
+                                const label = safeText(r.category, "-");
+                                const k = `row-${label}-${Number.isFinite(r.amount) ? r.amount : 0}-${i}`;
+                                const showWindowsM2 = /finestr/i.test(label) && windowsM2 > 0;
+                                const pieces = (r as any).pieces as number | null;
                                 return (
                                     <View key={k} style={s.tr}>
-                                        <Text style={[s.td, { flex: 2 }]}>{safeText(r.category, "-")}</Text>
+                                        <Text style={[s.td, { flex: 2 }]}>
+                                            <Text>{label}</Text>
+                                            {typeof pieces === "number" && pieces > 0 ? (
+                                                <Text style={s.piecesNote}> · {pieces} pezzi </Text>
+                                            ) : null}
+                                            {showWindowsM2 ? (
+                                                <Text style={s.piecesNote}> · {windowsM2.toFixed(2)} m²</Text>
+                                            ) : null}
+                                        </Text>
                                         <Text style={[s.td, s.right]}>{euro(r.amount)}</Text>
                                     </View>
-                                )
+                                );
                             })
                         ) : (
                             <View style={s.tr}>
@@ -527,13 +543,9 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 <Text style={[s.td, s.right]}>{euro(mountingCost)}</Text>
                             </View>
                         )}
-                        <View style={s.tr}>
-                          <Text style={[s.td, { flex: 2 }]}>Superficie totale</Text>
-                          <Text style={[s.td, s.right]}>{totalM2.toFixed(2)} m²</Text>
-                        </View>
                         <View style={[s.tr, { borderBottomWidth: 0 }]}>
-                            <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>TOTALE (IVA ESCLUSA)</Text>
-                            <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(totalImponibile)}</Text>
+                            <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7'  }]}>TOTALE (IVA ESCLUSA)</Text>
+                            <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(totalImponibile)}</Text>
                         </View>
                     </View>
                 </View>
@@ -565,7 +577,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 ? String(it?.title || it?.label || "Voce personalizzata").trim()
                                 : String(it?.kind || "Voce").toUpperCase();
 
-                            const qty = `Quantità ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : "1"}`;
+                            const qty = `Q.tà ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : "1"}`;
 
                             //mostra misure anche per custom
                             const description = describeItem(it);
@@ -592,12 +604,12 @@ export default function QuotePDF(props: QuotePDFProps) {
                                         })()}
                                         {/* Dimension overlays on image */}
                                         <Text style={s.dimW}>
-                                          { (it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza) ? `${String(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)} mm` : '—' }
+                                            {(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza) ? `${String(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)} mm` : '—'}
                                         </Text>
                                         <View style={s.dimHWrap}>
-                                          <Text style={s.dimH}>
-                                            { (it?.height_mm ?? it?.altezza_mm ?? it?.altezza) ? `${String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)} mm` : '—' }
-                                          </Text>
+                                            <Text style={s.dimH}>
+                                                {(it?.height_mm ?? it?.altezza_mm ?? it?.altezza) ? `${String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)} mm` : '—'}
+                                            </Text>
                                         </View>
                                     </View>
 
@@ -639,7 +651,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                 {companyLogoUrl && companyLogoUrl.trim() ? (
                     <Image src={companyLogoUrl} style={s.logo} />
                 ) : (
-                    <Text style={s.h1}>X INFISSI</Text>
+                    <Image src={xInfissiLogo} style={s.logo} />
                 )}
                 <Text style={[s.h2, { marginTop: 6 }]}>Condizioni di Fornitura</Text>
                 <View style={{ height: 1, backgroundColor: "#eee", marginVertical: 10 }} />
