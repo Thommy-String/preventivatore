@@ -87,12 +87,7 @@ export default function Editor() {
   const removeRow = (id: string) =>
     setManualTotals(r => r.filter(x => x.id !== id))
 
-  const duplicateRow = (id: string) =>
-    setManualTotals(r => {
-      const it = r.find(x => x.id === id)
-      if (!it) return r
-      return [...r, { ...it, id: crypto.randomUUID() }]
-    })
+
 
   // piva local state
   const [piva, setPiva] = useState<string>("")
@@ -1005,7 +1000,7 @@ export default function Editor() {
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {itemsArray.map((it, idx) => (
+            {itemsArray.map((it) => (
               <div
                 key={it.id}
                 className={`relative group rounded-lg`}

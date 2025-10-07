@@ -115,7 +115,6 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     // --- Scala dinamica basata sul lato corto (per quote sempre vicine) ---
     const baseDim = Math.max(60, Math.min(width_mm, height_mm)); // usa il lato corto, con un minimo
     const strokeWidth = Math.max(1.0, Math.min(5.0, baseDim / 400)); const fontSize = Math.max(9, Math.min(24, baseDim / 28));
-    const textPadding = fontSize * 1.15;
 
     // --- Spazio fisso per quote vicino al bordo dell'oggetto ---
     const labelGap = Math.max(10, Math.min(22, baseDim / 18)); // distanza costante “vicina”

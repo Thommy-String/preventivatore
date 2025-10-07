@@ -1,5 +1,5 @@
 //src/features/quotes/forms/WindowForm.tsx
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import type { ItemFormProps } from "../types";
 import type { WindowItem } from "../types";
 import type { GridWindowConfig, LeafState } from "../window/WindowSvg";
@@ -118,30 +118,14 @@ function rebalanceColsToTotal(
     return cols.map((c, i) => ({ ...c, width_ratio: target[i] }));
 }
 
-// --- Helper dimensioni assolute (mm) ---
-function innerWidthMm(grid: GridWindowConfig) {
-    return Math.max(0, grid.width_mm - grid.frame_mm * 2);
-}
-function innerHeightMm(grid: GridWindowConfig) {
-    return Math.max(0, grid.height_mm - grid.frame_mm * 2);
-}
-function usableWidthMm(grid: GridWindowConfig, colsCount: number) {
-    return Math.max(0, innerWidthMm(grid) - Math.max(0, colsCount - 1) * grid.mullion_mm);
-}
-function usableHeightMm(grid: GridWindowConfig, rowsCount: number) {
-    return Math.max(0, innerHeightMm(grid) - Math.max(0, rowsCount - 1) * grid.mullion_mm);
-}
+
 
 export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     if (!draft) return null;
     const d = draft;
 
     const [autoSplit, setAutoSplit] = useState(true);
-    const equalizeRowCols = (rows: GridWindowConfig['rows']) =>
-        rows.map(r => ({
-            ...r,
-            cols: r.cols.map(c => ({ ...c, width_ratio: 1 }))
-        }));
+    
 
     const [widthStr, setWidthStr] = useState(String(d.width_mm || ''));
     const [heightStr, setHeightStr] = useState(String(d.height_mm || ''));

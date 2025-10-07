@@ -7,7 +7,7 @@ import QuoteActionsMenu from '../components/QuoteActionsMenu'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+
 
 
 // Anteprima preventivo: totale senza IVA e riepilogo per tipo
@@ -559,11 +559,6 @@ function daysLeft(created_at: string | null, validity_days: number) {
   return d
 }
 
-function BadgeStatus({ s }: { s: QuoteRow['status'] }) {
-  const cls = `badge badge-${s}`
-  const label = s.charAt(0).toUpperCase() + s.slice(1)
-  return <Badge className={cls}>{label}</Badge>
-}
 
 function CardQuote({
   q, onOpen, onDuplicate, onPdf, onDelete, onDeleteDisabled = false, onFilterByReference

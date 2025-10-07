@@ -1,5 +1,4 @@
 // src/features/quotes/svg/windowToPng.tsx
-import React from "react";
 import * as ReactDOMClient from "react-dom/client";
 import WindowSvg from "../window/WindowSvg";
 

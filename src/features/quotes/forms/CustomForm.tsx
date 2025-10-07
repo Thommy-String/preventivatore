@@ -1,5 +1,5 @@
 // src/features/quotes/forms/CustomForm.tsx
-import React, { useRef, useState } from "react"
+import React, { useRef } from "react"
 import type { CustomItem, CustomField } from "../../quotes/types"
 
 type Props = {

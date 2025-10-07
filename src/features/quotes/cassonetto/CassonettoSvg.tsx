@@ -37,7 +37,6 @@ export default function CassonettoSvg({ cfg, stroke = "#222" }: CassonettoSvgPro
   const strokeWidth = 1.5;
   // Scala del font più conservativa per grandi larghezze
   const fontSize = Math.max(12, Math.min(50, drawingWidth / 40));
-  const textStyle = { fontFamily: 'sans-serif', fontSize, stroke: 'none', fill: '#374151' };
   const inset = Math.min(width_mm, height_mm) * 0.1;
 
   // --- NUOVO: Calcolo del ViewBox corretto per un centraggio perfetto ---

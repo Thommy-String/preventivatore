@@ -227,51 +227,10 @@ function describeItem(it: any): string {
     return '';
 }
 
-// Rettangolo contenuto (equivalente di object-fit: contain)
-function containRect(boxW: number, boxH: number, imgW: number, imgH: number, padding = 0) {
-    const cW = Math.max(0, boxW - padding * 2);
-    const cH = Math.max(0, boxH - padding * 2);
-    const arBox = cW > 0 && cH > 0 ? cW / cH : 1;
-    const arImg = imgW > 0 && imgH > 0 ? imgW / imgH : 1;
 
-    let w = cW, h = cH;
-    if (arImg > arBox) { w = cW; h = cW / arImg; }
-    else { h = cH; w = cH * arImg; }
 
-    const x = (boxW - w) / 2;
-    const y = (boxH - h) / 2;
-    return { x, y, w, h };
-}
 
-// Stima dimensioni “intrinseche” da L/H dell’item (in mm)
-function guessImageSizeFromItem(it: any) {
-    const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza) || 1;
-    const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza) || 1;
-    return { w, h };
-}
 
-function getDimOffsets(it: any) {
-    const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-    const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-    if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-        return { bottom: -18, left: -20 };
-    }
-    const ar = h / w; // aspect ratio (H/W)
-    // Per elementi "schiacciati" (basso e largo) avvicina la quota L al box
-    // Per elementi molto alti, tienila un po' più distante
-    const bottom =
-        ar < 0.55 ? -8   // molto bassi → vicino
-            : ar < 0.8 ? -12
-                : ar < 1.2 ? -16
-                    : -18;             // alti → come prima
-    // La quota H a sinistra: se l'oggetto è molto alto, tienila più distante; altrimenti avvicina
-    const left =
-        ar > 1.6 ? -28   // molto alti → più esterna
-            : ar > 1.2 ? -24
-                : ar > 0.9 ? -22
-                    : -18;             // bassi/larghi → più vicina
-    return { bottom, left };
-}
 
 function imageFor(kind?: string | null) {
     switch (kind) {
@@ -499,7 +458,6 @@ export default function QuotePDF(props: QuotePDFProps) {
         totalExcluded,
         validityLabel,
         validityDays,
-        vatRateLabel,
         terms,
         items,
     } = props || {};
@@ -511,17 +469,7 @@ export default function QuotePDF(props: QuotePDFProps) {
         return k === 'finestra' || k === 'portafinestra' || k === 'scorrevole' || /serrament/i.test(k);
     });
 
-    // Superficie totale (somma di tutte le voci con misure), in m²
-    const totalM2 = itemsSafe.reduce((acc: number, it: any) => {
-        const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-        const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-        const q = Number(it?.qty ?? 1);
-        if (Number.isFinite(w) && Number.isFinite(h)) {
-            const m2 = (w * h) / 1_000_000;
-            return acc + (Number.isFinite(q) ? m2 * q : m2);
-        }
-        return acc;
-    }, 0);
+  
 
     // Superficie solo finestre (finestra, portafinestra, scorrevole)
     const windowsM2 = itemsSafe.reduce((acc: number, it: any) => {
@@ -552,7 +500,6 @@ export default function QuotePDF(props: QuotePDFProps) {
         : (typeof totalExcluded === 'number' && Number.isFinite(totalExcluded) ? totalExcluded : fallbackTotal);
 
     const discountedTotal = hasDiscount ? props.discount!.discountedTotal : originalTotal;
-    const discountDelta = Math.max(0, originalTotal - discountedTotal);
 
     // --- MODIFICA QUI ---
     // Calcola la validità da validityDays se presente, altrimenti da validityLabel
@@ -765,7 +712,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 ? it.reference.trim()
                                 : (typeof it?.riferimento === 'string' && it.riferimento.trim() ? it.riferimento.trim() : '');
 
-                            const dimOff = getDimOffsets(it);
+                            
 
                             return (
                                 <View
@@ -818,8 +765,8 @@ export default function QuotePDF(props: QuotePDFProps) {
                                             const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
                                             const hasDims = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
 
-                                            // Estimate margins produced by "contain" within the INNER box.
-                                            let marginX = 0, marginY = 0;
+                                            // Estimate margins produced by "contain" within the INNER box (only marginY needed).
+                                            let marginY = 0;
                                             if (hasDims) {
                                                 const ar = w / h;
                                                 const arBox = INNER_W / INNER_H;
@@ -827,10 +774,6 @@ export default function QuotePDF(props: QuotePDFProps) {
                                                     // Wide: width touches INNER_W, height shrinks
                                                     const imgH = INNER_W / ar;
                                                     marginY = Math.max(0, (INNER_H - imgH) / 2);
-                                                } else {
-                                                    // Tall: height touches INNER_H, width shrinks
-                                                    const imgW = INNER_H * ar;
-                                                    marginX = Math.max(0, (INNER_W - imgW) / 2);
                                                 }
                                             }
 
@@ -842,7 +785,6 @@ export default function QuotePDF(props: QuotePDFProps) {
                                             const widthLabelTop = PAD + (INNER_H - marginY) + GAP;
 
                                             // Altezza: a sinistra dell’immagine reale, ruotata
-                                            const heightLabelLeft = Math.max(2, PAD + marginX - 8);
 
                                             return (
                                                 <>
