@@ -1,7 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Toaster } from 'sonner'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createHashRouter, RouterProvider } from 'react-router-dom'
 import '@fontsource-variable/inter/index.css';
 import './index.css'
 
@@ -15,15 +15,15 @@ import AppLayout from './ui/AppLayout'
 import Home from './ui/Home'
 import Editor from './ui/Editor'
 
-const router = createBrowserRouter([
+const router = createHashRouter([
   {
     path: '/',
     element: <AppLayout />,
     children: [
       { index: true, element: <Home /> },
       { path: 'quotes/:id', element: <Editor /> },
-    ]
-  }
+    ],
+  },
 ])
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

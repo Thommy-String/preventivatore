@@ -6,7 +6,9 @@ import { supabase } from '../lib/supabase'
 import QuoteActionsMenu from '../components/QuoteActionsMenu'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+
 import { Card } from '../components/ui/Card'
+
 
 
 
@@ -469,34 +471,79 @@ export default function Home() {
     <div className="space-y-6">
       {/* Header title + CTA */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1>Preventivi</h1>
-          <div className="mt-1 text-sm text-gray-600">Gestisci e crea preventivi per i tuoi clienti</div>
+        <div className="flex items-center gap-3">
+          
+          <div>
+            <h1 className="leading-tight">Preventivi</h1>
+            <div className="mt-0.5 text-sm text-gray-600">Gestisci e crea preventivi per i tuoi clienti</div>
+          </div>
         </div>
         <Button onClick={handleNew} disabled={loading}>+ Nuovo preventivo</Button>
       </div>
 
       {/* Sticky toolbar: search + filtri */}
-      <div className="sticky top-[52px] z-10 border-b bg-[color:var(--bg)]/90 backdrop-blur">
-        <div className="py-3 flex flex-col md:flex-row md:items-center gap-3">
-          <div className="md:w-96 relative">
+      <div className="md:sticky md:top-[52px] md:z-10 md:border-b md:bg-[color:var(--bg)]/90 md:backdrop-blur">
+        <div className="py-3 flex flex-col gap-3 md:flex-row md:items-center">
+          {/* Search */}
+          <div className="w-full md:w-[28rem] relative">
+            <svg
+              aria-hidden="true"
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+              viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M12.9 14.32a8 8 0 111.414-1.414l4.387 4.387a1 1 0 01-1.414 1.414l-4.387-4.387zM14 8a6 6 0 11-12 0 6 6 0 0112 0z" clipRule="evenodd"/>
+            </svg>
             <Input
               id="dashboard-search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cerca per numero, cliente o via…"
+              className="pl-9 text-base md:text-sm"
+              inputMode="search"
             />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 kbd">/</span>
+            <span className="hidden md:inline absolute right-2 top-1/2 -translate-y-1/2 kbd">/</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {STATUS_ORDER.map(s => (
-              <button key={s}
-                onClick={() => toggleFilter(s)}
-                className={`chip ${filters.has(s) ? 'chip-active' : ''}`}
-                title={`${headerCounts[s]} visibili in questa pagina`}
-              >{s}</button>
-            ))}
-            <button onClick={() => setFilters(new Set())} className="chip">Azzera</button>
+          {/* Segmented filter */}
+          <div
+            role="tablist"
+            aria-label="Stato preventivi"
+            className="overflow-x-auto -mx-2 md:mx-0 px-2 flex flex-nowrap md:flex-wrap md:overflow-visible [-webkit-overflow-scrolling:touch]"
+          >
+            <div className="inline-flex bg-gray-100 rounded-xl p-1 shadow-inner min-w-0">
+              {STATUS_ORDER.map((s) => {
+                const active = filters.has(s)
+                const label = s.charAt(0).toUpperCase() + s.slice(1)
+                const count = headerCounts[s]
+                return (
+                  <button
+                    key={s}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => toggleFilter(s)}
+                    className={[
+                      "shrink-0 px-3 py-1.5 text-sm rounded-lg transition",
+                      active
+                        ? "bg-white shadow-sm ring-1 ring-gray-200 text-gray-900"
+                        : "text-gray-600 hover:bg-white/60"
+                    ].join(" ")}
+                    title={`${count} visibili in questa pagina`}
+                  >
+                    <span className="font-medium">{label}</span>
+                    {typeof count === "number" && count > 0 && (
+                      <span className={active ? "ml-1 text-gray-900/70" : "ml-1 text-gray-500"}>· {count}</span>
+                    )}
+                  </button>
+                )
+              })}
+              <button
+                role="tab"
+                aria-selected={filters.size === 0}
+                onClick={() => setFilters(new Set())}
+                className="shrink-0 px-3 py-1.5 text-sm rounded-lg text-gray-600 hover:bg-white/60"
+                title="Mostra tutti"
+              >
+                Azzera
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -513,13 +560,13 @@ export default function Home() {
         <div className="space-y-6">
           {groupedByMonth.map((group) => (
             <div key={group.key} className="space-y-3">
-              <div className="sticky top-[96px] z-10 bg-[color:var(--bg)]/85 backdrop-blur border-b py-1">
+              <div className="md:sticky md:top-[96px] md:z-10 md:bg-[color:var(--bg)]/85 md:backdrop-blur border-b py-1">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold text-gray-800 capitalize">{group.label}</div>
                   <div className="text-xs text-gray-500">{group.items.length} preventivi</div>
                 </div>
               </div>
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {group.items.map(q => (
                   <CardQuote
                     key={q.id}
@@ -577,51 +624,57 @@ function CardQuote({
 
   return (
     <Card className={`group ${accentClass} transition-transform will-change-transform hover:-translate-y-px ${onDeleteDisabled ? 'opacity-60' : ''}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="cursor-pointer" onClick={onOpen}>
-          {/* Numero piccolo e grassetto */}
-          <div className="text-[11px] font-semibold text-gray-900 tracking-tight truncate max-w-[28ch] flex items-center gap-2 font-mono">
-            <span>{q.number}</span>
-            {q.created_at && <span className="text-[11px] font-normal text-gray-500">{fmtDate(q.created_at)}</span>}
-          </div>
-          {/* Nome cliente ben visibile */}
-          <div className="mt-0.5 text-lg font-semibold truncate max-w-[28ch]">
-            {q.customer_name ?? '—'}
-          </div>
-          {/* Riferimento (se presente) oppure indirizzo lavori */}
-          {(q.reference || q.job_address) && (
-            <div className="mt-1 text-xs text-gray-700 truncate max-w-[38ch]">
-              {q.reference ?? q.job_address}
+      {/* Make entire content clickable */}
+      <div role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpen() }}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            {/* Numero piccolo e grassetto */}
+            <div className="text-[11px] font-semibold text-gray-900 tracking-tight truncate max-w-[28ch] flex items-center gap-2 font-mono">
+              <span>{q.number}</span>
+              {q.created_at && <span className="text-[11px] font-normal text-gray-500">{fmtDate(q.created_at)}</span>}
             </div>
-          )}
+            {/* Nome cliente ben visibile */}
+            <div className="mt-0.5 text-lg font-semibold truncate max-w-[28ch]">
+              {q.customer_name ?? '—'}
+            </div>
+            {/* Riferimento (se presente) oppure indirizzo lavori */}
+            {(q.reference || q.job_address) && (
+              <div className="mt-1 text-xs text-gray-700 truncate max-w-[38ch]">
+                {q.reference ?? q.job_address}
+              </div>
+            )}
+          </div>
+          <div
+            className={onDeleteDisabled ? 'opacity-50 pointer-events-none' : ''}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <QuoteActionsMenu
+              onOpen={onOpen}
+              onDuplicate={onDuplicate}
+              onPdf={onPdf}
+              onDelete={onDelete}
+            />
+          </div>
         </div>
-        <div className={onDeleteDisabled ? 'opacity-50 pointer-events-none' : ''}>
-          <QuoteActionsMenu
-            onOpen={onOpen}
-            onDuplicate={onDuplicate}
-            onPdf={onPdf}
-            onDelete={onDelete}
-          />
+        {/* Meta footer: stato + scadenza (senza progress) */}
+        <div className="mt-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <StatusPill s={q.status} />
+            {q.groupCount && q.groupCount > 1 && (q.reference || q.job_address) && (
+              <button
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border border-gray-200 text-xs text-gray-600 bg-white/60 hover:bg-white"
+                title={q.siblingsNumbers && q.siblingsNumbers.length ? `Altri: ${q.siblingsNumbers.join(', ')}` : 'Mostra tutti i preventivi con questo riferimento'}
+                onClick={(e) => { e.stopPropagation(); onFilterByReference((q.reference ?? q.job_address)!) }}
+              >
+                Versioni {q.groupCount}
+              </button>
+            )}
+          </div>
+          <div className="text-xs text-gray-600">{expiryLabel}</div>
         </div>
+        {/* Anteprima: totale e voci principali */}
+        <QuotePreview quoteId={q.id} />
       </div>
-      {/* Meta footer: stato + scadenza (senza progress) */}
-      <div className="mt-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <StatusPill s={q.status} />
-          {q.groupCount && q.groupCount > 1 && (q.reference || q.job_address) && (
-            <button
-              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 border border-gray-200 text-xs text-gray-600 bg-white/60 hover:bg-white"
-              title={q.siblingsNumbers && q.siblingsNumbers.length ? `Altri: ${q.siblingsNumbers.join(', ')}` : 'Mostra tutti i preventivi con questo riferimento'}
-              onClick={(e) => { e.stopPropagation(); onFilterByReference((q.reference ?? q.job_address)!) }}
-            >
-              Versioni {q.groupCount}
-            </button>
-          )}
-        </div>
-        <div className="text-xs text-gray-600">{expiryLabel}</div>
-      </div>
-      {/* Anteprima: totale e voci principali */}
-      <QuotePreview quoteId={q.id} />
     </Card>
   )
 }
