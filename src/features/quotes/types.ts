@@ -14,8 +14,12 @@ export type QuoteKind =
 
 export type CustomField = {
   key: string
-  name: string
-  value: string
+  /** Etichetta visibile (opzionale) */
+  label?: string
+  /** Nome tecnico/chiave (opzionale) */
+  name?: string
+  /** Valore del campo (opzionale durante l'editing) */
+  value?: string
 }
 
 /** Stato di apertura per ogni anta nel disegno */
@@ -82,6 +86,7 @@ export type WindowItem = BaseItem & {
   kind: 'finestra'
   color?: string | null
   glass?: string | null
+  glass_spec?: string | null
   hinges_color?: string | null
   uw?: number | null
   profile_system?: string | null
@@ -95,6 +100,7 @@ export type CassonettoItem = BaseItem & {
   material?: 'PVC' | 'Alluminio' | 'Altro' | null
   depth_mm?: number | null
   celino_mm?: number | null   // “celino” (ex spalletta/extension)
+  color?: string | null
 }
 
 /** Zanzariera */
@@ -153,3 +159,9 @@ export type QuoteItem =
   | PersianaItem
   | TapparellaItem
   | CustomItem
+
+export type ItemFormProps<T extends QuoteItem> = {
+  draft: T
+  onChange: (next: T) => void
+  readOnly?: boolean
+}

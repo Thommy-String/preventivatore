@@ -1,12 +1,10 @@
-
-
-import type { ItemFormProps } from "./types"
+import type { ItemFormProps } from "../types"
 import type { PersianaItem } from "../types"
 
 const MATERIALI = ["Alluminio", "PVC", "Altro"] as const
 const LAMELLE = ["fisse", "regolabili"] as const
 
-export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
+export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
   if (!draft) return null
   const d = draft
 
@@ -22,7 +20,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
               className="input"
               type="number"
               value={d.width_mm}
-              onChange={(e) => set("width_mm", Number(e.target.value || 0))}
+              onChange={(e) => onChange({ ...d, width_mm: Number(e.target.value || 0) })}
             />
           </div>
           <div>
@@ -31,7 +29,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
               className="input"
               type="number"
               value={d.height_mm}
-              onChange={(e) => set("height_mm", Number(e.target.value || 0))}
+              onChange={(e) => onChange({ ...d, height_mm: Number(e.target.value || 0) })}
             />
           </div>
         </div>
@@ -41,7 +39,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
             <select
               className="input"
               value={d.misura_tipo ?? "luce"}
-              onChange={(e) => set("misura_tipo", e.target.value as any)}
+              onChange={(e) => onChange({ ...d, misura_tipo: e.target.value as any })}
             >
               <option value="luce">Luce</option>
             </select>
@@ -53,7 +51,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
               type="number"
               min={1}
               value={d.qty}
-              onChange={(e) => set("qty", Math.max(1, Number(e.target.value || 1)))}
+              onChange={(e) => onChange({ ...d, qty: Math.max(1, Number(e.target.value || 1)) })}
             />
           </div>
         </div>
@@ -68,7 +66,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
             <select
               className="input"
               value={d.material ?? "Alluminio"}
-              onChange={(e) => set("material", e.target.value as any)}
+              onChange={(e) => onChange({ ...d, material: e.target.value as any })}
             >
               {MATERIALI.map((m) => (
                 <option key={m} value={m}>{m}</option>
@@ -80,7 +78,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
             <select
               className="input"
               value={d.lamelle ?? "fisse"}
-              onChange={(e) => set("lamelle", e.target.value as any)}
+              onChange={(e) => onChange({ ...d, lamelle: e.target.value as any })}
             >
               {LAMELLE.map((l) => (
                 <option key={l} value={l}>{l}</option>
@@ -92,7 +90,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
           <input
             type="checkbox"
             checked={Boolean(d.con_telaio)}
-            onChange={(e) => set("con_telaio", e.target.checked)}
+            onChange={(e) => onChange({ ...d, con_telaio: e.target.checked })}
           />
           Con telaio
         </label>
@@ -105,7 +103,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
           className="input"
           placeholder="es. RAL 6005 Verde"
           value={d.color ?? ""}
-          onChange={(e) => set("color", e.target.value || null)}
+          onChange={(e) => onChange({ ...d, color: e.target.value || null })}
         />
       </section>
 
@@ -117,7 +115,7 @@ export function PersianaForm({ draft, set }: ItemFormProps<PersianaItem>) {
           type="text"
           placeholder="es. Bagno piccolo, Salotto..."
           value={d.reference ?? ''}
-          onChange={(e) => set('reference', e.target.value)}
+          onChange={(e) => onChange({ ...d, reference: e.target.value })}
         />
       </section>
     </div>

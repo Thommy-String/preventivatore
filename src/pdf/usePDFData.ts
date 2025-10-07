@@ -1,6 +1,6 @@
 // src/pdf/usePDFData.ts
 import { useMemo } from "react";
-import { shallow } from "zustand/shallow";
+import { useShallow } from "zustand/react/shallow";
 import { useQuoteStore } from "../stores/useQuoteStore";
 import type { QuotePDFProps } from "./QuotePDF";
 
@@ -129,8 +129,7 @@ function toPlainItem(it: any) {
 
 export function usePDFData(): QuotePDFProps {
   const [quote, manualTotals, items] = useQuoteStore(
-    (s) => [ (s as any).quote ?? null, (s as any).manualTotals ?? [], (s as any).items ?? [] ],
-    shallow
+    useShallow((s: any) => [ (s as any).quote ?? null, (s as any).manualTotals ?? [], (s as any).items ?? [] ])
   ) as unknown as [any, any[], any[]];
 
   return useMemo<QuotePDFProps>(() => {

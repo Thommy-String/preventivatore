@@ -1,36 +1,20 @@
-
-
-import type { ItemFormProps } from "./types"
+//src/features/quotes/forms/Tapparella.tsx
+import type { ItemFormProps } from "../types"
 import type { TapparellaItem } from "../types"
 
 const MATERIALI = ["PVC", "Alluminio"] as const
 
-export function TapparellaForm(
-  props: ItemFormProps<TapparellaItem> & { draft?: TapparellaItem }
-) {
-  const draft = props.value ?? props.draft
-  const onChange = props.onChange
-  // preserva sempre `kind` e i campi esistenti del draft
-  const set = <K extends keyof TapparellaItem>(k: K, v: TapparellaItem[K]) => {
-    const base =
-      draft ??
-      ({
-        kind: "tapparella",
-        qty: 1,
-        width_mm: 1000,
-        height_mm: 1400,
-        material: "PVC",
-        color: "",
-      } as TapparellaItem)
-    onChange({ ...base, [k]: v })
-  }
+export function TapparellaForm({ draft, onChange }: ItemFormProps<TapparellaItem>) {
+  // helper per aggiornare mantenendo il resto dell'oggetto
+  const set = <K extends keyof TapparellaItem>(k: K, v: TapparellaItem[K]) =>
+    onChange({ ...draft, [k]: v })
 
-  // Fallback sicuri per campi controllati
-  const width = draft?.width_mm ?? 1000
-  const height = draft?.height_mm ?? 1400
-  const qty = draft?.qty ?? 1
-  const material = draft?.material ?? "PVC"
-  const color = draft?.color ?? ""
+  // Fallback sicuri per campi controllati (il draft arriva già con default dal registry)
+  const width = draft.width_mm ?? 1000
+  const height = draft.height_mm ?? 1400
+  const qty = draft.qty ?? 1
+  const material = draft.material ?? "PVC"
+  const color = draft.color ?? ""
 
   return (
     <div className="space-y-4">

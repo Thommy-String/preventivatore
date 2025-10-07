@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import type { CassonettoItem } from '../types';
-import type { ItemFormProps } from './types';
+import type { ItemFormProps } from '../types';
 
 const MATERIALS = ['PVC', 'Alluminio coibentato', 'Legno coibentato'] as const;
 
@@ -18,6 +18,7 @@ export function CassonettoForm({ draft, onChange }: ItemFormProps<CassonettoItem
         depth_mm: 250,
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Eseguito solo al primo render
 
   const updateField = (key: keyof CassonettoItem, value: any) => {
@@ -50,10 +51,10 @@ export function CassonettoForm({ draft, onChange }: ItemFormProps<CassonettoItem
         <div className="text-xs font-medium text-gray-500">Celino (Opzionale)</div>
         <div className="grid grid-cols-2 gap-3 items-center">
           <div>
-            <div className="text-xs text-gray-500">Estensione (mm)</div>
-            <input className="input" type="number" value={(d as any).extension_mm ?? ''} onChange={(e) => updateField('extension_mm' as any, e.target.value === '' ? null : Number(e.target.value))} />
+            <div className="text-xs text-gray-500">Celino (mm)</div>
+            <input className="input" type="number" value={d.celino_mm ?? ''} onChange={(e) => updateField('celino_mm', e.target.value === '' ? null : Number(e.target.value))} />
           </div>
-          <div className="text-xs text-gray-500">Aggiunge profondità per coprire il muro.</div>
+          <div className="text-xs text-gray-500">Estensione frontale per coprire il muro.</div>
         </div>
       </section>
 
@@ -78,17 +79,16 @@ export function CassonettoForm({ draft, onChange }: ItemFormProps<CassonettoItem
       <section className="space-y-2">
         <div className="text-xs font-medium text-gray-500">Quantità e Riferimento</div>
         <div className="grid grid-cols-2 gap-3">
-           <div>
-              <label className="text-xs text-gray-500">Pezzi</label>
-              <input className="input" type="number" min={1} value={d.qty} onChange={(e) => updateField('qty', Math.max(1, Number(e.target.value) || 1))} />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">Riferimento</label>
-              <input className="input" type="text" placeholder="es. Cucina" value={d.reference ?? ''} onChange={(e) => updateField('reference', e.target.value)} />
-            </div>
+          <div>
+            <label className="text-xs text-gray-500">Pezzi</label>
+            <input className="input" type="number" min={1} value={d.qty} onChange={(e) => updateField('qty', Math.max(1, Number(e.target.value) || 1))} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Riferimento</label>
+            <input className="input" type="text" placeholder="es. Cucina" value={d.reference ?? ''} onChange={(e) => updateField('reference', e.target.value)} />
+          </div>
         </div>
       </section>
     </div>
   );
 }
-

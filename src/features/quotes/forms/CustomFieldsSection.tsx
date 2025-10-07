@@ -1,5 +1,5 @@
 import React from "react"
-import type { CustomField } from "../../types"
+import type { CustomField } from "../types"
 
 type WithCustomFields = { custom_fields?: CustomField[] } & Record<string, any>
 

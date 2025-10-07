@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { Toaster } from 'sonner'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
-import '@fontsource-variable/inter';
+import '@fontsource-variable/inter/index.css';
 import './index.css'
 
 import { Buffer } from 'buffer';

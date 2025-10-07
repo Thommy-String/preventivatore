@@ -1,6 +1,6 @@
 //src/features/quotes/forms/WindowForm.tsx
 import React, { useState, useEffect } from "react";
-import type { ItemFormProps } from "./types";
+import type { ItemFormProps } from "../types";
 import type { WindowItem } from "../types";
 import type { GridWindowConfig, LeafState } from "../window/WindowSvg";
 import { Trash2 } from "lucide-react";

@@ -1073,7 +1073,7 @@ export default function Editor() {
         <ItemModal
           draft={draft}
           editingId={editingId}
-          onChange={(next) => setDraft(next)}
+          onChange={(next: QuoteItem) => setDraft(next)}
           onCancel={() => { setDraft(null); setEditingId(null) }}
           onSave={saveDraft}
         />

@@ -1,4 +1,4 @@
-import type { ItemFormProps } from "../registry"
+import type { ItemFormProps } from "../types"
 import type { ZanzarieraItem } from "../types"
 
 const PROFILO_COLORI = [
@@ -34,7 +34,7 @@ const MODELLI = ["Tondo 38", "Tondo 46", "Tondo 65", "Tondo 105"] as const
 export function ZanzarieraForm(
   props: ItemFormProps<ZanzarieraItem> & { draft?: ZanzarieraItem }
 ) {
-  const draft = props.value ?? props.draft
+  const draft = props.draft
   const onChange = props.onChange
 
   // Usa sempre il draft corrente come base; se assente preserva il kind

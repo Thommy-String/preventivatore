@@ -125,7 +125,7 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                         )}
 
                         {/* Finestre/Portefinestre/Scorrevoli */}
-                        {(it.kind === 'finestra' || it.kind === 'portafinestra' || it.kind === 'scorrevole') && (it as any).profile_system && (
+                        {(it.kind === 'finestra') && (it as any).profile_system && (
                             <div><span className="text-gray-500">Sistema profilo:</span> {(it as any).profile_system}</div>
                         )}
 
