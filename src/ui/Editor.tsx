@@ -2,11 +2,11 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { ArrowLeft, FileText, User, Building, Copy, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, FileText, User, Building, Copy, Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
-import { Badge } from '../components/ui/Badge'
+import { BadgePercent, X } from "lucide-react";
 
 
 // Store & Quote items
@@ -112,8 +112,104 @@ export default function Editor() {
     updateField('notes', newNotes || null)
   }
 
+  // --- Sconto totale (solo UI) ---
+  const [showDiscountEditor, setShowDiscountEditor] = useState(false);
+  const [discountMode, setDiscountMode] = useState<'pct' | 'final' | null>(null);
+  const [discountPct, setDiscountPct] = useState<number | null>(null);       // es. 10 = 10%
+  const [discountFinal, setDiscountFinal] = useState<number | null>(null);   // nuovo totale (IVA esclusa)
+
+  // --- Reorder helpers ---
+  function arrayMove<T>(arr: T[], from: number, to: number) {
+    const a = arr.slice();
+    if (from < 0 || from >= a.length) return a;
+    if (to < 0 || to >= a.length) return a;
+    const [it] = a.splice(from, 1);
+    a.splice(to, 0, it);
+    return a;
+  }
+
+  // DnD state for manualTotals
+  const [dragTotalId, setDragTotalId] = useState<string | null>(null);
+  // DnD state for items
+  const [dragItemId, setDragItemId] = useState<string | null>(null);
+
+  // --- ManualTotals reorder functions ---
+  function moveTotalRow(id: string, dir: -1 | 1) {
+    setManualTotals((rows) => {
+      const i = rows.findIndex(r => r.id === id);
+      if (i === -1) return rows;
+      const j = i + dir;
+      return arrayMove(rows, i, j);
+    });
+  }
+
+  function onTotalDragStart(e: React.DragEvent<HTMLDivElement>, id: string) {
+    setDragTotalId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  }
+  function onTotalDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+  function onTotalDrop(e: React.DragEvent<HTMLDivElement>, targetId: string) {
+    e.preventDefault();
+    const sourceId = dragTotalId || e.dataTransfer.getData('text/plain');
+    if (!sourceId || sourceId === targetId) return;
+    setManualTotals((rows) => {
+      const from = rows.findIndex(r => r.id === sourceId);
+      const to = rows.findIndex(r => r.id === targetId);
+      if (from === -1 || to === -1) return rows;
+      return arrayMove(rows, from, to);
+    });
+    setDragTotalId(null);
+  }
+
+  // --- Items reorder functions ---
+  function moveItemRow(id: string, dir: -1 | 1) {
+    const curr = Array.isArray(items)
+      ? items.slice()
+      : (items && typeof items === 'object') ? Object.values(items as any) : [];
+    const i = curr.findIndex((r: any) => r?.id === id);
+    if (i === -1) return;
+    const j = Math.max(0, Math.min(curr.length - 1, i + dir));
+    if (j === i) return;
+    const next = arrayMove(curr, i, j);
+    setItems(next as any);
+  }
+
+  function onItemDragStart(e: React.DragEvent<HTMLDivElement>, id: string) {
+    setDragItemId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  }
+  function onItemDragOver(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+  function onItemDrop(e: React.DragEvent<HTMLDivElement>, targetId: string) {
+    e.preventDefault();
+    const sourceId = dragItemId || e.dataTransfer.getData('text/plain');
+    if (!sourceId || sourceId === targetId) return;
+    const curr = Array.isArray(items)
+      ? items.slice()
+      : (items && typeof items === 'object') ? Object.values(items as any) : [];
+    const from = curr.findIndex((r: any) => r?.id === sourceId);
+    const to = curr.findIndex((r: any) => r?.id === targetId);
+    if (from === -1 || to === -1) { setDragItemId(null); return; }
+    const next = arrayMove(curr, from, to);
+    setItems(next as any);
+    setDragItemId(null);
+  }
+
   // Items (store)
   const items = useQuoteStore(s => s.items)
+  // Normalize items to an array for rendering/ordering safety
+  const itemsArray: any[] = Array.isArray(items)
+    ? items
+    : (items && typeof items === 'object')
+      ? Object.values(items as any)
+      : [];
   const setItems = useQuoteStore(s => s.setItems)
   const addItem = useQuoteStore(s => s.addItem)
   const replaceItem = useQuoteStore(s => s.replaceItem)
@@ -276,13 +372,27 @@ export default function Editor() {
       }));
       const totalExcluded = catTotals.reduce((s, r) => s + (r.amount || 0), 0);
 
+      // ↓ SCONTO (solo UI)
+      const hasDiscount =
+        (discountMode === 'pct' && typeof discountPct === 'number' && discountPct > 0) ||
+        (discountMode === 'final' && typeof discountFinal === 'number' && discountFinal >= 0);
+
+      const discountedTotal =
+        discountMode === 'pct'
+          ? Math.max(0, totalExcluded * (1 - (discountPct ?? 0) / 100))
+          : discountMode === 'final' && discountFinal != null
+            ? Math.max(0, discountFinal)
+            : totalExcluded;
+
       const extractedVat =
         (quote.customer_type === 'azienda')
           ? (
-              (piva && piva.trim())
-              || (quote.notes?.match(/P\.IVA:\s*([^;]+)(;|$)/i)?.[1]?.trim() ?? null)
-            )
+            (piva && piva.trim())
+            || (quote.notes?.match(/P\.IVA:\s*([^;]+)(;|$)/i)?.[1]?.trim() ?? null)
+          )
           : null;
+
+
 
       const data = {
         companyLogoUrl: branding?.logo_url ?? null,
@@ -309,6 +419,14 @@ export default function Editor() {
 
         // passa gli items già normalizzati (no blob:)
         items: itemsForPdf,
+
+        discount: hasDiscount ? {
+          mode: discountMode!,                       // 'pct' | 'final'
+          pct: discountMode === 'pct' ? (discountPct ?? null) : null,
+          final: discountMode === 'final' ? (discountFinal ?? null) : null,
+          originalTotal: totalExcluded,              // prima dello sconto
+          discountedTotal,                           // dopo lo sconto
+        } : null,
       };
 
       const element = <qpdf.default {...data} />;
@@ -406,6 +524,17 @@ export default function Editor() {
 
   const totalExcluded = manualTotals.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
 
+  // --- Derivati sconto (usati nella UI e nel PDF) ---
+  const hasDiscount =
+    (discountMode === 'pct' && typeof discountPct === 'number' && discountPct > 0) ||
+    (discountMode === 'final' && typeof discountFinal === 'number' && discountFinal >= 0);
+
+  const discountedTotal =
+    discountMode === 'pct'
+      ? Math.max(0, totalExcluded * (1 - (discountPct ?? 0) / 100))
+      : discountMode === 'final' && discountFinal != null
+        ? Math.max(0, discountFinal)
+        : totalExcluded;
 
   if (!quote) {
     return <div className="animate-pulse h-8 w-40 rounded bg-gray-200" />
@@ -441,13 +570,23 @@ export default function Editor() {
           </div>
         </div>
         <div className="text-right space-y-2">
-          <div className="text-xs text-gray-500">Totale documento</div>
-          <div className="text-2xl font-bold tracking-tight">{euro(totalExcluded)}</div>
+          <div className="text-xs text-gray-500">Totale documento (IVA esclusa)</div>
+
+          {!hasDiscount ? (
+            <div className="text-2xl font-bold tracking-tight">{euro(totalExcluded)}</div>
+          ) : (
+            <div className="space-y-1">
+              <div className="text-sm text-gray-500 line-through">{euro(totalExcluded)}</div>
+              <div className="text-2xl font-bold tracking-tight">{euro(discountedTotal)}</div>
+              {discountMode === 'pct' && (
+                <div className="text-xs text-gray-600">Sconto {discountPct}%</div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-2">
-            <Button
-              className="bg-gray-800 text-white hover:bg-gray-900"
-              onClick={openPdfPreview}
-            >
+
+            <Button className="bg-gray-800 text-white hover:bg-gray-900" onClick={openPdfPreview}>
               <FileText size={16} /> PDF
             </Button>
             <Button variant="outline" onClick={onDuplicateQuote}>
@@ -578,7 +717,7 @@ export default function Editor() {
               />
             </div>
             <div>
-              <div className="text-xs text-gray-500">Tempi posa in opera</div>
+              <div className="text-xs text-gray-500">Termine di completamento</div>
               <input
                 className="input"
                 placeholder="es. 4-6 settimane"
@@ -652,26 +791,53 @@ export default function Editor() {
             {manualTotals.map((row) => (
               <div
                 key={row.id}
-                className="rounded-lg border p-3 bg-white/60"
+                className={`rounded-lg border p-3 bg-white/60 ${dragTotalId===row.id ? 'ring-2 ring-gray-300' : ''}`}
+                draggable
+                onDragStart={(e) => onTotalDragStart(e, row.id)}
+                onDragOver={onTotalDragOver}
+                onDrop={(e) => onTotalDrop(e, row.id)}
               >
                 <div className="space-y-2">
                   {/* Top row: Title + Delete (inline on mobile) */}
                   <div className="flex items-center gap-2">
+                    <span className="cursor-grab text-gray-400 hover:text-gray-700" title="Trascina per riordinare">
+                      <GripVertical size={16} />
+                    </span>
                     <input
                       className="input flex-1 min-w-0"
                       placeholder="Es. Finestre / Portoncino cantina / Montaggio…"
                       value={row.label}
                       onChange={(e) => updateRow(row.id, { label: e.target.value })}
                     />
-                    <button
-                      type="button"
-                      className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                      aria-label="Rimuovi riga"
-                      onClick={() => removeRow(row.id)}
-                      title="Rimuovi"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                        aria-label="Sposta su"
+                        title="Sposta su"
+                        onClick={() => moveTotalRow(row.id, -1)}
+                      >
+                        <ArrowUp size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                        aria-label="Sposta giù"
+                        title="Sposta giù"
+                        onClick={() => moveTotalRow(row.id, +1)}
+                      >
+                        <ArrowDown size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                        aria-label="Rimuovi riga"
+                        onClick={() => removeRow(row.id)}
+                        title="Rimuovi"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Amount (second row) */}
@@ -714,9 +880,113 @@ export default function Editor() {
           </div>
         )}
 
-        <div className="mt-4 flex items-center justify-between border-t pt-3">
-          <div className="text-sm text-gray-600">Totale (IVA esclusa)</div>
-          <div className="text-xl font-semibold">{euro(totalExcluded)}</div>
+        <div className="mt-4 border-t pt-3 space-y-2 relative">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">Totale (IVA esclusa)</div>
+
+            <div className="flex items-center gap-2">
+              {!hasDiscount ? (
+                <div className="text-xl font-semibold">{euro(totalExcluded)}</div>
+              ) : (
+                <div className="text-right">
+                  <div className="text-sm text-gray-500 line-through">{euro(totalExcluded)}</div>
+                  <div className="text-[11px] text-gray-500">
+                    {discountMode === 'pct' ? `Sconto ${discountPct}%` : 'Totale impostato manualmente'}
+                  </div>
+                </div>
+              )}
+
+              {/* ← nuovo bottone qui */}
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50"
+                onClick={() => {
+                  setShowDiscountEditor((v) => !v);
+                  if (!discountMode) setDiscountMode('pct');
+                }}
+                title="Applica sconto"
+              >
+                <BadgePercent size={14} /> Sconto
+              </button>
+            </div>
+          </div>
+
+          {/* Popover Sconto spostato qui */}
+          {showDiscountEditor && (
+            <div className="absolute right-0 mt-2 w-80 rounded-lg border bg-white p-3 shadow-lg z-10">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Imposta sconto</div>
+                <button className="text-gray-500 hover:text-gray-800" onClick={() => setShowDiscountEditor(false)}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                <button
+                  className={`rounded-md border px-2 py-1.5 ${discountMode === 'pct' ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
+                  onClick={() => setDiscountMode('pct')}
+                >
+                  In percentuale
+                </button>
+                <button
+                  className={`rounded-md border px-2 py-1.5 ${discountMode === 'final' ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
+                  onClick={() => setDiscountMode('final')}
+                >
+                  Sul totale
+                </button>
+              </div>
+
+              {discountMode === 'pct' ? (
+                <div className="mt-3">
+                  <label className="text-xs text-gray-500">Sconto (%)</label>
+                  <input
+                    className="input w-full"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.5"
+                    value={discountPct ?? ''}
+                    onChange={(e) => setDiscountPct(e.target.value === '' ? null : Number(e.target.value))}
+                  />
+                  <div className="mt-1 text-xs text-gray-600">
+                    Nuovo totale: <b>{euro(Math.max(0, totalExcluded * (1 - (discountPct ?? 0) / 100)))}</b>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3">
+                  <label className="text-xs text-gray-500">Nuovo totale (IVA esclusa)</label>
+                  <input
+                    className="input w-full"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={discountFinal ?? ''}
+                    onChange={(e) => setDiscountFinal(e.target.value === '' ? null : Number(e.target.value))}
+                  />
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  className="text-sm text-red-600 hover:underline"
+                  onClick={() => { setDiscountMode(null); setDiscountPct(null); setDiscountFinal(null); }}
+                >
+                  Rimuovi sconto
+                </button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setShowDiscountEditor(false)}>Annulla</Button>
+                  <Button onClick={() => setShowDiscountEditor(false)}>Applica</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {hasDiscount && (
+            <div className="flex items-center justify-between rounded-md px-3 py-2" style={{ background: '#e8f7ec' }}>
+              <div className="text-sm font-medium text-gray-800">Totale scontato (IVA esclusa)</div>
+              <div className="text-xl font-bold">{euro(discountedTotal)}</div>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -729,20 +999,53 @@ export default function Editor() {
           </div>
         </div>
 
-        {items.length === 0 ? (
+        {itemsArray.length === 0 ? (
           <div className="mt-4 rounded border border-dashed p-6 text-center text-sm text-gray-600">
             Nessuna voce. Premi <span className="font-medium">Aggiungi</span> e scegli la categoria.
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {items.map((it) => (
-              <ItemCard
+            {itemsArray.map((it, idx) => (
+              <div
                 key={it.id}
-                item={it}
-                onEdit={startEdit}
-                onDuplicate={duplicateItem}
-                onRemove={removeItem}
-              />
+                className={`relative group rounded-lg`}
+                draggable
+                onDragStart={(e) => onItemDragStart(e, it.id)}
+                onDragOver={onItemDragOver}
+                onDrop={(e) => onItemDrop(e, it.id)}
+              >
+                {/* Drag handle (left) */}
+                <div className="absolute -left-6 top-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-gray-400 hover:text-gray-700" title="Trascina per riordinare">
+                  <GripVertical size={16} />
+                </div>
+
+                {/* Controls (right) */}
+                <div className="absolute -right-6 top-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                    title="Sposta su"
+                    onClick={() => moveItemRow(it.id, -1)}
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                    title="Sposta giù"
+                    onClick={() => moveItemRow(it.id, +1)}
+                  >
+                    <ArrowDown size={16} />
+                  </button>
+                </div>
+
+                <ItemCard
+                  item={it}
+                  onEdit={startEdit}
+                  onDuplicate={duplicateItem}
+                  onRemove={removeItem}
+                />
+              </div>
             ))}
           </div>
         )}

@@ -33,10 +33,17 @@ export type QuotePDFProps = {
     validityDays?: number | null;
     terms?: string | null;                // testo condizioni (pagina 2)
     items?: any[] | null;               // elenco voci del preventivo
+    discount?: {
+        mode: 'pct' | 'final';
+        pct?: number | null;
+        final?: number | null;
+        originalTotal: number;
+        discountedTotal: number;
+    } | null;
 };
 
 const s = StyleSheet.create({
-    page: { padding: 38, fontSize: 12, color: "#111" },
+    page: { padding: 38, fontSize: 11, color: "#111" },
     row: { flexDirection: "row" },
     col: { flexGrow: 1 },
     h1: { fontSize: 32, fontWeight: 700, marginBottom: 4 },
@@ -50,11 +57,15 @@ const s = StyleSheet.create({
     td: { flex: 1, padding: 8, fontSize: 11 },
     right: { textAlign: "right" as const },
     small: { fontSize: 10, color: "#555" },
-    logo: { width: 140, height: 55, objectFit: "contain", marginBottom: 0 , marginTop: -20},
+    logo: { width: 140, height: 55, objectFit: "contain", marginBottom: 0, marginTop: -20 },
     companyDetails: { fontSize: 9, color: '#555', lineHeight: 1.4 },
     sep: { height: 8 },
     footerNote: { marginTop: 14, fontSize: 9, color: "#555" },
     block: { marginTop: 6 },
+
+    // colore verde pastello per sconto
+    pastelGreen: { backgroundColor: '#e8f7ec' },
+    strike: { textDecoration: 'line-through', color: '#777' },
 
     // --- STILI CARD "DETTAGLIO VOCI" ---
     itemCard: {
@@ -218,25 +229,25 @@ function describeItem(it: any): string {
 
 // Rettangolo contenuto (equivalente di object-fit: contain)
 function containRect(boxW: number, boxH: number, imgW: number, imgH: number, padding = 0) {
-  const cW = Math.max(0, boxW - padding * 2);
-  const cH = Math.max(0, boxH - padding * 2);
-  const arBox = cW > 0 && cH > 0 ? cW / cH : 1;
-  const arImg = imgW > 0 && imgH > 0 ? imgW / imgH : 1;
+    const cW = Math.max(0, boxW - padding * 2);
+    const cH = Math.max(0, boxH - padding * 2);
+    const arBox = cW > 0 && cH > 0 ? cW / cH : 1;
+    const arImg = imgW > 0 && imgH > 0 ? imgW / imgH : 1;
 
-  let w = cW, h = cH;
-  if (arImg > arBox) { w = cW; h = cW / arImg; }
-  else { h = cH; w = cH * arImg; }
+    let w = cW, h = cH;
+    if (arImg > arBox) { w = cW; h = cW / arImg; }
+    else { h = cH; w = cH * arImg; }
 
-  const x = (boxW - w) / 2;
-  const y = (boxH - h) / 2;
-  return { x, y, w, h };
+    const x = (boxW - w) / 2;
+    const y = (boxH - h) / 2;
+    return { x, y, w, h };
 }
 
 // Stima dimensioni “intrinseche” da L/H dell’item (in mm)
 function guessImageSizeFromItem(it: any) {
-  const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza) || 1;
-  const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza) || 1;
-  return { w, h };
+    const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza) || 1;
+    const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza) || 1;
+    return { w, h };
 }
 
 function getDimOffsets(it: any) {
@@ -250,15 +261,15 @@ function getDimOffsets(it: any) {
     // Per elementi molto alti, tienila un po' più distante
     const bottom =
         ar < 0.55 ? -8   // molto bassi → vicino
-      : ar < 0.8  ? -12
-      : ar < 1.2  ? -16
-      : -18;             // alti → come prima
+            : ar < 0.8 ? -12
+                : ar < 1.2 ? -16
+                    : -18;             // alti → come prima
     // La quota H a sinistra: se l'oggetto è molto alto, tienila più distante; altrimenti avvicina
     const left =
         ar > 1.6 ? -28   // molto alti → più esterna
-      : ar > 1.2 ? -24
-      : ar > 0.9 ? -22
-      : -18;             // bassi/larghi → più vicina
+            : ar > 1.2 ? -24
+                : ar > 0.9 ? -22
+                    : -18;             // bassi/larghi → più vicina
     return { bottom, left };
 }
 
@@ -313,12 +324,64 @@ function detailPairs(it: any): Array<[string, string]> {
             }
             const ps = pickFirst(it, ["profile_system", "system_profile"]); if (ps) pairs.push(["Sistema profilo", String(ps)])
             const col = pickFirst(it, ["color", "colore", "profilo_colore"]); if (col) pairs.push(["Colore", String(col)])
-            // --- Custom glazing/uw logic ---
-            const glazing = pickFirst(it, ["glass", "vetro", "glazing"]);
-            if (glazing) {
-                // Mostra solo "Vetro" (singolo/doppio/triplo/satinato). Niente "Numero vetro".
-                pairs.push(["Vetro", String(glazing)]);
-            }
+            // --- Vetro (singola riga, con supporto per mix per-anta) ---
+            const baseGlazing = pickFirst(it, ["glass", "vetro", "glazing"]);
+            let glazingValue: string | null = null;
+            try {
+                const rows = it?.options?.gridWindow?.rows;
+                const defaultGridGlazing = (typeof it?.options?.gridWindow?.glazing === 'string' && it.options.gridWindow.glazing.trim())
+                    ? it.options.gridWindow.glazing.trim()
+                    : null;
+                // Base fallback from item-level (glass/vetro/glazing)
+                const fallbackGlazing = (typeof baseGlazing === 'string' && String(baseGlazing).trim())
+                    ? String(baseGlazing).trim()
+                    : null;
+
+                if (Array.isArray(rows) && rows.length > 0) {
+                    const counts: Record<string, number> = {};
+                    for (const row of rows) {
+                        const cols = Array.isArray(row?.cols) ? row.cols : [];
+                        for (const col of cols) {
+                            // Prefer glazing set on the sash, then grid default, then item fallback
+                            const local =
+                                (col?.leaf && typeof col.leaf.glazing === 'string' && col.leaf.glazing.trim())
+                                    ? col.leaf.glazing.trim()
+                                    : (typeof col?.glazing === 'string' && col.glazing.trim()
+                                        ? col.glazing.trim()
+                                        : (defaultGridGlazing || fallbackGlazing));
+                            if (local) {
+                                const key = local.toLowerCase();
+                                counts[key] = (counts[key] || 0) + 1;
+                            }
+                        }
+                    }
+                    const entries = Object.entries(counts);
+                    if (entries.length > 0) {
+                        const order = ["singolo", "doppio", "triplo", "satinato"]; // ordine preferito
+                        const pretty: Record<string, string> = { singolo: "Singolo", doppio: "Doppio", triplo: "Triplo", satinato: "Satinato" };
+                        entries.sort((a, b) => {
+                            const ia = order.indexOf(a[0].toLowerCase());
+                            const ib = order.indexOf(b[0].toLowerCase());
+                            if (ia === -1 && ib === -1) return a[0].localeCompare(b[0]);
+                            if (ia === -1) return 1;
+                            if (ib === -1) return -1;
+                            return ia - ib;
+                        });
+                        if (entries.length === 1) {
+                            const [g] = entries[0];
+                            glazingValue = pretty[g.toLowerCase()] || (g.charAt(0).toUpperCase() + g.slice(1));
+                        } else {
+                            glazingValue = entries
+                                .map(([g, c]) => `x${c} ${pretty[g.toLowerCase()] || (g.charAt(0).toUpperCase() + g.slice(1))}`)
+                                .join(', ');
+                        }
+                    }
+                }
+            } catch {}
+            if (!glazingValue && baseGlazing) glazingValue = String(baseGlazing);
+            if (glazingValue) pairs.push(["Vetro", glazingValue]);
+
+            // --- UW ---
             const uwRaw = pickFirst(it, ["uw"]);
             if (uwRaw !== undefined && uwRaw !== null && String(uwRaw).trim() !== "") {
                 const uwNum = Number(uwRaw);
@@ -326,6 +389,7 @@ function detailPairs(it: any): Array<[string, string]> {
                 pairs.push(["Uw", uwStr]);
             }
 
+            // --- Stratigrafia vetro ---
             const gspec = pickFirst(it, ["glass_spec", "vetro_stratigrafia", "stratigrafia_vetro"]);
             if (gspec) pairs.push(["Stratigrafia vetro", String(gspec)]);
 
@@ -442,6 +506,11 @@ export default function QuotePDF(props: QuotePDFProps) {
 
     const itemsSafe = normalizeItems(items);
 
+    const hasWindows = itemsSafe.some((it: any) => {
+        const k = String(it?.kind || '').toLowerCase();
+        return k === 'finestra' || k === 'portafinestra' || k === 'scorrevole' || /serrament/i.test(k);
+    });
+
     // Superficie totale (somma di tutte le voci con misure), in m²
     const totalM2 = itemsSafe.reduce((acc: number, it: any) => {
         const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
@@ -469,10 +538,21 @@ export default function QuotePDF(props: QuotePDFProps) {
     }, 0);
 
     const totals = normalizeTotals(catTotals);
-    const mnt = typeof mountingCost === 'number' && Number.isFinite(mountingCost) ? mountingCost : 0
-    const totalImponibile = (typeof totalExcluded === 'number' && Number.isFinite(totalExcluded))
-        ? totalExcluded
-        : totals.reduce((s, r) => s + r.amount, 0) + mnt
+    const mnt = typeof mountingCost === 'number' && Number.isFinite(mountingCost) ? mountingCost : 0;
+    const fallbackTotal = totals.reduce((s, r) => s + r.amount, 0) + mnt;
+
+    const hasDiscount =
+        !!(props?.discount &&
+            typeof props.discount.discountedTotal === 'number' &&
+            props.discount.discountedTotal >= 0 &&
+            props.discount.discountedTotal < (props.discount.originalTotal ?? Infinity));
+
+    const originalTotal = hasDiscount
+        ? (props.discount?.originalTotal ?? fallbackTotal)
+        : (typeof totalExcluded === 'number' && Number.isFinite(totalExcluded) ? totalExcluded : fallbackTotal);
+
+    const discountedTotal = hasDiscount ? props.discount!.discountedTotal : originalTotal;
+    const discountDelta = Math.max(0, originalTotal - discountedTotal);
 
     // --- MODIFICA QUI ---
     // Calcola la validità da validityDays se presente, altrimenti da validityLabel
@@ -502,7 +582,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                             P.IVA 04062850120{"\n"}
                             sede legale - Saronno (VA) 21047{"\n"}
                             Via San Giuseppe, 95{"\n"}
-                            info@xinfissi.it · www.xinfissi.it · +39 02 1234 5678
+                            info@xinfissi.it · www.xinfissi.it · +39 345 457 3328
                         </Text>
                     </View>
                     <View style={{ width: 300, marginTop: 0 }}>
@@ -528,7 +608,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                     <View style={[s.box]}>
                         <View style={s.row}>
                             <View style={{ flex: 1, paddingRight: 8 }}>
-                                <Text style={s.label}>Data emissione</Text>
+                                <Text style={s.label}>Data emissione preventivo</Text>
                                 <Text wrap={false}>{formatISODate(issueDate)}</Text>
                             </View>
                             <View style={{ flex: 1, paddingLeft: 8 }}>
@@ -539,7 +619,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                         </View>
                         <View style={[s.row, { marginTop: 6 }]}>
                             <View style={{ flex: 1, paddingRight: 8 }}>
-                                <Text style={s.label}>Tempi posa</Text>
+                                <Text style={s.label}>Termini di completamento</Text>
                                 <Text wrap={false}>{safeText(installTime)}</Text>
                             </View>
                             <View style={{ flex: 1, paddingLeft: 8 }}>
@@ -547,6 +627,18 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 <Text wrap={false}>{safeText(profileSystem)}</Text>
                             </View>
                         </View>
+                        {hasWindows && (
+                            <View style={[s.row, { marginTop: 6 }]}> 
+                                <View style={{ flex: 1, paddingRight: 8 }}>
+                                    <Text style={s.label}>Ferramenta</Text>
+                                    <Text wrap={false}>WINKHAUS + HOPPE</Text>
+                                </View>
+                                <View style={{ flex: 1, paddingLeft: 8 }}>
+                                    <Text style={s.label}>Servizi</Text>
+                                    <Text wrap={false}>Trasporto incluso</Text>
+                                </View>
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -562,8 +654,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                             totals.map((r, i) => {
                                 const label = safeText(r.category, "-");
                                 const k = `row-${label}-${Number.isFinite(r.amount) ? r.amount : 0}-${i}`;
-                                const showWindowsM2 = /finestr/i.test(label) && windowsM2 > 0;
-                                const pieces = (r as any).pieces as number | null;
+                                const showWindowsM2 = /finestr|serramenti/i.test(label) && windowsM2 > 0; const pieces = (r as any).pieces as number | null;
                                 return (
                                     <View key={k} style={s.tr}>
                                         <Text style={[s.td, { flex: 2 }]}>
@@ -591,34 +682,70 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 <Text style={[s.td, s.right]}>{euro(mountingCost)}</Text>
                             </View>
                         )}
-                        <View style={[s.tr, { borderBottomWidth: 0 }]}>
-                            <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7'  }]}>TOTALE (IVA ESCLUSA)</Text>
-                            <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(totalImponibile)}</Text>
-                        </View>
+                        {hasDiscount ? (
+                          <>
+                            {/* Totale originale, senza barrato e senza riga SCONTO */}
+                            <View style={[s.tr]}>
+                              <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
+                              <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
+                            </View>
+
+                            {/* Totale scontato, con sfondo verde; mostra la % solo se lo sconto è percentuale */}
+                            <View style={[s.tr, s.pastelGreen, { borderBottomWidth: 0 }]}>
+                              <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>
+                                {`TOTALE SCONTATO (IVA ESCLUSA)${
+                                  props.discount?.mode === 'pct' && typeof props.discount?.pct === 'number' && props.discount.pct > 0
+                                    ? ` (${props.discount.pct}%)`
+                                    : ''
+                                }`}
+                              </Text>
+                              <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(discountedTotal)}</Text>
+                            </View>
+                          </>
+                        ) : (
+                            <View style={[s.tr, { borderBottomWidth: 0 }]}>
+                                <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
+                                <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
-                {/* Dettaglio voci */}
+            </Page>
+
+            {/* Pagina 2: dettaglio voci */}
+            <Page size="A4" style={s.page}>
+                {companyLogoUrl && companyLogoUrl.trim() ? (
+                    <Image src={companyLogoUrl} style={s.logo} />
+                ) : (
+                    <Image src={xInfissiLogo} style={s.logo} />
+                )}
+                {/* Dettaglio voci (spostato a pagina 2) */}
                 <View style={s.block}>
                     <Text style={s.h2}>Dettaglio voci</Text>
                     {itemsSafe.length > 0 ? (
                         itemsSafe.map((it: any, i: number) => {
                             const isCustom = it?.kind === 'custom';
 
-                            const pairs: Array<[string, string]> = isCustom
-                                ? (Array.isArray(it?.custom_fields)
-                                    ? it.custom_fields
-                                        .filter((f: any) => {
-                                            const key = (f?.name ?? f?.label);
-                                            const val = f?.value;
-                                            return key && String(key).trim() && val != null && String(val).trim();
-                                        })
-                                        .map((f: any) => [
-                                            String(f?.name ?? f?.label).trim(),
-                                            String(f?.value).trim(),
-                                        ] as [string, string])
-                                    : [])
-                                : detailPairs(it);
+                            // Dettagli base (solo per voci non custom)
+                            const basePairs: Array<[string, string]> = isCustom ? [] : detailPairs(it);
+
+                            // Campi personalizzati (per tutte le voci): label/name/key + value, ignorando vuoti
+                            const extraPairs: Array<[string, string]> = Array.isArray(it?.custom_fields)
+                              ? it.custom_fields
+                                  .filter((f: any) => {
+                                    const key = (f?.name ?? f?.label ?? f?.key);
+                                    const val = f?.value;
+                                    return key && String(key).trim() && val != null && String(val).trim();
+                                  })
+                                  .map((f: any) => [
+                                    String(f?.name ?? f?.label ?? f?.key).trim(),
+                                    String(f?.value).trim(),
+                                  ] as [string, string])
+                              : [];
+
+                            // Per le voci custom mostriamo solo i custom fields; per le altre, appende in fondo
+                            const pairs: Array<[string, string]> = isCustom ? extraPairs : [...basePairs, ...extraPairs];
 
                             // Titolo: per custom mostra il titolo libero (senza uppercase aggressivo); per gli altri usa il kind in uppercase
                             const title = isCustom
@@ -627,7 +754,7 @@ export default function QuotePDF(props: QuotePDFProps) {
 
                             const qty = `Q.tà ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : "1"}`;
 
-                            //mostra misure anche per custom
+                            // mostra misure anche per custom
                             const description = describeItem(it);
 
                             const pairCount = pairs.length;
@@ -648,106 +775,106 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 >
                                     <View style={s.itemPhotoWrap}>
                                         {(() => {
-                                          const raw = typeof it?.image_url === 'string' ? it.image_url : '';
-                                          const imgSrc = raw && !raw.startsWith('blob:') ? raw : imageFor(it?.kind);
-                                          return <Image src={imgSrc} style={s.photo} />;
+                                            const raw = typeof it?.image_url === 'string' ? it.image_url : '';
+                                            const imgSrc = raw && !raw.startsWith('blob:') ? raw : imageFor(it?.kind);
+                                            return <Image src={imgSrc} style={s.photo} />;
                                         })()}
 
                                         {(() => {
-  const kind = String(it?.kind || "").toLowerCase();
+                                            const kind = String(it?.kind || "").toLowerCase();
 
-  // Common texts
-  const widthText = (it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)
-    ? `${String(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)} mm`
-    : "—";
-  const heightText = (it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
-    ? `${String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)} mm`
-    : "—";
+                                            // Common texts
+                                            const widthText = (it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)
+                                                ? `${String(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)} mm`
+                                                : "—";
+                                            const heightText = (it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
+                                                ? `${String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)} mm`
+                                                : "—";
 
-  // Apply "smart" placement only for proportional drawings
-  const isProportional = kind === "finestra" || kind === "cassonetto";
+                                            // Apply "smart" placement only for proportional drawings
+                                            const isProportional = kind === "finestra" || kind === "cassonetto";
 
-  if (!isProportional) {
-    // Fixed positions (icons, tapparella, zanzariera, persiana, ecc.)
-    return (
-      <>
-        <Text style={s.dimW}>{widthText}</Text>
-        <View style={s.dimHWrap}>
-          <Text style={s.dimH}>{heightText}</Text>
-        </View>
-      </>
-    );
-  }
+                                            if (!isProportional) {
+                                                // Fixed positions (icons, tapparella, zanzariera, persiana, ecc.)
+                                                return (
+                                                    <>
+                                                        <Text style={s.dimW}>{widthText}</Text>
+                                                        <View style={s.dimHWrap}>
+                                                            <Text style={s.dimH}>{heightText}</Text>
+                                                        </View>
+                                                    </>
+                                                );
+                                            }
 
-  // ---- Proportional drawings (finestra, cassonetto) ----
-  // Wrapper box and its inner padding (must match s.itemPhotoWrap.padding)
-  const WRAP_W = 170;
-  const WRAP_H = 170;
-  const PAD = 6; // <-- s.itemPhotoWrap.padding
-  const INNER_W = WRAP_W - PAD * 2;
-  const INNER_H = WRAP_H - PAD * 2;
+                                            // ---- Proportional drawings (finestra, cassonetto) ----
+                                            // Wrapper box and its inner padding (must match s.itemPhotoWrap.padding)
+                                            const WRAP_W = 170;
+                                            const WRAP_H = 170;
+                                            const PAD = 6; // <-- s.itemPhotoWrap.padding
+                                            const INNER_W = WRAP_W - PAD * 2;
+                                            const INNER_H = WRAP_H - PAD * 2;
 
-  const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-  const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-  const hasDims = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
+                                            const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
+                                            const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
+                                            const hasDims = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
 
-  // Estimate margins produced by "contain" within the INNER box.
-  let marginX = 0, marginY = 0;
-  if (hasDims) {
-    const ar = w / h;
-    const arBox = INNER_W / INNER_H;
-    if (ar >= arBox) {
-      // Wide: width touches INNER_W, height shrinks
-      const imgH = INNER_W / ar;
-      marginY = Math.max(0, (INNER_H - imgH) / 2);
-    } else {
-      // Tall: height touches INNER_H, width shrinks
-      const imgW = INNER_H * ar;
-      marginX = Math.max(0, (INNER_W - imgW) / 2);
-    }
-  }
+                                            // Estimate margins produced by "contain" within the INNER box.
+                                            let marginX = 0, marginY = 0;
+                                            if (hasDims) {
+                                                const ar = w / h;
+                                                const arBox = INNER_W / INNER_H;
+                                                if (ar >= arBox) {
+                                                    // Wide: width touches INNER_W, height shrinks
+                                                    const imgH = INNER_W / ar;
+                                                    marginY = Math.max(0, (INNER_H - imgH) / 2);
+                                                } else {
+                                                    // Tall: height touches INNER_H, width shrinks
+                                                    const imgW = INNER_H * ar;
+                                                    marginX = Math.max(0, (INNER_W - imgW) / 2);
+                                                }
+                                            }
 
-  const GAP = 4;
-  const centerX = WRAP_W / 2;
-  const centerY = PAD + INNER_H / 2;
+                                            const GAP = 4;
+                                            const centerX = WRAP_W / 2;
+                                            const centerY = PAD + INNER_H / 2;
 
-  // Larghezza: subito sotto l’immagine reale
-  const widthLabelTop = PAD + (INNER_H - marginY) + GAP;
+                                            // Larghezza: subito sotto l’immagine reale
+                                            const widthLabelTop = PAD + (INNER_H - marginY) + GAP;
 
-  // Altezza: a sinistra dell’immagine reale, ruotata
-  const heightLabelLeft = Math.max(2, PAD + marginX - 8);
+                                            // Altezza: a sinistra dell’immagine reale, ruotata
+                                            const heightLabelLeft = Math.max(2, PAD + marginX - 8);
 
-  return (
-    <>
-      {/* Larghezza (sotto l’immagine, centrata) */}
-      <Text
-        style={{
-          position: "absolute",
-          top: widthLabelTop,
-          left: centerX - 60,
-          width: 120,
-          textAlign: "center",
-          fontSize: 10,
-          color: "#333",
-        }}
-      >
-        {widthText}
-      </Text>
+                                            return (
+                                                <>
+                                                    {/* Larghezza (sotto l’immagine, centrata) */}
+                                                    <Text
+                                                        style={{
+                                                            position: "absolute",
+                                                            top: widthLabelTop,
+                                                            left: centerX - 60,
+                                                            width: 120,
+                                                            textAlign: "center",
+                                                            fontSize: 10,
+                                                            color: "#333",
+                                                        }}
+                                                    >
+                                                        {widthText}
+                                                    </Text>
 
-      {/* Altezza (a sinistra dell’immagine, ruotata e centrata verticalmente) */}
-      <View
-        style={{
-          position: "absolute",
-          left: -22,
-          top: centerY,
-          transform: "rotate(-90deg)",
-        }}
-      >
-        <Text style={{ fontSize: 10, color: "#333" }}>{heightText}</Text>
-      </View>
-    </>
-  );
-})()}
+                                                    {/* Altezza (a sinistra dell’immagine, ruotata e centrata verticalmente) */}
+                                                    <View
+                                                        style={{
+                                                            position: "absolute",
+                                                            left: -22,
+                                                            top: centerY,
+                                                            transform: "rotate(-90deg)",
+                                                        }}
+                                                    >
+                                                        <Text style={{ fontSize: 10, color: "#333" }}>{heightText}</Text>
+                                                    </View>
+                                                </>
+                                            );
+                                        })()}
                                     </View>
 
                                     <View style={s.itemContent}>
@@ -783,13 +910,14 @@ export default function QuotePDF(props: QuotePDFProps) {
                 </View>
             </Page>
 
-            {/* Pagina 2: condizioni */}
+            {/* Pagina 3: condizioni */}
             <Page size="A4" style={s.page}>
                 {companyLogoUrl && companyLogoUrl.trim() ? (
                     <Image src={companyLogoUrl} style={s.logo} />
                 ) : (
                     <Image src={xInfissiLogo} style={s.logo} />
                 )}
+
                 <Text style={[s.h2, { marginTop: 6 }]}>Condizioni di Fornitura</Text>
                 <View style={{ height: 1, backgroundColor: "#eee", marginVertical: 10 }} />
                 <Text>{safeText(terms)}</Text>

@@ -26,6 +26,8 @@ export type LeafState =
   | 'vasistas'
   | 'apre_sx+vasistas'
   | 'apre_dx+vasistas'
+  | 'scorrevole_sx'
+  | 'scorrevole_dx'
 
 /** Configurazione disegno finestra per l'SVG (opzionale) */
 export type GridWindowConfig = {
@@ -48,6 +50,8 @@ export type GridWindowConfig = {
       width_ratio: number
       /** stato della singola anta (facoltativo se pannello fisso) */
       leaf?: { state: LeafState }
+      /** override del tipo di vetro per la singola anta; se assente eredita da GridWindowConfig.glazing */
+      glazing?: GridWindowConfig['glazing']
     }>
   }>
 }

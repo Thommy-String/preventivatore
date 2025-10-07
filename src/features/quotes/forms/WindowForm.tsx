@@ -280,6 +280,10 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             } else if (count < cur) {
                 newCols = newCols.slice(0, count);
             }
+
+            // Assicura che ogni anta abbia un glazing valorizzato (eredita dal default di griglia)
+            newCols = newCols.map((c) => ({ ...c, glazing: (c as any).glazing ?? grid.glazing }));
+
             if (autoSplit) {
                 const equal = Math.max(1, Math.round(totalW / count));
                 const cols = newCols.map(c => ({ ...c, width_ratio: equal }));
@@ -299,6 +303,20 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             if (rIdx === rowIndex) {
                 const newCols = row.cols.map((col, cIdx) =>
                     cIdx === colIndex ? { ...col, leaf: { state: newState } } : col
+                );
+                return { ...row, cols: newCols };
+            }
+            return row;
+        });
+        handleRowsChange(newRows);
+    };
+
+    // Nuova funzione: aggiorna il glazing di una singola anta
+    const updateSashGlazing = (rowIndex: number, colIndex: number, newGlazing: GridWindowConfig['glazing']) => {
+        const newRows = grid.rows.map((row, rIdx) => {
+            if (rIdx === rowIndex) {
+                const newCols = row.cols.map((col, cIdx) =>
+                    cIdx === colIndex ? { ...col, glazing: newGlazing } : col
                 );
                 return { ...row, cols: newCols };
             }
@@ -401,6 +419,20 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                     >
                                         {openingOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                                     </select>
+                                    {/* Per-anta glazing selector */}
+                                    <div className="mt-2">
+                                        <label className="text-xs text-gray-500">Vetro Anta {rowIndex + 1}.{colIndex + 1}</label>
+                                        <select
+                                            className="input"
+                                            value={(col as any).glazing ?? grid.glazing}
+                                            onChange={(e) => updateSashGlazing(rowIndex, colIndex, e.target.value as GridWindowConfig['glazing'])}
+                                        >
+                                            <option value="singolo">Singolo</option>
+                                            <option value="doppio">Doppio</option>
+                                            <option value="triplo">Triplo</option>
+                                            <option value="satinato">Satinato</option>
+                                        </select>
+                                    </div>
                                     {(() => {
                                         // Compute the TOTAL width per-anta (including telai/montanti) from ratios
                                         const colTotalMm = Math.round(col.width_ratio || 1);
@@ -438,32 +470,10 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             </section>
 
             <section className="space-y-2">
-                <div className="text-sm font-medium text-gray-600">Vetro e Riferimento</div>
+                <div className="text-sm font-medium text-gray-600">Vetro</div>
                 <div className="grid grid-cols-2 gap-3">
-                    {/* Input per Vetro e Riferimento */}
-                    <div>
-                        <label className="text-xs text-gray-500">Tipo Vetro</label>
-                        <select
-                            className="input"
-                            value={grid.glazing}
-                            onChange={(e) => {
-                              const val = e.target.value as any;
-                              applyPatch({ glass: val as any }, { glazing: val as any });
-                            }}
-                        >
-                            <option value="singolo">Singolo</option>
-                            <option value="doppio">Doppio</option>
-                            <option value="triplo">Triplo</option>
-                            <option value="satinato">Satinato</option>
-                        </select>
-                        <div className="mt-1 text-[11px] text-gray-500">
-                          Numero vetro: {grid.glazing === 'singolo' ? '1'
-                            : grid.glazing === 'doppio' ? '2'
-                            : grid.glazing === 'triplo' ? '3'
-                            : grid.glazing === 'satinato' ? 'satinato'
-                            : '-'}
-                        </div>
-                    </div>
+                    {/* Input per Riferimento */}
+                    
                     <div>
                         <label className="text-xs text-gray-500">Stratigrafia vetro</label>
                         <input

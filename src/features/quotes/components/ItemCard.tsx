@@ -1,3 +1,4 @@
+//src/features/quotes/components/ItemCard.tsx
 import { Button } from "../../../components/ui/Button"
 import { Copy, Pencil, Trash2 } from "lucide-react"
 import { surfaceMq } from "../utils/pricing"

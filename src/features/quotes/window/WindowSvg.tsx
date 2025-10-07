@@ -1,4 +1,3 @@
-//src/features/quotes/window/WindowSvg.tsx
 import * as React from "react";
 
 // --- Tipi ---
@@ -22,7 +21,7 @@ export interface GridWindowConfig {
     showDims?: boolean;
     rows: Array<{
         height_ratio: number;
-        cols: Array<{ width_ratio: number; leaf?: { state: LeafState } }>;
+        cols: Array<{ width_ratio: number; leaf?: { state: LeafState }; glazing?: GridWindowConfig['glazing'] }>;
     }>;
 }
 
@@ -125,7 +124,6 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     const padBottom = labelGap + fontSize * 1.1; // spazio per la quota L in basso
     const padLeft = labelGap + fontSize * 1.1; // spazio per la quota H a sinistra
 
-    const glassColor = glassFill(glazing);
     const satinPatternId = React.useMemo(() => `satin-dots-${Math.random().toString(36).slice(2, 8)}`, []);
 
     return (
@@ -170,6 +168,8 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
                     const gw = colW - sashInset * 2;
                     const gh = rowH - sashInset * 2;
 
+                    const sashGlazing = (col as any).glazing ?? glazing;
+
                     // Disegna il montante verticale (se non è la prima anta)
                     if (colIdx > 0) {
                         const mx = xCursor - (mullion_mm / 2);
@@ -179,8 +179,10 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
                     // Disegna il vetro e il simbolo di apertura
                     acc.nodes.push(
                         <g key={`g-${rowIdx}-${colIdx}`}>
-                            <rect x={gx} y={gy} width={gw} height={gh} fill={glassColor} stroke={stroke} strokeWidth={strokeWidth / 1.5} />
-                            {isSatin(glazing) && <rect x={gx} y={gy} width={gw} height={gh} fill={`url(#${satinPatternId})`} opacity={0.6} />}
+                            <rect x={gx} y={gy} width={gw} height={gh} fill={glassFill(sashGlazing)} stroke={stroke} strokeWidth={strokeWidth / 1.5} />
+                            {isSatin(sashGlazing) && (
+                                <rect x={gx} y={gy} width={gw} height={gh} fill={`url(#${satinPatternId})`} opacity={0.6} />
+                            )}
                         </g>
                     );
                     acc.nodes.push(<OpeningGlyph key={`o-${rowIdx}-${colIdx}`} x={gx} y={gy} w={gw} h={gh} state={col.leaf?.state ?? "fissa"} stroke={stroke} strokeWidth={strokeWidth} />);

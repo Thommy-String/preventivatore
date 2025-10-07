@@ -3,6 +3,7 @@ import { Button } from "../../../components/ui/Button";
 import { registry } from "../registry";
 import type { QuoteItem } from "../types";
 import CustomForm from "../forms/CustomForm";
+import type { CustomField } from "../types";
 import { gridWindowToPngBlob } from "../svg/windowToPng";
 import { cassonettoToPngBlob } from "../cassonetto/cassonettoToPng";
 import WindowSvg from "../window/WindowSvg";
@@ -25,6 +26,76 @@ function fileToDataUrl(file: File): Promise<string> {
     fr.onerror = () => reject(fr.error || new Error("FileReader error"));
     fr.readAsDataURL(file);
   });
+}
+
+// — Reusable inline section: custom fields for ALL item kinds —
+function CustomFieldsSection({ draft, onChange }: { draft: any; onChange: (next: any) => void }) {
+  const details: CustomField[] = Array.isArray(draft?.custom_fields) ? (draft.custom_fields as any) : [];
+
+  const update = (nextArr: CustomField[]) => {
+    onChange({ ...(draft as any), custom_fields: nextArr } as any);
+  };
+
+  const updateRow = (idx: number, patch: Partial<CustomField>) => {
+    const next = details.slice();
+    next[idx] = { ...next[idx], ...patch } as CustomField;
+    update(next);
+  };
+
+  const addRow = () => {
+    update([
+      ...details,
+      { key: (crypto as any).randomUUID?.() || String(Date.now() + Math.random()), name: "", value: "" } as any,
+    ]);
+  };
+
+  const removeRow = (idx: number) => {
+    const next = details.slice();
+    next.splice(idx, 1);
+    update(next);
+  };
+
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-gray-600">Dettagli aggiuntivi</div>
+        <button type="button" className="btn btn-sm" onClick={addRow}>+ Aggiungi campo</button>
+      </div>
+
+      {details.length === 0 ? (
+        <div className="rounded border border-dashed p-4 text-sm text-gray-500">
+          Nessun campo. Premi “+ Aggiungi campo”.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {details.map((f, idx) => (
+            <div key={(f as any).key ?? idx} className="grid grid-cols-[1fr_1fr_40px] gap-2 items-center">
+              <input
+                className="input"
+                placeholder="Titolo (es. Colore maniglia)"
+                value={typeof (f as any).name === "string" && (f as any).name ? (f as any).name : (typeof (f as any).label === "string" ? (f as any).label : "")}
+                onChange={(e) => updateRow(idx, { name: e.target.value } as any)}
+              />
+              <input
+                className="input"
+                placeholder="Valore (es. Nero opaco)"
+                value={typeof (f as any).value === "string" ? (f as any).value : ""}
+                onChange={(e) => updateRow(idx, { value: e.target.value } as any)}
+              />
+              <button
+                type="button"
+                className="h-9 w-9 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                onClick={() => removeRow(idx)}
+                aria-label="Rimuovi"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }
 
 // Crea una cfg cassonetto di fallback dai campi della voce
@@ -185,8 +256,12 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
               </div>
             </div>
 
-            {/* Form */}
-            {Form ? <Form draft={draft as any} onChange={onChange as any} /> : null}
+            {/* Form and Custom Fields */}
+            <div className="space-y-4">
+              {Form ? <Form draft={draft as any} onChange={onChange as any} /> : null}
+              {/* Shared custom fields for every kind */}
+              <CustomFieldsSection draft={draft as any} onChange={onChange as any} />
+            </div>
           </div>
         </div>
       </div>
