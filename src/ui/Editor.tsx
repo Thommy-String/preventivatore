@@ -87,6 +87,58 @@ export default function Editor() {
   const removeRow = (id: string) =>
     setManualTotals(r => r.filter(x => x.id !== id))
 
+  // --- Mobile-friendly local strings for Riepilogo costi inputs ---
+  const [piecesStr, setPiecesStr] = useState<Record<string, string>>({});
+  const [amountStr, setAmountStr] = useState<Record<string, string>>({});
+
+  // Keep local strings in sync with manualTotals (and hide the initial 0 for amount)
+  useEffect(() => {
+    const nextPieces: Record<string, string> = {};
+    const nextAmount: Record<string, string> = {};
+    manualTotals.forEach(r => {
+      nextPieces[r.id] = (typeof r.pieces === 'number' && isFinite(r.pieces)) ? String(r.pieces) : '';
+      // UI nicer: if amount is 0, show empty string so "0" isn't forced
+      nextAmount[r.id] = (typeof r.amount === 'number' && isFinite(r.amount) && r.amount !== 0) ? String(r.amount) : '';
+    });
+    setPiecesStr(nextPieces);
+    setAmountStr(nextAmount);
+  }, [manualTotals]);
+  // --- Handlers: commit on blur, allow empty while typing ---
+  const onPiecesChange = (id: string, v: string) => {
+    if (v === '' || /^\d+$/.test(v)) setPiecesStr(prev => ({ ...prev, [id]: v }));
+  };
+  const onPiecesBlur = (id: string) => {
+    const raw = piecesStr[id] ?? '';
+    const n = raw === '' ? null : Math.max(0, parseInt(raw || '0', 10));
+    updateRow(id, { pieces: n });
+    setPiecesStr(prev => ({ ...prev, [id]: raw === '' ? '' : String(n) }));
+  };
+
+  // Accept comma or dot, keep up to 2 decimals in UI, but store full number
+  const normalizeAmountInput = (s: string) => s.replace(',', '.');
+  const onAmountChange = (id: string, v: string) => {
+    if (v === '') { setAmountStr(prev => ({ ...prev, [id]: '' })); return; }
+    // allow digits, optional one separator, optional decimals
+    if (/^\d+([.,]\d{0,2})?$/.test(v)) {
+      setAmountStr(prev => ({ ...prev, [id]: v }));
+    }
+  };
+  const onAmountBlur = (id: string) => {
+    const raw = amountStr[id] ?? '';
+    if (raw === '') {
+      // keep amount 0 but show empty field
+      updateRow(id, { amount: 0 });
+      setAmountStr(prev => ({ ...prev, [id]: '' }));
+      return;
+    }
+    const parsed = Number(normalizeAmountInput(raw));
+    const n = Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    updateRow(id, { amount: n });
+    // format back with up to 2 decimals only if user typed decimals; otherwise integer
+    const hasSep = /[.,]/.test(raw);
+    setAmountStr(prev => ({ ...prev, [id]: hasSep ? n.toFixed(2).replace('.', ',') : String(n) }));
+  };
+
 
 
   // piva local state
@@ -716,7 +768,7 @@ export default function Editor() {
               <input
                 className="input"
                 placeholder="es. 4-6 settimane"
-                value={quote.install_time ?? ''}
+                value={quote.install_time ?? '4-6 settimane'}
                 onChange={(e) => updateField('install_time', e.target.value || null)}
               />
             </div>
@@ -841,15 +893,15 @@ export default function Editor() {
                     <div className="w-20">
                       <input
                         className="input w-full text-right"
-                        type="number"
+                        type="text"
                         inputMode="numeric"
-                        min="0"
+                        pattern="[0-9]*"
                         placeholder="pz."
-                        value={typeof row.pieces === 'number' ? row.pieces : ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          updateRow(row.id, { pieces: v === '' ? null : Math.max(0, parseInt(v || '0', 10)) })
-                        }}
+                        value={piecesStr[row.id] ?? (typeof row.pieces === 'number' ? String(row.pieces) : '')}
+                        onChange={(e) => onPiecesChange(row.id, e.target.value)}
+                        onBlur={() => onPiecesBlur(row.id)}
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                       />
                     </div>
 
@@ -857,14 +909,15 @@ export default function Editor() {
                     <div className="flex-1 sm:flex-none sm:w-40">
                       <input
                         className="input w-full text-right"
-                        type="number"
+                        type="text"
                         inputMode="decimal"
-                        step="0.01"
-                        min="0"
-                        value={row.amount}
-                        onChange={(e) =>
-                          updateRow(row.id, { amount: Number(e.target.value || 0) })
-                        }
+                        // allow comma or dot while typing; we'll sanitize on blur
+                        value={amountStr[row.id] ?? (row.amount === 0 ? '' : String(row.amount))}
+                        onChange={(e) => onAmountChange(row.id, e.target.value)}
+                        onBlur={() => onAmountBlur(row.id)}
+                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                        onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                        placeholder="0,00"
                       />
                     </div>
                     <span className="hidden sm:inline text-sm text-gray-500">€</span>

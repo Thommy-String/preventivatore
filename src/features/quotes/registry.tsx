@@ -46,12 +46,12 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
       color: null,
       glass: null,
       hinges_color: null,
-      uw: null,
+      uw: 1.3,
       profile_system: null,
       notes: null,
       reference: "",
       custom_fields: [],
-      // modello a griglia base 2 ante (50/50) apre sx + apre dx
+      // modello a griglia base 2 ante (50/50) apre dx +  sx vasistas
       options: {
         gridWindow: {
           width_mm: 1200,
@@ -64,8 +64,8 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
             {
               height_ratio: 1,
               cols: [
-                { width_ratio: 0.5, leaf: { state: "apre_sx" } },
                 { width_ratio: 0.5, leaf: { state: "apre_dx" } },
+                { width_ratio: 0.5, leaf: { state: "apre_sx+vasistas" } },
               ],
             },
           ],

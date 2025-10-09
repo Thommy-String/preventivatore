@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import type { ItemFormProps } from "../types"
 import type { ZanzarieraItem } from "../types"
 
@@ -37,15 +38,23 @@ export function ZanzarieraForm(
   const draft = props.draft
   const onChange = props.onChange
 
+  // Mobile-friendly numeric editing (allow empty while typing, commit on blur)
+  const [qtyStr, setQtyStr] = useState(draft?.qty == null ? "1" : String(draft.qty))
+  const [widthStr, setWidthStr] = useState(draft?.width_mm == null ? "" : String(draft.width_mm))
+  const [heightStr, setHeightStr] = useState(draft?.height_mm == null ? "" : String(draft.height_mm))
+
+  // Keep local strings in sync when draft changes externally
+  useEffect(() => {
+    setQtyStr(draft?.qty == null ? "1" : String(draft?.qty))
+    setWidthStr(draft?.width_mm == null ? "" : String(draft?.width_mm))
+    setHeightStr(draft?.height_mm == null ? "" : String(draft?.height_mm))
+  }, [draft?.qty, draft?.width_mm, draft?.height_mm])
+
   // Usa sempre il draft corrente come base; se assente preserva il kind
   const set = <K extends keyof ZanzarieraItem>(k: K, v: ZanzarieraItem[K]) => {
     const base = (draft ?? ({ kind: "zanzariera" } as ZanzarieraItem))
     onChange({ ...base, [k]: v })
   }
-  // valori di fallback per evitare accessi a undefined
-  const qty = draft?.qty ?? 1
-  const width = draft?.width_mm ?? 1000
-  const height = draft?.height_mm ?? 1500
   const misura = draft?.misura_tipo ?? 'vano'
   const modello = draft?.modello ?? ''
   const tipologia = draft?.tipologia ?? 'Tondo verticale molla'
@@ -64,10 +73,21 @@ export function ZanzarieraForm(
             <div className="text-xs text-gray-500">Pezzi</div>
             <input
               className="input"
-              type="number"
-              min={1}
-              value={qty}
-              onChange={(e) => set('qty', Math.max(1, Number(e.target.value || 1)))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={qtyStr}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === "" || /^\d+$/.test(v)) setQtyStr(v)
+              }}
+              onBlur={() => {
+                const n = qtyStr === "" ? 1 : Math.max(1, Number(qtyStr) || 1)
+                set("qty", n as any)
+                setQtyStr(String(n))
+              }}
+              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+              onKeyDown={(e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault() }}
             />
           </div>
         </div>
@@ -117,18 +137,50 @@ export function ZanzarieraForm(
             <div className="text-xs text-gray-500">Larghezza (mm)</div>
             <input
               className="input"
-              type="number"
-              value={width}
-              onChange={(e) => set('width_mm', Number(e.target.value || 0))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={widthStr}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === "" || /^\d+$/.test(v)) setWidthStr(v)
+              }}
+              onBlur={() => {
+                if (widthStr === "") {
+                  set("width_mm", null as any)
+                } else {
+                  const n = Number(widthStr)
+                  set("width_mm", Number.isNaN(n) ? null as any : (n as any))
+                  setWidthStr(Number.isNaN(n) ? "" : String(n))
+                }
+              }}
+              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+              onKeyDown={(e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault() }}
             />
           </div>
           <div>
             <div className="text-xs text-gray-500">Altezza (mm)</div>
             <input
               className="input"
-              type="number"
-              value={height}
-              onChange={(e) => set('height_mm', Number(e.target.value || 0))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={heightStr}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === "" || /^\d+$/.test(v)) setHeightStr(v)
+              }}
+              onBlur={() => {
+                if (heightStr === "") {
+                  set("height_mm", null as any)
+                } else {
+                  const n = Number(heightStr)
+                  set("height_mm", Number.isNaN(n) ? null as any : (n as any))
+                  setHeightStr(Number.isNaN(n) ? "" : String(n))
+                }
+              }}
+              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+              onKeyDown={(e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault() }}
             />
           </div>
           <div>

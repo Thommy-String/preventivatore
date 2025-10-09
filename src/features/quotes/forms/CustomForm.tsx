@@ -1,5 +1,5 @@
 // src/features/quotes/forms/CustomForm.tsx
-import React, { useRef } from "react"
+import React, { useRef, useState, useEffect } from "react"
 import type { CustomItem, CustomField } from "../../quotes/types"
 
 type Props = {
@@ -11,6 +11,18 @@ type FlexField = CustomField & { name?: string; label?: string } // tollera name
 
 export default function CustomForm({ draft, onChange }: Props) {
     const fileRef = useRef<HTMLInputElement | null>(null)
+
+    // Mobile-friendly numeric editing (allow empty while typing, commit on blur)
+    const [widthStr, setWidthStr] = useState(draft.width_mm == null ? '' : String(draft.width_mm))
+    const [heightStr, setHeightStr] = useState(draft.height_mm == null ? '' : String(draft.height_mm))
+    const [qtyStr, setQtyStr] = useState(draft.qty == null ? '1' : String(draft.qty))
+
+    // Keep local strings in sync if draft changes from outside
+    useEffect(() => {
+      setWidthStr(draft.width_mm == null ? '' : String(draft.width_mm))
+      setHeightStr(draft.height_mm == null ? '' : String(draft.height_mm))
+      setQtyStr(draft.qty == null ? '1' : String(draft.qty))
+    }, [draft.width_mm, draft.height_mm, draft.qty])
 
     const set = <K extends keyof CustomItem>(k: K, v: CustomItem[K]) =>
         onChange({ ...draft, [k]: v })
@@ -93,41 +105,75 @@ export default function CustomForm({ draft, onChange }: Props) {
                 <div>
                     <div className="text-xs text-gray-500">Larghezza (mm)</div>
                     <input
-                        type="number"
-                        min={0}
-                        className="input"
-                        value={draft.width_mm ?? ""}
-                        onChange={(e) =>
-                            set("width_mm", Number(e.target.value || 0) as any)
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="input"
+                      value={widthStr}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v === '' || /^\d+$/.test(v)) setWidthStr(v)
+                      }}
+                      onBlur={() => {
+                        if (widthStr === '') {
+                          set('width_mm', null as any)
+                        } else {
+                          const n = Number(widthStr)
+                          set('width_mm', Number.isNaN(n) ? null as any : (n as any))
+                          setWidthStr(Number.isNaN(n) ? '' : String(n))
                         }
-                        placeholder="es. 1200"
+                      }}
+                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                      onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault() }}
+                      placeholder="es. 1200"
                     />
                 </div>
                 <div>
                     <div className="text-xs text-gray-500">Altezza (mm)</div>
                     <input
-                        type="number"
-                        min={0}
-                        className="input"
-                        value={draft.height_mm ?? ""}
-                        onChange={(e) =>
-                            set("height_mm", Number(e.target.value || 0) as any)
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="input"
+                      value={heightStr}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v === '' || /^\d+$/.test(v)) setHeightStr(v)
+                      }}
+                      onBlur={() => {
+                        if (heightStr === '') {
+                          set('height_mm', null as any)
+                        } else {
+                          const n = Number(heightStr)
+                          set('height_mm', Number.isNaN(n) ? null as any : (n as any))
+                          setHeightStr(Number.isNaN(n) ? '' : String(n))
                         }
-                        placeholder="es. 1500"
+                      }}
+                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                      onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault() }}
+                      placeholder="es. 1500"
                     />
                 </div>
                 <div>
                     <div className="text-xs text-gray-500">Quantità</div>
                     <input
-                        type="number"
-                        min={1}
-                        step={1}
-                        className="input"
-                        value={draft.qty ?? 1}
-                        onChange={(e) =>
-                            set("qty", Math.max(1, Number(e.target.value || 1)) as any)
-                        }
-                        placeholder="1"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="input"
+                      value={qtyStr}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v === '' || /^\d+$/.test(v)) setQtyStr(v)
+                      }}
+                      onBlur={() => {
+                        const n = qtyStr === '' ? 1 : Math.max(1, Number(qtyStr) || 1)
+                        set('qty', n as any)
+                        setQtyStr(String(n))
+                      }}
+                      onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                      onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault() }}
+                      placeholder="1"
                     />
                 </div>
             </div>

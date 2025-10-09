@@ -125,18 +125,45 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const d = draft;
 
     const [autoSplit, setAutoSplit] = useState(true);
-    
+
+    const getGrid = (): GridWindowConfig | undefined => (d as any)?.options?.gridWindow;
+    const grid = getGrid();
 
     const [widthStr, setWidthStr] = useState(String(d.width_mm || ''));
     const [heightStr, setHeightStr] = useState(String(d.height_mm || ''));
+    const [qtyStr, setQtyStr] = useState(String(d.qty ?? 1));
+
+    // --- Per-row and per-anta string states for safe editing ---
+    const [rowHeightStr, setRowHeightStr] = useState<Record<number, string>>({});
+    const [sashCountStr, setSashCountStr] = useState<Record<number, string>>({});
+    const [colWidthStr, setColWidthStr] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        setQtyStr(String(d.qty ?? 1));
+    }, [d.qty]);
 
     useEffect(() => {
         setWidthStr(String(d.width_mm || ''));
         setHeightStr(String(d.height_mm || ''));
     }, [d.width_mm, d.height_mm]);
 
-    const getGrid = (): GridWindowConfig | undefined => (d as any)?.options?.gridWindow;
-    const grid = getGrid();
+    // Sync string states from grid structure/values
+    useEffect(() => {
+        if (!grid) return;
+        const nextRowHeights: Record<number, string> = {};
+        const nextSashCounts: Record<number, string> = {};
+        const nextColWidths: Record<string, string> = {};
+        grid.rows.forEach((r, ri) => {
+            nextRowHeights[ri] = String(Math.round(r.height_ratio || 1));
+            nextSashCounts[ri] = String(r.cols.length);
+            r.cols.forEach((c, ci) => {
+                nextColWidths[`${ri}.${ci}`] = String(Math.round(c.width_ratio || 1));
+            });
+        });
+        setRowHeightStr(nextRowHeights);
+        setSashCountStr(nextSashCounts);
+        setColWidthStr(nextColWidths);
+    }, [grid?.rows]);
 
     // Inizializzazione
     useEffect(() => {
@@ -159,37 +186,37 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
 
     // --- Patch atomica: aggiorna contemporaneamente draft e gridWindow ---
     const applyPatch = (
-      draftPatch: Partial<WindowItem> = {},
-      gridPatch: Partial<GridWindowConfig> = {}
+        draftPatch: Partial<WindowItem> = {},
+        gridPatch: Partial<GridWindowConfig> = {}
     ) => {
-      const curGrid: GridWindowConfig = (d as any)?.options?.gridWindow ?? {
-        width_mm: d.width_mm || 1200,
-        height_mm: d.height_mm || 1500,
-        frame_mm: FRAME_MM,
-        mullion_mm: MULLION_MM,
-        rows: [{
-          height_ratio: (d.height_mm || 1500),
-          cols: [{ width_ratio: (d.width_mm || 1200), leaf: { state: 'fissa' } }]
-        }],
-        glazing: 'doppio',
-        showDims: true,
-      };
-    
-      const next = {
-        ...(d as any),
-        ...draftPatch,
-        options: {
-          ...(d as any).options,
-          gridWindow: { ...curGrid, ...gridPatch },
-        },
-      };
-    
-      onChange(next as any);
+        const curGrid: GridWindowConfig = (d as any)?.options?.gridWindow ?? {
+            width_mm: d.width_mm || 1200,
+            height_mm: d.height_mm || 1500,
+            frame_mm: FRAME_MM,
+            mullion_mm: MULLION_MM,
+            rows: [{
+                height_ratio: (d.height_mm || 1500),
+                cols: [{ width_ratio: (d.width_mm || 1200), leaf: { state: 'fissa' } }]
+            }],
+            glazing: 'doppio',
+            showDims: true,
+        };
+
+        const next = {
+            ...(d as any),
+            ...draftPatch,
+            options: {
+                ...(d as any).options,
+                gridWindow: { ...curGrid, ...gridPatch },
+            },
+        };
+
+        onChange(next as any);
     };
 
     // --- Gestori Eventi ---
     const handleGridChange = (newGridData: Partial<GridWindowConfig>) => {
-      applyPatch({}, newGridData);
+        applyPatch({}, newGridData);
     };
 
     const handleRowsChange = (newRows: GridWindowConfig['rows']) => {
@@ -197,36 +224,35 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     };
 
     const handleMeasureUpdate = (key: 'width_mm' | 'height_mm', value: string) => {
-      const nextTotal = Math.max(100, Math.round(Number(value)) || 100);
-    
-      if (key === 'width_mm') {
-        // Per ogni riga, porta la somma delle ante al nuovo TOTALE finestra.
-        // Se autoSplit è attivo, distribuzione perfettamente uguale tra le ante.
-        const nextRows = grid.rows.map((r) => {
-          if (autoSplit) {
-            const count = Math.max(1, r.cols.length);
-            const equal = Math.max(1, Math.round(nextTotal / count));
-            const cols = r.cols.map((c) => ({ ...c, width_ratio: equal }));
-            // Aggiusta eventuale differenza di arrotondamento sull'ultima anta
-            const diff = nextTotal - sumNum(cols.map(c => c.width_ratio as number));
-            if (diff !== 0) cols[cols.length - 1].width_ratio = Math.max(1, (cols[cols.length - 1].width_ratio as number) + diff);
-            return { ...r, cols };
-          }
-          return { ...r, cols: rebalanceColsToTotal(r.cols, nextTotal) };
-        });
-    
-        applyPatch(
-          { width_mm: nextTotal },
-          { width_mm: nextTotal, rows: nextRows }
-        );
-      } else {
-        // Altezza totale finestra: ribilancia le righe per farle sommare al nuovo TOTALE.
-        const nextRows = rebalanceRowsToTotal(grid.rows, nextTotal);
-        applyPatch(
-          { height_mm: nextTotal },
-          { height_mm: nextTotal, rows: nextRows }
-        );
-      }
+        // Se è vuoto al blur, non committare nulla: lascia lo stato locale vuoto
+        if (value === '') return;
+
+        const nextTotal = Math.max(100, Math.round(Number(value)) || 100);
+
+        if (key === 'width_mm') {
+            const nextRows = grid.rows.map((r) => {
+                if (autoSplit) {
+                    const count = Math.max(1, r.cols.length);
+                    const equal = Math.max(1, Math.round(nextTotal / count));
+                    const cols = r.cols.map((c) => ({ ...c, width_ratio: equal }));
+                    const diff = nextTotal - sumNum(cols.map(c => c.width_ratio as number));
+                    if (diff !== 0) cols[cols.length - 1].width_ratio = Math.max(1, (cols[cols.length - 1].width_ratio as number) + diff);
+                    return { ...r, cols };
+                }
+                return { ...r, cols: rebalanceColsToTotal(r.cols, nextTotal) };
+            });
+
+            applyPatch(
+                { width_mm: nextTotal },
+                { width_mm: nextTotal, rows: nextRows }
+            );
+        } else {
+            const nextRows = rebalanceRowsToTotal(grid.rows, nextTotal);
+            applyPatch(
+                { height_mm: nextTotal },
+                { height_mm: nextTotal, rows: nextRows }
+            );
+        }
     };
 
     const addRow = () => {
@@ -324,6 +350,40 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         handleRowsChange(nextRows);
     };
 
+    // --- Handlers for safe editing of numeric fields (row/cols) ---
+    const onRowHeightChange = (i: number, v: string) => {
+        if (v === '' || /^\d+$/.test(v)) setRowHeightStr(prev => ({ ...prev, [i]: v }));
+    };
+    const onRowHeightBlur = (i: number) => {
+        const raw = rowHeightStr[i] ?? '';
+        if (raw === '') return; // don't commit empty
+        const n = Math.max(1, Number(raw) || 1);
+        updateRowHeightMm(i, n);
+        setRowHeightStr(prev => ({ ...prev, [i]: String(n) }));
+    };
+
+    const onSashCountChange = (i: number, v: string) => {
+        if (v === '' || /^\d+$/.test(v)) setSashCountStr(prev => ({ ...prev, [i]: v }));
+    };
+    const onSashCountBlur = (i: number) => {
+        const raw = sashCountStr[i] ?? '';
+        const n = raw === '' ? 1 : Math.max(1, Number(raw) || 1);
+        handleSashCountChange(i, n);
+        setSashCountStr(prev => ({ ...prev, [i]: String(n) }));
+    };
+
+    const onColWidthChange = (ri: number, ci: number, v: string) => {
+        if (v === '' || /^\d+$/.test(v)) setColWidthStr(prev => ({ ...prev, [`${ri}.${ci}`]: v }));
+    };
+    const onColWidthBlur = (ri: number, ci: number) => {
+        const key = `${ri}.${ci}`;
+        const raw = colWidthStr[key] ?? '';
+        if (raw === '') return; // don't commit empty
+        const n = Math.max(1, Number(raw) || 1);
+        updateColWidthMm(ri, ci, n);
+        setColWidthStr(prev => ({ ...prev, [key]: String(n) }));
+    };
+
     return (
         <div className="space-y-6">
             <section className="space-y-2">
@@ -334,25 +394,66 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                         <label className="text-xs text-gray-500">Largh (mm)</label>
                         <input
                             className="input"
-                            type="number"
-                            min="100"
-                            step="10"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             value={widthStr}
-                            onChange={(e) => { const v = e.target.value; setWidthStr(v); handleMeasureUpdate('width_mm', v); }}
-                        />                    </div>
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                // consenti vuoto o solo cifre
+                                if (v === '' || /^\d+$/.test(v)) setWidthStr(v);
+                            }}
+                            onBlur={() => {
+                                handleMeasureUpdate('width_mm', widthStr);
+                                if (widthStr !== '') {
+                                    const n = Math.max(100, Math.round(Number(widthStr)) || 100);
+                                    setWidthStr(String(n));
+                                }
+                            }}
+                        />
+                    </div>
+
                     <div>
                         <label className="text-xs text-gray-500">Altezza (mm)</label>
                         <input
                             className="input"
-                            type="number"
-                            min="100"
-                            step="10"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             value={heightStr}
-                            onChange={(e) => { const v = e.target.value; setHeightStr(v); handleMeasureUpdate('height_mm', v); }}
-                        />                    </div>
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || /^\d+$/.test(v)) setHeightStr(v);
+                            }}
+                            onBlur={() => {
+                                handleMeasureUpdate('height_mm', heightStr);
+                                if (heightStr !== '') {
+                                    const n = Math.max(100, Math.round(Number(heightStr)) || 100);
+                                    setHeightStr(String(n));
+                                }
+                            }}
+                        />
+                    </div>
+
                     <div>
                         <label className="text-xs text-gray-500">Quantità</label>
-                        <input className="input" type="number" min={1} value={d.qty} onChange={e => onChange({ ...(d as any), qty: Math.max(1, Number(e.target.value || 1)) })} />
+                        <input
+                            className="input"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={qtyStr}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '' || /^\d+$/.test(v)) setQtyStr(v);
+                            }}
+                            onBlur={() => {
+                                // se vuoto, default a 1; altrimenti clamp minimo 1
+                                const n = qtyStr === '' ? 1 : Math.max(1, Number(qtyStr) || 1);
+                                applyPatch({ qty: n as any });
+                                setQtyStr(String(n));
+                            }}
+                        />
                     </div>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -373,17 +474,30 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                 <div className="flex-1">
                                     <label className="text-xs text-gray-500">Altezza {rowIndex + 1} (mm)</label>
                                     <input
-                                        type="number"
                                         className="input"
-                                        min="1"
-                                        step="1"
-                                        value={Math.round(row.height_ratio || 1)}
-                                        onChange={(e) => updateRowHeightMm(rowIndex, Number(e.target.value))}
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        value={rowHeightStr[rowIndex] ?? String(Math.round(row.height_ratio || 1))}
+                                        onChange={(e) => onRowHeightChange(rowIndex, e.target.value)}
+                                        onBlur={() => onRowHeightBlur(rowIndex)}
+                                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                        onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                     />
                                 </div>
                                 <div className="flex-1">
                                     <label className="text-xs text-gray-500">Numero Ante</label>
-                                    <input type="number" className="input" min="1" value={row.cols.length} onChange={e => handleSashCountChange(rowIndex, Number(e.target.value))} />
+                                    <input
+                                        className="input"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        value={sashCountStr[rowIndex] ?? String(row.cols.length)}
+                                        onChange={(e) => onSashCountChange(rowIndex, e.target.value)}
+                                        onBlur={() => onSashCountBlur(rowIndex)}
+                                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                        onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                                    />
                                     <div className="mt-1 text-xs text-gray-500">
                                         {`≈ ${Math.round(grid.width_mm / Math.max(1, row.cols.length))} mm ad anta`}
                                     </div>
@@ -435,11 +549,14 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                                         <label className="text-xs text-gray-500">Larghezza Anta {rowIndex + 1}.{colIndex + 1} (totale mm)</label>
                                                         <input
                                                             className="input"
-                                                            type="number"
-                                                            min={1}
-                                                            step={1}
-                                                            value={colTotalMm}
-                                                            onChange={(e) => updateColWidthMm(rowIndex, colIndex, Number(e.target.value))}
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            pattern="[0-9]*"
+                                                            value={colWidthStr[`${rowIndex}.${colIndex}`] ?? String(colTotalMm)}
+                                                            onChange={(e) => onColWidthChange(rowIndex, colIndex, e.target.value)}
+                                                            onBlur={() => onColWidthBlur(rowIndex, colIndex)}
+                                                            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                                            onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                                         />
                                                     </>
                                                 )}
@@ -457,15 +574,15 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                 <div className="text-sm font-medium text-gray-600">Vetro</div>
                 <div className="grid grid-cols-2 gap-3">
                     {/* Input per Riferimento */}
-                    
+
                     <div>
                         <label className="text-xs text-gray-500">Stratigrafia vetro</label>
                         <input
-                          className="input"
-                          type="text"
-                          placeholder="es. 4-14-4-12-33.1 LowE"
-                          value={(d as any).glass_spec ?? ''}
-                          onChange={(e) => applyPatch({ glass_spec: e.target.value })}
+                            className="input"
+                            type="text"
+                            placeholder="es. 4-14-4-12-33.1 LowE"
+                            value={(d as any).glass_spec ?? ''}
+                            onChange={(e) => applyPatch({ glass_spec: e.target.value })}
                         />
                     </div>
                     <div>
