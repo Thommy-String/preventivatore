@@ -37,6 +37,11 @@ type Quote = {
   profile_system: string | null
   notes: string | null
   manual_totals?: { id: string; label: string; amount: number }[]
+  discount_json?: {
+    mode: 'pct' | 'final';
+    pct?: number | null;
+    final?: number | null;
+  } | null
 }
 
 type BrandingSettings = { logo_url?: string | null }
@@ -164,6 +169,27 @@ export default function Editor() {
   const [discountMode, setDiscountMode] = useState<'pct' | 'final' | null>(null);
   const [discountPct, setDiscountPct] = useState<number | null>(null);       // es. 10 = 10%
   const [discountFinal, setDiscountFinal] = useState<number | null>(null);   // nuovo totale (IVA esclusa)
+
+  // Persist discount to DB whenever it changes (so it survives reloads and is visible on other devices)
+  useEffect(() => {
+    if (!quote) return;
+    // Build the payload following the same "hasDiscount" semantics
+    const payload =
+      (discountMode === 'pct' && typeof discountPct === 'number' && discountPct > 0)
+        ? { mode: 'pct' as const, pct: discountPct, final: null }
+        : (discountMode === 'final' && typeof discountFinal === 'number' && discountFinal >= 0)
+          ? { mode: 'final' as const, pct: null, final: discountFinal }
+          : null;
+
+    // Avoid needless writes if unchanged
+    const prev = quote.discount_json ?? null;
+    const same = JSON.stringify(prev) === JSON.stringify(payload);
+    if (same) return;
+
+    // Update local quote and persist
+    setQuote({ ...(quote as any), discount_json: payload as any });
+    debouncedSave({ discount_json: payload } as any);
+  }, [discountMode, discountPct, discountFinal]);
 
   // --- Reorder helpers ---
   function arrayMove<T>(arr: T[], from: number, to: number) {
@@ -498,6 +524,19 @@ export default function Editor() {
       setManualTotals(((data as any)?.manual_totals) ?? [])
       const savedItems = Array.isArray((data as any)?.items_json) ? (data as any).items_json : []
       setItems(savedItems as any)
+      // Hydrate discount UI state from DB
+      const dq = (data as any)?.discount_json;
+      if (dq && typeof dq === 'object') {
+        const mode = dq.mode === 'pct' || dq.mode === 'final' ? dq.mode : null;
+        setDiscountMode(mode);
+        setDiscountPct(mode === 'pct' ? (typeof dq.pct === 'number' ? dq.pct : null) : null);
+        setDiscountFinal(mode === 'final' ? (typeof dq.final === 'number' ? dq.final : null) : null);
+      } else {
+        // fallback: no discount persisted
+        setDiscountMode(null);
+        setDiscountPct(null);
+        setDiscountFinal(null);
+      }
     })()
   }, [id, setItems])
 

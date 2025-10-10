@@ -655,11 +655,14 @@ export default function QuotePDF(props: QuotePDFProps) {
                             {/* Totale scontato, con sfondo verde; mostra la % solo se lo sconto è percentuale */}
                             <View style={[s.tr, s.pastelGreen, { borderBottomWidth: 0 }]}>
                               <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>
-                                {`TOTALE SCONTATO (IVA ESCLUSA)${
-                                  props.discount?.mode === 'pct' && typeof props.discount?.pct === 'number' && props.discount.pct > 0
-                                    ? ` (${props.discount.pct}%)`
-                                    : ''
-                                }`}
+                                {(
+                                  props.discount?.mode === 'pct' &&
+                                  typeof props.discount?.pct === 'number' &&
+                                  props.discount.pct > 0
+                                )
+                                  ? `TOTALE SCONTATO DEL ${props.discount.pct}% (IVA ESCLUSA)`
+                                  : `TOTALE SCONTATO (IVA ESCLUSA)`
+                                }
                               </Text>
                               <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(discountedTotal)}</Text>
                             </View>

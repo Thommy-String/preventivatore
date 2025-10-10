@@ -1,5 +1,4 @@
 // src/features/quotes/types.ts
-
 export type QuoteStatus = 'bozza'|'inviato'|'accettato'|'rifiutato'|'scaduto'
 export type VatRate = '22'|'10'|'4'
 export type PriceMode = 'per_mq' | 'per_pezzo' | 'total'
