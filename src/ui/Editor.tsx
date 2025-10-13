@@ -50,6 +50,7 @@ type TermsSettings = { validity_label?: string | null, conditions?: string | nul
 // Modular components
 import { ItemCard } from '../features/quotes/components/ItemCard'
 import { ItemModal } from '../features/quotes/modals/ItemModal'
+import { ProfileOverview } from '../components/editor/ProfileOverview'
 
 
 const PROFILE_SYSTEMS = [
@@ -288,6 +289,8 @@ export default function Editor() {
   const replaceItem = useQuoteStore(s => s.replaceItem)
   const duplicateItem = useQuoteStore(s => s.duplicateItem)
   const removeItem = useQuoteStore(s => s.removeItem)
+  // Profile Overview (editor → PDF)
+  const profileOverview = useQuoteStore(s => s.profileOverview)
 
   // Item editor state
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -492,6 +495,18 @@ export default function Editor() {
 
         // passa gli items già normalizzati (no blob:)
         items: itemsForPdf,
+
+        // Sezione "Panoramica profilo" dal nostro store → PDF
+        profileOverview: profileOverview
+          ? {
+              imageUrl: profileOverview.imageUrl ?? null,
+              features: (profileOverview.features || []).map(f => ({
+                eyebrow: f.eyebrow,
+                title: f.title,
+                description: f.description,
+              })),
+            }
+          : null,
 
         discount: hasDiscount ? {
           mode: discountMode!,                       // 'pct' | 'final'
@@ -859,6 +874,8 @@ export default function Editor() {
 
           </div>
         </Card>
+
+        <ProfileOverview />
       </div>
 
       {/* Riepilogo costi (manuale) */}

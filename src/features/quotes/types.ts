@@ -164,3 +164,36 @@ export type ItemFormProps<T extends QuoteItem> = {
   onChange: (next: T) => void
   readOnly?: boolean
 }
+
+// --- Editor / Profile Overview ---
+
+/** Singola caratteristica da mostrare sotto l'immagine (stile "Apple"): eyebrow, titolo grande e descrizione breve. */
+export type ProfileOverviewFeature = {
+  eyebrow?: string | null
+  title: string
+  description?: string | null
+}
+
+/** Contenuto completo della sezione "Panoramica profilo": immagine sopra + lista di caratteristiche.
+ *  Le caratteristiche verranno impaginate a due colonne (2 per riga) dove possibile.
+ */
+export type ProfileOverviewContent = {
+  /** URL pubblico dell'immagine (Supabase o data URL) */
+  image_url?: string | null
+  /** Elenco di caratteristiche (l'ordine è importante). */
+  features: ProfileOverviewFeature[]
+}
+
+// --- Modello sconto persistente (riutilizzabile nello store/DB e nel PDF) ---
+
+export type DiscountModel = {
+  mode: 'pct' | 'final'
+  /** percentuale sconto (0-100) se mode === 'pct' */
+  pct?: number | null
+  /** totale finale (IVA esclusa) desiderato se mode === 'final' */
+  final?: number | null
+  /** totale originale (IVA esclusa) prima dello sconto */
+  originalTotal: number
+  /** totale scontato (IVA esclusa) calcolato */
+  discountedTotal: number
+}

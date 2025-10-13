@@ -38,6 +38,10 @@ export type QuotePDFProps = {
         originalTotal: number;
         discountedTotal: number;
     } | null;
+    profileOverview?: {
+        imageUrl: string | null;
+        features: { eyebrow?: string; title?: string; description?: string }[] | null;
+    } | null;
 };
 
 const s = StyleSheet.create({
@@ -176,6 +180,21 @@ const s = StyleSheet.create({
         color: "#777",
         fontSize: 10,
     },
+    // --- PROFILE OVERVIEW STYLES ---
+    poBlock: { marginTop: 12, marginBottom: 0 },
+    // image very small, aligned left
+    poInlineRow: { flexDirection: 'row', alignItems: 'center' },
+    poImageSmall: { width: 60, height: 60, objectFit: 'contain', borderRadius: 6, alignSelf: 'flex-start', marginRight: 10 },
+    // grid two columns for features (full width, below image)
+    poGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
+    poCol: { width: '50%', paddingRight: 8, paddingLeft: 2, paddingVertical: 4 },
+    // texts
+    poEyebrow: { color: '#6b7280', fontSize: 11, fontWeight: 400, marginBottom: 2 },
+    poTitle: { fontSize: 18, fontWeight: 600, color: '#0b0b0b', marginBottom: 2 },
+    // description same weight/size/color as eyebrow
+    poDesc: { color: '#6b7280', fontSize: 11, fontWeight: 400, lineHeight: 1.25, maxWidth:'200px' },
+    // short green divider
+    poDivider: { width: 80, height: 2, backgroundColor: '#3fb26b', marginTop: 6, alignSelf: 'flex-start' },
 });
 
 function euro(n?: number | null) {
@@ -456,6 +475,7 @@ export default function QuotePDF(props: QuotePDFProps) {
         validityDays,
         terms,
         items,
+        profileOverview,
     } = props || {};
 
     const itemsSafe = normalizeItems(items);
@@ -521,6 +541,10 @@ export default function QuotePDF(props: QuotePDFProps) {
     const cleanValidityLabel = (computedValidity && computedValidity !== '—')
         ? computedValidity.replace(/VALIDIT[ÀA][’']?\s*OFFERTA\s*:\s*/i, '').trim()
         : '—';
+
+    // --- PROFILE OVERVIEW feature grouping ---
+    const po = (profileOverview && (profileOverview as any)) || null;
+    const poFeatures: Array<{ eyebrow?: string; title?: string; description?: string }> = Array.isArray(po?.features) ? po!.features.filter(Boolean) : [];
 
     return (
         <Document>
@@ -598,6 +622,32 @@ export default function QuotePDF(props: QuotePDFProps) {
                         )}
                     </View>
                 </View>
+
+                {/* Profile Overview (image small on the left, then features below aligned left) */}
+                {(po?.imageUrl || poFeatures.length > 0) && (
+                  <View style={[s.block, s.poBlock, { paddingTop: 2, paddingBottom: 2 }]}>
+                    {/* Image row */}
+                    {po?.imageUrl ? (
+                      <View style={s.poInlineRow}>
+                        <Image src={po.imageUrl} style={s.poImageSmall} />
+                      </View>
+                    ) : null}
+
+                    {/* Features grid (full width, below image) */}
+                    <View style={s.poGrid}>
+                      {poFeatures.map((f, idx) => (
+                        <View key={`pof-${idx}`} style={s.poCol} wrap={false}>
+                          {f.eyebrow ? <Text style={s.poEyebrow}>{String(f.eyebrow)}</Text> : null}
+                          {f.title ? <Text style={s.poTitle}>{String(f.title)}</Text> : null}
+                          {f.description ? <Text style={s.poDesc}>{String(f.description)}</Text> : null}
+                          <View style={s.poDivider} />
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                <View style={{ height: 28 }} />
 
                 {/* Riepilogo per categoria */}
                 <View style={s.block}>
@@ -678,7 +728,9 @@ export default function QuotePDF(props: QuotePDFProps) {
 
             </Page>
 
-            {/* Pagina 2: dettaglio voci */}
+
+
+            {/* Pagina 3: dettaglio voci */}
             <Page size="A4" style={s.page}>
                 {companyLogoUrl && companyLogoUrl.trim() ? (
                     <Image src={companyLogoUrl} style={s.logo} />
@@ -900,3 +952,5 @@ export default function QuotePDF(props: QuotePDFProps) {
         </Document>
     );
 }
+
+export { QuotePDF }; // named export, oltre al default

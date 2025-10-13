@@ -128,9 +128,16 @@ function toPlainItem(it: any) {
 }
 
 export function usePDFData(): QuotePDFProps {
-  const [quote, manualTotals, items] = useQuoteStore(
-    useShallow((s: any) => [ (s as any).quote ?? null, (s as any).manualTotals ?? [], (s as any).items ?? [] ])
-  ) as unknown as [any, any[], any[]];
+const [quote, manualTotals, items, profileOverview] = useQuoteStore(
+  useShallow((s: any) => [
+    (s as any).quote ?? null,
+    (s as any).manualTotals ?? [],
+    (s as any).items ?? [],
+    (s as any).profileOverview ?? null,
+  ])
+) as unknown as [any, any[], any[], any];
+
+
 
   return useMemo<QuotePDFProps>(() => {
     const q = quote || ({} as any);
@@ -199,6 +206,20 @@ export function usePDFData(): QuotePDFProps {
       vat: isStr(q.customer_vat) ? q.customer_vat : (isStr(q.vat_number) ? q.vat_number : null),
     };
 
+    // Profile Overview (from store)
+    const po = profileOverview ? {
+      imageUrl: isStr(profileOverview.imageUrl) ? profileOverview.imageUrl : null,
+      features: Array.isArray(profileOverview.features)
+        ? profileOverview.features
+            .filter(Boolean)
+            .map((f: any) => ({
+              eyebrow: isStr(f.eyebrow) ? f.eyebrow : undefined,
+              title: isStr(f.title) ? f.title : undefined,
+              description: isStr(f.description) ? f.description : undefined,
+            }))
+        : [],
+    } : null;
+
     return {
       companyLogoUrl: isStr(q.companyLogoUrl) ? q.companyLogoUrl : null,
       quoteNumber: isStr(q.number) ? q.number : null,
@@ -217,7 +238,9 @@ export function usePDFData(): QuotePDFProps {
       validityLabel,
       terms: isStr(q.terms) ? q.terms : null,
 
+      profileOverview: po,
+
       items: pdfSafeItems,
     };
-  }, [quote, manualTotals, items]);
+  }, [quote, manualTotals, items, profileOverview]);
 }
