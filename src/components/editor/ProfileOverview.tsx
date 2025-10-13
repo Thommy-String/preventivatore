@@ -54,16 +54,6 @@ export function ProfileOverview() {
     setPO?.(cloned);
   }
 
-  // Apply a preset merging with existing features (keep current image if already set)
-  function applyPresetMerge(preset: { imageUrl: string | null; features: Feature[] }) {
-    const base = ensurePO();
-    const merged: Feature[] = [
-      ...features,
-      ...(preset.features || []).map((f) => ({ ...f, id: rid() })),
-    ];
-    setPO?.({ imageUrl: base.imageUrl ?? preset.imageUrl ?? null, features: merged });
-  }
-
   const addFeature = () => {
     const f: Feature = {
       id: rid(),

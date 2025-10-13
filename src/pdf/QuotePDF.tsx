@@ -497,7 +497,6 @@ export default function QuotePDF(props: QuotePDFProps) {
         quoteNumber,
         issueDate,
         installTime,
-        profileSystem,
         customer,
         catTotals,
         mountingCost,
