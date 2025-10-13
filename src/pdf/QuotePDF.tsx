@@ -45,15 +45,15 @@ export type QuotePDFProps = {
 };
 
 const s = StyleSheet.create({
-    page: { padding: 38, fontSize: 11, color: "#111" },
+    page: { padding: 34, fontSize: 11, color: "#111" },
     row: { flexDirection: "row" },
     col: { flexGrow: 1 },
     h1: { fontSize: 32, fontWeight: 700, marginBottom: 4 },
-    h2: { fontSize: 13, fontWeight: 700, marginTop: 14, marginBottom: 6 },
+    h2: { fontSize: 13, fontWeight: 700, marginTop: 7, marginBottom: 4 },
     h2Tight: { fontSize: 13, fontWeight: 700, marginTop: 0, marginBottom: 4 },
     label: { color: "#555" },
     box: { borderWidth: 1, borderStyle: "solid", borderColor: "#e6e6e6", borderRadius: 6, padding: 8 },
-    table: { borderWidth: 1, borderStyle: "solid", borderColor: "#e6e6e6", borderRadius: 6, marginTop: 8 },
+    table: { borderWidth: 1, borderStyle: "solid", borderColor: "#e6e6e6", borderRadius: 6, marginTop: 2 },
     tr: { flexDirection: "row", borderBottomWidth: 1, borderStyle: "solid", borderColor: "#e0e0e0" },
     th: { flex: 1, fontWeight: 700, fontSize: 11, padding: 8, backgroundColor: "#f7f7f7" },
     td: { flex: 1, padding: 8, fontSize: 11 },
@@ -180,6 +180,22 @@ const s = StyleSheet.create({
         color: "#777",
         fontSize: 10,
     },
+    // --- HEADER CARDS (3-column, Apple/Notion style) ---
+    headerGrid: { flexDirection: 'row', marginTop: 2 },
+    colThird: { flex: 1, paddingLeft: 6, paddingRight: 6 },
+
+    // base card + variants
+    card: { borderWidth: 1, borderStyle: 'solid', borderColor: '#e6e6e6', borderRadius: 8, padding: 10, backgroundColor: '#ffffff' },
+    brandCard: { backgroundColor: 'transparent', padding: 0 },
+    clientCard: { backgroundColor: '#fdfdfd', borderWidth: 1, borderStyle: 'solid', borderColor: '#efefef', borderRadius: 8, padding: 10 },
+    stampCard: { backgroundColor: '#fbfbfb', borderWidth: 1, borderStyle: 'dashed', borderColor: '#d1d5db', borderRadius: 10, padding: 10 },
+    stampTitle: { fontSize: 11, fontWeight: 700, marginBottom: 2, color: '#111' },
+
+    // tiny text system
+    overline: { fontSize: 8, color: '#6b7280', marginBottom: 2 },
+    metaRow: { fontSize: 10, color: '#0b0b0b', marginTop: 2 },
+    metaLabel: { fontSize: 8, color: '#6b7280', marginRight: 4 },
+
     // --- PROFILE OVERVIEW STYLES ---
     poBlock: { marginTop: 12, marginBottom: 0 },
     // image very small, aligned left
@@ -188,13 +204,23 @@ const s = StyleSheet.create({
     // grid two columns for features (full width, below image)
     poGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 },
     poCol: { width: '50%', paddingRight: 8, paddingLeft: 2, paddingVertical: 4 },
+    // special first column wrapper for overlay image
+    poFirstCol: { position: 'relative', paddingRight: 112 },
     // texts
     poEyebrow: { color: '#6b7280', fontSize: 11, fontWeight: 400, marginBottom: 2 },
-    poTitle: { fontSize: 18, fontWeight: 600, color: '#0b0b0b', marginBottom: 2 },
+    poTitle: { fontSize: 16, fontWeight: 600, color: '#0b0b0b', marginBottom: 2 },
     // description same weight/size/color as eyebrow
-    poDesc: { color: '#6b7280', fontSize: 11, fontWeight: 400, lineHeight: 1.25, maxWidth:'200px' },
+    poDesc: { color: '#6b7280', fontSize: 11, fontWeight: 400, lineHeight: 1.25, maxWidth: '220px' },
     // short green divider
-    poDivider: { width: 80, height: 2, backgroundColor: '#3fb26b', marginTop: 6, alignSelf: 'flex-start' },
+    poDivider: { width: 80, height: 2, backgroundColor: '#3fb26b', marginTop: 6, marginBottom: 6, alignSelf: 'flex-start' },
+    poTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+    poImageTiny: { width: 60, height: 60, objectFit: 'contain', borderRadius: 6, marginLeft: 6 },
+    poTitleText: { lineHeight: 1.05, marginRight: 6 },
+    // --- NEW PROFILE OVERVIEW OVERLAY STYLES ---
+    poTitleRowTight: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 2 },
+    poImageInline: { width: 50, height: 50, objectFit: 'contain', borderRadius: 4, marginLeft: 6, marginBottom: 1 },
+    poHeroAbsWrap: { position: 'absolute', top: 0, bottom: 0, right: 8, width: 96, justifyContent: 'center', alignItems: 'flex-end' },
+    poHeroAbs: { width: 96, height: 96, objectFit: 'contain', borderRadius: 4 },
 });
 
 function euro(n?: number | null) {
@@ -209,7 +235,12 @@ function safeText(v?: string | null, fallback = "—") {
 
 function formatISODate(iso?: string | null) {
     if (!iso) return "—";
-    if (/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso.slice(0, 10);
+    // Accept ISO like YYYY-MM-DD or full timestamps
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+        const [, y, mo, d] = m;
+        return `${d}-${mo}-${y}`; // DD-MM-YYYY
+    }
     return String(iso);
 }
 
@@ -351,7 +382,7 @@ function detailPairs(it: any): Array<[string, string]> {
                         }
                     }
                 }
-            } catch {}
+            } catch { }
             if (!glazingValue && baseGlazing) glazingValue = String(baseGlazing);
             if (glazingValue) pairs.push(["Vetro", glazingValue]);
 
@@ -386,7 +417,7 @@ function detailPairs(it: any): Array<[string, string]> {
         case "cassonetto": {
             const mat = pickFirst(it, ["material", "materiale"]); if (mat) pairs.push(["Materiale", String(mat)])
             const d = pickFirst(it, ["depth_mm", "profondita_mm", "profondità_mm"]); if (d) pairs.push(["Profondità", `${d} mm`])
-            const sp = pickFirst(it, ["spalletta_mm", "extension_mm", "spalletta"]); if (sp) pairs.push(["Celino", `${sp} mm`])
+            const sp = pickFirst(it, ["celino_mm", "spalletta_mm", "extension_mm", "spalletta"]); if (sp) pairs.push(["Celino", `${sp} mm`])
             const col = pickFirst(it, ["color", "colore"]); if (col) pairs.push(["Colore", String(col)])
             break
         }
@@ -411,13 +442,13 @@ function detailPairs(it: any): Array<[string, string]> {
 
     const shownKeys = new Set(pairs.map(([k]) => k.toLowerCase()))
     const skip = new Set([
-        "id", "kind", "qty",
+        "id", "kind", "qty", "title", "label",
         "width_mm", "height_mm", "larghezza_mm", "altezza_mm", "larghezza", "altezza",
         "price_mode", "price_total", "price_per_mq", "unit_price", "unitPrice", "price", "prezzo", "misura_tipo",
         "accessori_colore",
         // Exclude reference/image fields
         "reference", "riferimento", "image_url", "imageUrl"
-    ])
+    ]);
     for (const [k, v] of Object.entries(it)) {
         if (v === undefined || v === null || String(v).trim() === '') continue
         if (typeof v === "object" || typeof v === "function") continue
@@ -435,7 +466,7 @@ function detailPairs(it: any): Array<[string, string]> {
             deceleratore: "Deceleratore", has_deceleratore: "Deceleratore", con_deceleratore: "Deceleratore",
             material: "Materiale", materiale: "Materiale",
             depth_mm: "Profondità", profondita_mm: "Profondità",
-            spalletta_mm: "Celino", extension_mm: "Celino",
+            celino_mm: "Celino", spalletta_mm: "Celino", extension_mm: "Celino",
             lamelle_type: "Lamelle", lamelle: "Lamelle",
             con_telaio: "Telaio",
             hinge_color: "Colore cerniere", hinges_color: "Colore cerniere",
@@ -485,7 +516,7 @@ export default function QuotePDF(props: QuotePDFProps) {
         return k === 'finestra' || k === 'portafinestra' || k === 'scorrevole' || /serrament/i.test(k);
     });
 
-  
+
 
     // Superficie solo finestre (finestra, portafinestra, scorrevole)
     const windowsM2 = itemsSafe.reduce((acc: number, it: any) => {
@@ -550,66 +581,62 @@ export default function QuotePDF(props: QuotePDFProps) {
         <Document>
             {/* Pagina 1 */}
             <Page size="A4" style={s.page}>
-                {/* Header */}
-                <View style={[s.row, { alignItems: "flex-start", justifyContent: "space-between" }]}>
-                    <View style={{ flexGrow: 1, flexBasis: 0, paddingRight: 12 }}>
-                        {companyLogoUrl && companyLogoUrl.trim() ? (
-                            <Image src={companyLogoUrl} style={s.logo} />
-                        ) : (
-                            <Image src={xInfissiLogo} style={s.logo} />
-                        )}
-                        <Text style={s.companyDetails}>
-                            X S.R.L.{"\n"}
-                            P.IVA 04062850120{"\n"}
-                            sede legale - Saronno (VA) 21047{"\n"}
-                            Via San Giuseppe, 95{"\n"}
-                            info@xinfissi.it · www.xinfissi.it · +39 345 457 3328
-                        </Text>
+                {/* Header: 3 columns (brand · client · document) */}
+                <View style={[s.headerGrid]}>
+                    {/* Brand / Company */}
+                    <View style={s.colThird}>
+                        <View style={s.brandCard}>
+                            {companyLogoUrl && companyLogoUrl.trim() ? (
+                                <Image src={companyLogoUrl} style={s.logo} />
+                            ) : (
+                                <Image src={xInfissiLogo} style={s.logo} />
+                            )}
+                            <Text style={s.companyDetails}>
+                                X S.R.L.{"\n"}
+                                P.IVA 04062850120{"\n"}
+                                sede legale - Saronno (VA) 21047{"\n"}
+                                Via San Giuseppe, 95{"\n"}
+                                info@xinfissi.it · www.xinfissi.it · +39 345 457 3328
+                            </Text>
+                        </View>
                     </View>
-                    <View style={{ width: 300, marginTop: 0 }}>
-                        <Text style={s.h2Tight}>Spettabile</Text>
-                        <Text>{safeText(customer?.name)}</Text>
-                        {safeText(customer?.address, "") !== "" ? <Text>{safeText(customer?.address)}</Text> : null}
-                        {(() => {
-                            const parts = [
-                                safeText(customer?.email, ""),
-                                safeText(customer?.phone, ""),
-                                (customer?.vat && customer.vat.trim()) ? `P.IVA ${customer.vat.trim()}` : ""
-                            ].filter(p => p && p.trim() !== "");
-                            return parts.length > 0 ? (
-                                <Text style={s.small}>{parts.join(" · ")}</Text>
-                            ) : null;
-                        })()}
+
+                    {/* Client */}
+                    <View style={s.colThird}>
+                        <View style={s.clientCard}>
+                            <Text style={s.h2Tight}>Spettabile</Text>
+                            <Text>{safeText(customer?.name)}</Text>
+                            {safeText(customer?.address, "") !== "" ? <Text>{safeText(customer?.address)}</Text> : null}
+                            {(() => {
+                                const parts = [
+                                    safeText(customer?.email, ""),
+                                    safeText(customer?.phone, ""),
+                                    (customer?.vat && customer.vat.trim()) ? `P.IVA ${customer.vat.trim()}` : ""
+                                ].filter(p => p && p.trim() !== "");
+                                return parts.length > 0 ? (
+                                    <Text style={s.small}>{parts.join(" · ")}</Text>
+                                ) : null;
+                            })()}
+                        </View>
+                    </View>
+
+                    {/* Document meta */}
+                    <View style={s.colThird}>
+                        <View style={s.stampCard}>
+                            <Text style={s.stampTitle}>Offerta n° {safeText(quoteNumber, '-')}</Text>
+                            <Text style={s.metaRow}><Text style={s.metaLabel}>Emesso:</Text> {formatISODate(issueDate)}</Text>
+                            <Text style={s.metaRow}><Text style={s.metaLabel}>Validità:</Text> {cleanValidityLabel}</Text>
+                            <Text style={s.metaRow}><Text style={s.metaLabel}>Termini completamento:</Text> {safeText(installTime)}</Text>
+                        </View>
                     </View>
                 </View>
 
                 {/* Dati documento */}
                 <View style={s.block}>
-                    <Text style={s.h2}>Offerta n° {safeText(quoteNumber, "-")}</Text>
+
                     <View style={[s.box]}>
-                        <View style={s.row}>
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                                <Text style={s.label}>Data emissione preventivo</Text>
-                                <Text wrap={false}>{formatISODate(issueDate)}</Text>
-                            </View>
-                            <View style={{ flex: 1, paddingLeft: 8 }}>
-                                <Text style={s.label}>Validità offerta</Text>
-                                {/* --- USA LA VARIABILE PULITA --- */}
-                                <Text wrap={false}>{cleanValidityLabel}</Text>
-                            </View>
-                        </View>
-                        <View style={[s.row, { marginTop: 6 }]}>
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                                <Text style={s.label}>Termini di completamento</Text>
-                                <Text wrap={false}>{safeText(installTime)}</Text>
-                            </View>
-                            <View style={{ flex: 1, paddingLeft: 8 }}>
-                                <Text style={s.label}>Sistema profilo</Text>
-                                <Text wrap={false}>{safeText(profileSystem)}</Text>
-                            </View>
-                        </View>
                         {hasWindows && (
-                            <View style={[s.row, { marginTop: 6 }]}> 
+                            <View style={[s.row, { marginTop: 0 }]}>
                                 <View style={{ flex: 1, paddingRight: 8 }}>
                                     <Text style={s.label}>Ferramenta</Text>
                                     <Text wrap={false}>WINKHAUS + HOPPE</Text>
@@ -625,29 +652,42 @@ export default function QuotePDF(props: QuotePDFProps) {
 
                 {/* Profile Overview (image small on the left, then features below aligned left) */}
                 {(po?.imageUrl || poFeatures.length > 0) && (
-                  <View style={[s.block, s.poBlock, { paddingTop: 2, paddingBottom: 2 }]}>
-                    {/* Image row */}
-                    {po?.imageUrl ? (
-                      <View style={s.poInlineRow}>
-                        <Image src={po.imageUrl} style={s.poImageSmall} />
-                      </View>
-                    ) : null}
+                    <View style={[s.block, s.poBlock, { paddingTop: 2, paddingBottom: 2 }]}>
+                        {/* Features grid (full width, below image) */}
+                        <View style={s.poGrid}>
+                            {poFeatures.map((f, idx) => {
+                                const isFirst = idx === 0;
+                                return (
+                                    <View
+                                        key={`pof-${idx}`}
+                                        style={isFirst ? [s.poCol, s.poFirstCol] : [s.poCol]}
+                                        wrap={false}
+                                    >
+                                        {/* Eyebrow */}
+                                        {f.eyebrow ? <Text style={s.poEyebrow}>{String(f.eyebrow)}</Text> : null}
 
-                    {/* Features grid (full width, below image) */}
-                    <View style={s.poGrid}>
-                      {poFeatures.map((f, idx) => (
-                        <View key={`pof-${idx}`} style={s.poCol} wrap={false}>
-                          {f.eyebrow ? <Text style={s.poEyebrow}>{String(f.eyebrow)}</Text> : null}
-                          {f.title ? <Text style={s.poTitle}>{String(f.title)}</Text> : null}
-                          {f.description ? <Text style={s.poDesc}>{String(f.description)}</Text> : null}
-                          <View style={s.poDivider} />
+                                        {/* Title */}
+                                        {f.title ? <Text style={[s.poTitle, s.poTitleText]}>{String(f.title)}</Text> : null}
+
+                                        {/* Absolute image that aligns to the end of the title without affecting spacing */}
+                                        {isFirst && po?.imageUrl ? (
+                                            <View style={s.poHeroAbsWrap}>
+                                                <Image src={po.imageUrl} style={s.poHeroAbs} />
+                                            </View>
+                                        ) : null}
+
+                                        {/* Description */}
+                                        {f.description ? <Text style={s.poDesc}>{String(f.description)}</Text> : null}
+
+                                        <View style={s.poDivider} />
+                                    </View>
+                                );
+                            })}
                         </View>
-                      ))}
                     </View>
-                  </View>
                 )}
 
-                <View style={{ height: 28 }} />
+                <View style={{ height: 0 }} />
 
                 {/* Riepilogo per categoria */}
                 <View style={s.block}>
@@ -695,28 +735,28 @@ export default function QuotePDF(props: QuotePDFProps) {
                             </View>
                         )}
                         {hasDiscount ? (
-                          <>
-                            {/* Totale originale, senza barrato e senza riga SCONTO */}
-                            <View style={[s.tr]}>
-                              <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
-                              <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
-                            </View>
+                            <>
+                                {/* Totale originale, senza barrato e senza riga SCONTO */}
+                                <View style={[s.tr]}>
+                                    <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
+                                    <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
+                                </View>
 
-                            {/* Totale scontato, con sfondo verde; mostra la % solo se lo sconto è percentuale */}
-                            <View style={[s.tr, s.pastelGreen, { borderBottomWidth: 0 }]}>
-                              <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>
-                                {(
-                                  props.discount?.mode === 'pct' &&
-                                  typeof props.discount?.pct === 'number' &&
-                                  props.discount.pct > 0
-                                )
-                                  ? `TOTALE SCONTATO DEL ${props.discount.pct}% (IVA ESCLUSA)`
-                                  : `TOTALE SCONTATO (IVA ESCLUSA)`
-                                }
-                              </Text>
-                              <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(discountedTotal)}</Text>
-                            </View>
-                          </>
+                                {/* Totale scontato, con sfondo verde; mostra la % solo se lo sconto è percentuale */}
+                                <View style={[s.tr, s.pastelGreen, { borderBottomWidth: 0 }]}>
+                                    <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>
+                                        {(
+                                            props.discount?.mode === 'pct' &&
+                                            typeof props.discount?.pct === 'number' &&
+                                            props.discount.pct > 0
+                                        )
+                                            ? `TOTALE SCONTATO DEL ${props.discount.pct}% (IVA ESCLUSA)`
+                                            : `TOTALE SCONTATO (IVA ESCLUSA)`
+                                        }
+                                    </Text>
+                                    <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(discountedTotal)}</Text>
+                                </View>
+                            </>
                         ) : (
                             <View style={[s.tr, { borderBottomWidth: 0 }]}>
                                 <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
@@ -749,26 +789,28 @@ export default function QuotePDF(props: QuotePDFProps) {
 
                             // Campi personalizzati (per tutte le voci): label/name/key + value, ignorando vuoti
                             const extraPairs: Array<[string, string]> = Array.isArray(it?.custom_fields)
-                              ? it.custom_fields
-                                  .filter((f: any) => {
-                                    const key = (f?.name ?? f?.label ?? f?.key);
-                                    const val = f?.value;
-                                    return key && String(key).trim() && val != null && String(val).trim();
-                                  })
-                                  .map((f: any) => [
-                                    String(f?.name ?? f?.label ?? f?.key).trim(),
-                                    String(f?.value).trim(),
-                                  ] as [string, string])
-                              : [];
+                                ? it.custom_fields
+                                    .filter((f: any) => {
+                                        const key = (f?.name ?? f?.label ?? f?.key);
+                                        const val = f?.value;
+                                        return key && String(key).trim() && val != null && String(val).trim();
+                                    })
+                                    .map((f: any) => [
+                                        String(f?.name ?? f?.label ?? f?.key).trim(),
+                                        String(f?.value).trim(),
+                                    ] as [string, string])
+                                : [];
 
                             // Per le voci custom mostriamo solo i custom fields; per le altre, appende in fondo
                             const pairs: Array<[string, string]> = isCustom ? extraPairs : [...basePairs, ...extraPairs];
 
                             // Titolo: per custom mostra il titolo libero (senza uppercase aggressivo); per gli altri usa il kind in uppercase
-                            const title = isCustom
-                                ? String(it?.title || it?.label || "Voce personalizzata").trim()
-                                : String(it?.kind || "Voce").toUpperCase();
-
+                            // Titolo: per custom mostra il titolo libero (senza uppercase aggressivo); per gli altri usa il kind con la prima lettera maiuscola
+                            const title = (() => {
+                                if (it?.title && it.title.trim()) return it.title.trim();
+                                const base = String(it?.kind || "Voce").trim();
+                                return base.charAt(0).toUpperCase() + base.slice(1);
+                            })();
                             const qty = `Q.tà ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : "1"}`;
 
                             // mostra misure anche per custom
@@ -782,7 +824,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 ? it.reference.trim()
                                 : (typeof it?.riferimento === 'string' && it.riferimento.trim() ? it.riferimento.trim() : '');
 
-                            
+
 
                             return (
                                 <View

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import type { ItemFormProps } from "../types"
 import type { TapparellaItem } from "../types"
 
-const MATERIALI = ["PVC", "Alluminio"] as const
+const MATERIALI = ["PVC", "Alluminio", "Alluminio coibentato"] as const
 
 export function TapparellaForm({ draft, onChange }: ItemFormProps<TapparellaItem>) {
   // helper per aggiornare mantenendo il resto dell'oggetto

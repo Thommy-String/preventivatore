@@ -20,10 +20,13 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
     const localPreview = (it as any).__previewUrl as string | undefined; // data/blob URL temporaneo (solo in questa sessione)
     const publicUrl = (it as any).image_url as string | undefined;       // URL pubblico Supabase
     const thumbSrc = localPreview || publicUrl || entry?.icon;           // priorità: preview -> pubblica -> icona default
+
+    // Preferisci un titolo personalizzato se presente su qualsiasi item
+    const customTitle = typeof (it as any).title === 'string' ? (it as any).title.trim() : ''
     const label =
-        isCustom
-            ? ((it as any).title?.trim() || '(Senza titolo)')
-            : (entry?.label ?? it.kind.toUpperCase())
+      customTitle
+        ? customTitle
+        : (isCustom ? '(Senza titolo)' : (entry?.label ?? String(it.kind).toUpperCase()))
 
     return (
         <div className="card p-3">

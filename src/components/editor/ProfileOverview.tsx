@@ -1,9 +1,10 @@
 // src/components/editor/ProfileOverview.tsx
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { useQuoteStore } from "../../stores/useQuoteStore";
 import { uploadQuoteItemImage } from "../../lib/uploadImages";
+import { PROFILE_OVERVIEW_PRESETS } from "./presets/profileOverviewPresets";
 
 type Feature = {
   id: string;
@@ -23,6 +24,7 @@ function classNames(...cls: (string | false | null | undefined)[]) {
 }
 
 export function ProfileOverview() {
+  const [open, setOpen] = useState(false); // collapsed by default
   // ---- Store bindings ----
   const po = useQuoteStore((s) => s.profileOverview);
   const setPO = useQuoteStore((s) => s.setProfileOverview);
@@ -42,6 +44,25 @@ export function ProfileOverview() {
   const mobileInputCls = "input text-base sm:text-sm";
 
   const ensurePO = () => po ?? { imageUrl: null, features: [] as Feature[] };
+
+  // Apply a preset replacing everything (image + features)
+  function applyPresetReplace(preset: { imageUrl: string | null; features: Feature[] }) {
+    const cloned: { imageUrl: string | null; features: Feature[] } = {
+      imageUrl: preset.imageUrl ?? null,
+      features: (preset.features || []).map((f) => ({ ...f, id: rid() })),
+    };
+    setPO?.(cloned);
+  }
+
+  // Apply a preset merging with existing features (keep current image if already set)
+  function applyPresetMerge(preset: { imageUrl: string | null; features: Feature[] }) {
+    const base = ensurePO();
+    const merged: Feature[] = [
+      ...features,
+      ...(preset.features || []).map((f) => ({ ...f, id: rid() })),
+    ];
+    setPO?.({ imageUrl: base.imageUrl ?? preset.imageUrl ?? null, features: merged });
+  }
 
   const addFeature = () => {
     const f: Feature = {
@@ -128,19 +149,100 @@ export function ProfileOverview() {
   };
 
   return (
-    <Card>
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <Card className="w-full md:col-span-2">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between gap-3 group"
+        aria-expanded={open}
+      >
+        <div className="text-left">
           <h2 className="text-lg font-semibold">Panoramica profilo</h2>
           <p className="text-sm text-gray-600">
             Aggiungi un’immagine e le caratteristiche del sistema. Le voci saranno
             impaginate automaticamente a due colonne.
           </p>
         </div>
-        <div className="hidden sm:block">
-          <Button variant="ghost" onClick={addFeature} aria-label="Aggiungi caratteristica">
-            + Aggiungi caratteristica
-          </Button>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 hidden sm:inline">
+            {features.length > 0 ? `${features.length} caratteristiche` : 'Nessuna caratteristica'}
+          </span>
+          <span
+            className={`inline-block transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+            aria-hidden
+          >
+            ▾
+          </span>
+        </div>
+      </button>
+
+      {open && (
+        <>
+      {/* Preset library — minimal carousel */}
+      <div className="mt-4">
+        <h3 className="font-medium mb-2">Modelli rapidi</h3>
+
+        <div className="relative">
+          {/* Horizontal scroll, snap, minimal cards */}
+          <div
+            className="
+              flex gap-3 overflow-x-auto pb-2
+              snap-x snap-mandatory
+              -mx-1 px-1
+            "
+          >
+            {/* "Nessuna" card (clears overview) */}
+            <button
+              type="button"
+              onClick={() => { setPO?.(null); setOpen(false); }}
+              className="
+                snap-start shrink-0 w-40 rounded-lg border bg-white
+                hover:shadow-sm transition text-left
+                focus:outline-none focus:ring-2 focus:ring-emerald-500/40
+              "
+              title="Nessuna"
+            >
+              <div className="h-24 w-full bg-white flex items-center justify-center p-2 border-b">
+                <div className="h-full w-full bg-[repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6_6px,#ffffff_6px,#ffffff_12px)] rounded-md" />
+              </div>
+              <div className="px-2 py-2">
+                <div className="text-xs font-semibold truncate">Nessuna</div>
+              </div>
+            </button>
+
+            {/* Preset cards */}
+            {PROFILE_OVERVIEW_PRESETS.map((p) => {
+              const img = (p.imageUrl as string) || "";
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => applyPresetReplace(p as any)}
+                  className="
+                    snap-start shrink-0 w-40 rounded-lg border bg-white
+                    hover:shadow-sm transition text-left
+                    focus:outline-none focus:ring-2 focus:ring-emerald-500/40
+                  "
+                  title={p.label}
+                >
+                  <div className="h-24 w-full bg-white flex items-center justify-center p-2 border-b">
+                    {img ? (
+                      <img
+                        src={img}
+                        alt={p.label}
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <div className="h-full w-full bg-gradient-to-br from-gray-50 to-gray-100" />
+                    )}
+                  </div>
+                  <div className="px-2 py-2">
+                    <div className="text-xs font-semibold truncate">{p.label}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -332,6 +434,8 @@ export function ProfileOverview() {
             ))}
           </div>
         </div>
+      )}
+        </>
       )}
     </Card>
   );

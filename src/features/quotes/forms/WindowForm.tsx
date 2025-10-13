@@ -386,6 +386,20 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
 
     return (
         <div className="space-y-6">
+            {/* Titolo personalizzato voce */}
+            <section className="space-y-2">
+                <div className="text-sm font-medium text-gray-600">Titolo voce</div>
+                <input
+                    className="input"
+                    type="text"
+                    placeholder="es. Portafinestra soggiorno"
+                    value={(d as any).title ?? ""}
+                    onChange={(e) => applyPatch({ title: e.target.value })}
+                />
+                <div className="text-xs text-gray-500">
+                    Usato come titolo in editor e PDF. Se vuoto, verrà mostrato il tipo (es. “Finestra”).
+                </div>
+            </section>
             <section className="space-y-2">
                 <div className="text-sm font-medium text-gray-600">Misure Totali e Quantità</div>
                 <div className="grid grid-cols-3 gap-3">

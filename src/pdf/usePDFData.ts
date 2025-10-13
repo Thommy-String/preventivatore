@@ -23,7 +23,7 @@ function normalizeCustomFields(cf: any): { label: string; value: string }[] | un
   if (!cf) return undefined;
   if (!Array.isArray(cf)) return undefined;
   const out = cf
-    .map((e) => {
+    .map((e: any) => {
       if (!e) return null;
       const label = isStr(e.label)
         ? e.label
@@ -206,19 +206,25 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       vat: isStr(q.customer_vat) ? q.customer_vat : (isStr(q.vat_number) ? q.vat_number : null),
     };
 
-    // Profile Overview (from store)
-    const po = profileOverview ? {
-      imageUrl: isStr(profileOverview.imageUrl) ? profileOverview.imageUrl : null,
-      features: Array.isArray(profileOverview.features)
-        ? profileOverview.features
-            .filter(Boolean)
-            .map((f: any) => ({
-              eyebrow: isStr(f.eyebrow) ? f.eyebrow : undefined,
-              title: isStr(f.title) ? f.title : undefined,
-              description: isStr(f.description) ? f.description : undefined,
-            }))
-        : [],
-    } : null;
+    // Profile Overview (from store) — sanitize and collapse to null if empty
+    let po: QuotePDFProps['profileOverview'] = null;
+    if (profileOverview && typeof profileOverview === 'object') {
+      // Avoid blob: URLs in PDF
+      const imgRaw = isStr(profileOverview.imageUrl) ? profileOverview.imageUrl : null;
+      const img = imgRaw && !imgRaw.startsWith('blob:') ? imgRaw : null;
+
+      const featsRaw = Array.isArray(profileOverview.features) ? profileOverview.features : [];
+      const feats = featsRaw
+        .map((f: any) => ({
+          eyebrow: isStr(f?.eyebrow) ? f.eyebrow : undefined,
+          title: isStr(f?.title) ? f.title : undefined,
+          description: isStr(f?.description) ? f.description : undefined,
+        }))
+        // keep only features that have at least one non-empty field
+        .filter((f: any) => !!(f.eyebrow || f.title || f.description));
+
+      po = (img || feats.length > 0) ? { imageUrl: img, features: feats } : null;
+    }
 
     return {
       companyLogoUrl: isStr(q.companyLogoUrl) ? q.companyLogoUrl : null,

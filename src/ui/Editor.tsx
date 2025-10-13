@@ -53,15 +53,6 @@ import { ItemModal } from '../features/quotes/modals/ItemModal'
 import { ProfileOverview } from '../components/editor/ProfileOverview'
 
 
-const PROFILE_SYSTEMS = [
-  "WDS 76 MD",
-  "WDS 76 AD",
-  "WDS 76 PORTE",
-  "WDS 76 SCORREVOLE",
-  "ULTRA 70",
-  "ULTRA 60",
-] as const;
-
 // Convert a Blob to a data URL (browser-safe, no Buffer)
 function blobToDataURL(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -291,6 +282,7 @@ export default function Editor() {
   const removeItem = useQuoteStore(s => s.removeItem)
   // Profile Overview (editor → PDF)
   const profileOverview = useQuoteStore(s => s.profileOverview)
+  const setProfileOverview = useQuoteStore(s => s.setProfileOverview)
 
   // Item editor state
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -539,6 +531,7 @@ export default function Editor() {
       setManualTotals(((data as any)?.manual_totals) ?? [])
       const savedItems = Array.isArray((data as any)?.items_json) ? (data as any).items_json : []
       setItems(savedItems as any)
+      setProfileOverview(((data as any)?.profile_overview) ?? null)
       // Hydrate discount UI state from DB
       const dq = (data as any)?.discount_json;
       if (dq && typeof dq === 'object') {
@@ -593,6 +586,13 @@ export default function Editor() {
     })
     debouncedSave({ items_json: payload } as any)
   }, [items])
+
+  useEffect(() => {
+    if (!quote) return
+    const po = profileOverview
+    const hasContent = !!po?.imageUrl || (Array.isArray(po?.features) && po.features.length > 0)
+    debouncedSave({ profile_overview: hasContent ? po : null } as any)
+  }, [profileOverview])
 
   // --- Autosave helpers ---
   function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
@@ -851,23 +851,6 @@ export default function Editor() {
                   <option value="22">22%</option>
                   <option value="10">10%</option>
                   <option value="4">4%</option>
-                </select>
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Sistema profilo generale</div>
-                <select
-                  className="input"
-                  value={
-                    quote.profile_system && (PROFILE_SYSTEMS as readonly string[]).includes(quote.profile_system)
-                      ? (quote.profile_system as string)
-                      : ''
-                  }
-                  onChange={(e) => updateField('profile_system', e.target.value === '' ? null : (e.target.value as any))}
-                >
-                  <option value="">— Seleziona —</option>
-                  {PROFILE_SYSTEMS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
                 </select>
               </div>
             </div>

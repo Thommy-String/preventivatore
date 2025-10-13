@@ -91,6 +91,7 @@ export type WindowItem = BaseItem & {
   profile_system?: string | null
   /** Opzioni avanzate per disegno finestra */
   options?: { gridWindow?: GridWindowConfig }
+  title?: string
 }
 
 /** Cassonetto */
