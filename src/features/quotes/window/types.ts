@@ -13,7 +13,7 @@ export type GridWindow = {
     height_ratio: number; // somma = 1
     cols: Array<{
       width_ratio: number; // somma = 1 nella riga
-      leaf: { state: LeafState };
+      leaf: { state: LeafState; spanId?: string; spanLeader?: boolean; horizontalBars?: Array<{ offset_mm: number; origin?: 'top' | 'bottom' }> };
     }>;
   }>;
 };

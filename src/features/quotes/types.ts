@@ -51,8 +51,17 @@ export type GridWindowConfig = {
     height_ratio: number
     cols: Array<{
       width_ratio: number
-      /** stato della singola anta (facoltativo se pannello fisso) */
-      leaf?: { state: LeafState }
+      /**
+       * Stato della singola anta (facoltativo se pannello fisso).
+       * spanId/spanLeader permettono di legare più pannelli verticalmente per
+       * rappresentare un'unica anta che attraversa più file.
+       */
+      leaf?: {
+        state: LeafState
+        spanId?: string
+        spanLeader?: boolean
+        horizontalBars?: Array<{ offset_mm: number; origin?: 'top' | 'bottom' }>
+      }
       /** override del tipo di vetro per la singola anta; se assente eredita da GridWindowConfig.glazing */
       glazing?: GridWindowConfig['glazing']
       /** presenza della maniglia */

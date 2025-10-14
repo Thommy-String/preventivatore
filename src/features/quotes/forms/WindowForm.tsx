@@ -231,6 +231,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const [rowHeightStr, setRowHeightStr] = useState<Record<number, string>>({});
     const [sashCountStr, setSashCountStr] = useState<Record<number, string>>({});
     const [colWidthStr, setColWidthStr] = useState<Record<string, string>>({});
+    const [barOffsetStr, setBarOffsetStr] = useState<Record<string, string>>({});
 
     useEffect(() => {
         setQtyStr(String(d.qty ?? 1));
@@ -247,16 +248,30 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const nextRowHeights: Record<number, string> = {};
         const nextSashCounts: Record<number, string> = {};
         const nextColWidths: Record<string, string> = {};
+        const nextBarOffsets: Record<string, string> = {};
+
         grid.rows.forEach((r, ri) => {
             nextRowHeights[ri] = formatMm(r.height_ratio ?? 0);
             nextSashCounts[ri] = String(r.cols.length);
             r.cols.forEach((c, ci) => {
                 nextColWidths[`${ri}.${ci}`] = formatMm(c.width_ratio ?? 0);
+                const bar = c.leaf?.horizontalBars?.[0];
+                if (bar && Number.isFinite(bar.offset_mm)) {
+                    const rowHeight = r.height_ratio && r.height_ratio > 0
+                        ? r.height_ratio
+                        : grid.height_mm / Math.max(1, grid.rows.length);
+                    const raw = Math.max(MIN_MM, Math.min(rowHeight, bar.offset_mm));
+                    const bottomValue = bar.origin === 'bottom'
+                        ? raw
+                        : Math.max(MIN_MM, Math.min(rowHeight, rowHeight - raw));
+                    nextBarOffsets[`${ri}.${ci}`] = formatMm(bottomValue);
+                }
             });
         });
         setRowHeightStr(nextRowHeights);
         setSashCountStr(nextSashCounts);
         setColWidthStr(nextColWidths);
+        setBarOffsetStr(nextBarOffsets);
     }, [grid?.rows]);
 
     // Inizializzazione
@@ -440,6 +455,39 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             }
             return row;
         });
+        handleRowsChange(newRows);
+    };
+
+    const updateSashHorizontalBar = (rowIndex: number, colIndex: number, newOffsetMm: number | null) => {
+        const frameVal = grid.frame_mm ?? FRAME_MM;
+        const newRows = grid.rows.map((row, rIdx) => {
+            if (rIdx !== rowIndex) return row;
+            const safeRowHeight = row.height_ratio && row.height_ratio > 0
+                ? row.height_ratio
+                : grid.height_mm / Math.max(1, grid.rows.length);
+            const baseMin = MULLION_MM / 2;
+            const safeMin = Math.min(safeRowHeight / 2, Math.max(baseMin, frameVal * 0.12));
+            const maxOffset = Math.max(safeMin, safeRowHeight - safeMin);
+            const clampedBottom = typeof newOffsetMm === 'number'
+                ? Math.min(maxOffset, Math.max(safeMin, roundMm(newOffsetMm)))
+                : null;
+
+            const newCols = row.cols.map((col, cIdx) => {
+                if (cIdx !== colIndex) return col;
+                const baseLeaf = col.leaf ?? { state: 'fissa' as LeafState };
+                const nextLeaf = { ...baseLeaf };
+
+                if (clampedBottom === null) {
+                    if (nextLeaf.horizontalBars) delete nextLeaf.horizontalBars;
+                } else {
+                    nextLeaf.horizontalBars = [{ offset_mm: clampedBottom, origin: 'bottom' }];
+                }
+
+                return { ...col, leaf: nextLeaf };
+            });
+            return { ...row, cols: newCols };
+        });
+
         handleRowsChange(newRows);
     };
 
@@ -680,6 +728,83 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                                 <label htmlFor={inputId} className={!canHaveHandle ? 'text-gray-400 line-through' : ''}>
                                                     Maniglia
                                                 </label>
+                                            </div>
+                                        );
+                                    })()}
+                                    {(() => {
+                                        const barKey = `${rowIndex}.${colIndex}`;
+                                        const bar = col.leaf?.horizontalBars?.[0];
+                                        const hasBar = Boolean(bar);
+                                        const checkboxId = `bar-${rowIndex}-${colIndex}`;
+                                        const rowHeight = row.height_ratio && row.height_ratio > 0
+                                            ? row.height_ratio
+                                            : grid.height_mm / Math.max(1, grid.rows.length);
+                                        let storedValue = '';
+                                        if (bar && Number.isFinite(bar.offset_mm)) {
+                                            const raw = Math.max(MIN_MM, Math.min(rowHeight, bar.offset_mm));
+                                            const bottomValue = bar.origin === 'bottom'
+                                                ? raw
+                                                : Math.max(MIN_MM, Math.min(rowHeight, rowHeight - raw));
+                                            storedValue = formatMm(bottomValue);
+                                        }
+                                        return (
+                                            <div className="mt-3 space-y-2">
+                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                    <input
+                                                        id={checkboxId}
+                                                        type="checkbox"
+                                                        className="h-4 w-4"
+                                                        checked={hasBar}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                const frameVal = grid.frame_mm ?? FRAME_MM;
+                                                                const baseMin = MULLION_MM / 2;
+                                                                const safeMin = Math.min(rowHeight / 2, Math.max(baseMin, frameVal * 0.12));
+                                                                const safeMax = Math.max(safeMin, rowHeight - safeMin);
+                                                                const rawDefault = rowHeight / 2 || safeMin;
+                                                                const defaultOffset = roundMm(Math.min(safeMax, Math.max(safeMin, rawDefault)));
+                                                                updateSashHorizontalBar(rowIndex, colIndex, defaultOffset);
+                                                                setBarOffsetStr(prev => ({ ...prev, [barKey]: formatMm(defaultOffset) }));
+                                                            } else {
+                                                                updateSashHorizontalBar(rowIndex, colIndex, null);
+                                                                setBarOffsetStr(prev => {
+                                                                    const next = { ...prev };
+                                                                    delete next[barKey];
+                                                                    return next;
+                                                                });
+                                                            }
+                                                        }}
+                                                    />
+                                                    <label htmlFor={checkboxId}>Traverso orizzontale</label>
+                                                </div>
+                                                {hasBar && (
+                                                    <div>
+                                                        <label className="text-xs text-gray-500">Altezza dal bordo inferiore (mm)</label>
+                                                        <input
+                                                            className="input"
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            pattern="\\d+([.,]\\d{0,1})?"
+                                                            value={barOffsetStr[barKey] ?? storedValue}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                if (allowMmInput(v)) {
+                                                                    setBarOffsetStr(prev => ({ ...prev, [barKey]: v }));
+                                                                }
+                                                            }}
+                                                            onBlur={() => {
+                                                                const raw = barOffsetStr[barKey] ?? '';
+                                                                if (raw === '') return;
+                                                                const parsed = parseMmInput(raw);
+                                                                if (parsed === null) return;
+                                                                updateSashHorizontalBar(rowIndex, colIndex, parsed);
+                                                                setBarOffsetStr(prev => ({ ...prev, [barKey]: formatMm(parsed) }));
+                                                            }}
+                                                            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                                            onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })()}
