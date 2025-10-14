@@ -43,80 +43,173 @@ const PROFILE_SYSTEMS = [
     'ULTRA 60',
 ] as const;
 
-// === Nuovi helper: trattiamo width_ratio/height_ratio come mm assoluti che sommano al totale ===
-function sumNum(arr: number[]) { return arr.reduce((s, v) => s + v, 0); }
+// === Helper numeric con precisione a 0.1 mm ===
+const MM_DECIMALS = 1;
+const MM_SCALE = Math.pow(10, MM_DECIMALS);
+const MIN_MM = 1;
+const MIN_SCALED = Math.round(MIN_MM * MM_SCALE);
 
-/** Ribilancia le altezze di riga (mm assoluti) in modo che sommino a totalH.
- *  Se fixedIndex/fixedNewVal sono forniti, quella riga viene fissata a quel valore e le altre scalate proporzionalmente.
- */
+function sumNum(arr: number[]) { return arr.reduce((s, v) => s + v, 0); }
+const clampMm = (value: number) => Math.max(MIN_MM, value);
+const roundMm = (value: number) => Math.max(MIN_MM, Math.round(value * MM_SCALE) / MM_SCALE);
+const formatMm = (value: number) => {
+    if (!Number.isFinite(value)) return '0';
+    const rounded = roundMm(value);
+    const fixed = rounded.toFixed(MM_DECIMALS);
+    return fixed.replace(/\.?0+$/, '');
+};
+const allowMmInput = (value: string) => value === '' || /^\d+([.,]\d{0,1})?$/.test(value);
+const parseMmInput = (value: string) => {
+    if (value == null) return null;
+    const normalized = value.replace(',', '.').trim();
+    if (normalized === '') return null;
+    const parsed = Number(normalized);
+    if (!Number.isFinite(parsed)) return null;
+    return roundMm(parsed);
+};
+const toScaled = (value: number) => Math.max(MIN_SCALED, Math.round(clampMm(value) * MM_SCALE));
+const fromScaled = (value: number) => value / MM_SCALE;
+const normalizeDimensionValues = (values: number[], total: number) => {
+    const fallback = total > 0 ? total / Math.max(1, values.length) : 1;
+    const sanitized = values.map(v => (Number.isFinite(v) && v > 0 ? v : fallback));
+    const sumValues = sumNum(sanitized);
+    if (sumValues > 0 && total > 0 && sumValues <= 1.0001) {
+        return sanitized.map(v => v * total);
+    }
+    return sanitized.map(clampMm);
+};
+const allocateScaled = (totalScaled: number, weightsScaled: number[], minScaled: number) => {
+    const len = weightsScaled.length;
+    if (len === 0) return [];
+    const base = Array(len).fill(minScaled);
+    let remaining = totalScaled - minScaled * len;
+    if (remaining <= 0) {
+        const fallback = Array(len).fill(Math.floor(totalScaled / len));
+        let residue = totalScaled - sumNum(fallback);
+        for (let i = len - 1; i >= 0 && residue > 0; i -= 1) {
+            fallback[i] += 1;
+            residue -= 1;
+        }
+        return fallback;
+    }
+    const safeWeights = weightsScaled.map(w => Math.max(0, w));
+    const weightSum = sumNum(safeWeights);
+    const shares = weightSum > 0
+        ? safeWeights.map(w => Math.floor((w / weightSum) * remaining))
+        : Array(len).fill(Math.floor(remaining / len));
+    let residue = remaining - sumNum(shares);
+    const result = base.map((v, i) => v + shares[i]);
+    if (residue > 0) {
+        for (let i = len - 1; i >= 0 && residue > 0; i -= 1) {
+            result[i] += 1;
+            residue -= 1;
+        }
+    } else if (residue < 0) {
+        for (let i = len - 1; i >= 0 && residue < 0; i -= 1) {
+            const possible = result[i] - minScaled;
+            if (possible <= 0) continue;
+            const delta = Math.min(possible, -residue);
+            result[i] -= delta;
+            residue += delta;
+        }
+    }
+    return result;
+};
+const splitEvenly = (total: number, count: number) => {
+    if (count <= 0) return [];
+    const totalScaled = Math.round(clampMm(total) * MM_SCALE);
+    const distributed = allocateScaled(totalScaled, Array(count).fill(1), MIN_SCALED);
+    return distributed.map(fromScaled);
+};
+
+/** Ribilancia le altezze delle righe con precisione a 0.1 mm. */
 function rebalanceRowsToTotal(
     rows: GridWindowConfig['rows'],
     totalH: number,
     fixedIndex?: number,
     fixedNewVal?: number
 ): GridWindowConfig['rows'] {
-    const current = rows.map(r => Math.max(1, Math.round(r.height_ratio || 1)));
-    const sumH = Math.max(1, sumNum(current));
-    let target = [...current];
+    if (!rows.length) return rows;
+    const totalScaled = Math.round(clampMm(totalH) * MM_SCALE);
+    const baseValues = normalizeDimensionValues(rows.map(r => r.height_ratio ?? 0), totalH);
+    const rawScaled = baseValues.map(toScaled);
+    let targetScaled: number[];
 
-    if (typeof fixedIndex === 'number' && typeof fixedNewVal === 'number') {
-        // Fissa una riga e scala le altre
-        const clamped = Math.max(1, Math.round(fixedNewVal));
-        const otherIdx = target.map((_, i) => i).filter(i => i !== fixedIndex);
-        const otherSum = sumNum(otherIdx.map(i => target[i])) || 1;
-        const remain = Math.max(1, totalH - clamped);
-        target[fixedIndex] = clamped;
-        for (const i of otherIdx) {
-            target[i] = Math.max(1, Math.round((target[i] / otherSum) * remain));
-        }
+    if (
+        typeof fixedIndex === 'number' &&
+        fixedIndex >= 0 &&
+        fixedIndex < rows.length &&
+        typeof fixedNewVal === 'number'
+    ) {
+        const safeFixed = Math.min(
+            Math.max(MIN_SCALED, Math.round(clampMm(fixedNewVal) * MM_SCALE)),
+            totalScaled - MIN_SCALED * Math.max(0, rows.length - 1)
+        );
+        const otherIdx = rawScaled.map((_, i) => i).filter(i => i !== fixedIndex);
+        const otherWeights = otherIdx.map(i => rawScaled[i]);
+        const remainingScaled = Math.max(0, totalScaled - safeFixed);
+        const distributed = allocateScaled(remainingScaled, otherWeights, MIN_SCALED);
+        targetScaled = Array(rows.length).fill(MIN_SCALED);
+        targetScaled[fixedIndex] = safeFixed;
+        otherIdx.forEach((idx, pos) => {
+            targetScaled[idx] = distributed[pos] ?? MIN_SCALED;
+        });
     } else {
-        // Scala tutte le righe proporzionalmente
-        const k = totalH / sumH;
-        target = target.map(v => Math.max(1, Math.round(v * k)));
+        targetScaled = allocateScaled(totalScaled, rawScaled, MIN_SCALED);
     }
 
-    // Aggiusta eventuali differenze di arrotondamento
-    const diff = totalH - sumNum(target);
-    if (diff !== 0 && target.length > 0) {
-        target[target.length - 1] = Math.max(1, target[target.length - 1] + diff);
+    const diff = totalScaled - sumNum(targetScaled);
+    if (diff !== 0 && targetScaled.length > 0) {
+        const last = targetScaled.length - 1;
+        targetScaled[last] = Math.max(MIN_SCALED, targetScaled[last] + diff);
     }
 
-    return rows.map((r, i) => ({ ...r, height_ratio: target[i] }));
+    return rows.map((r, i) => ({ ...r, height_ratio: fromScaled(targetScaled[i]) }));
 }
 
-/** Ribilancia le larghezze delle ante (mm assoluti) in una riga, somma = totalW.
- *  Se fixedIndex/fixedNewVal sono forniti, quell'anta viene fissata e le altre scalate proporzionalmente.
- */
+/** Ribilancia le larghezze delle ante con precisione a 0.1 mm. */
 function rebalanceColsToTotal(
     cols: GridWindowConfig['rows'][0]['cols'],
     totalW: number,
     fixedIndex?: number,
     fixedNewVal?: number
 ): GridWindowConfig['rows'][0]['cols'] {
-    const current = cols.map(c => Math.max(1, Math.round(c.width_ratio || 1)));
-    const sumW = Math.max(1, sumNum(current));
-    let target = [...current];
+    if (!cols.length) return cols;
+    const totalScaled = Math.round(clampMm(totalW) * MM_SCALE);
+    const baseValues = normalizeDimensionValues(cols.map(c => c.width_ratio ?? 0), totalW);
+    const rawScaled = baseValues.map(toScaled);
+    let targetScaled: number[];
 
-    if (typeof fixedIndex === 'number' && typeof fixedNewVal === 'number') {
-        const clamped = Math.max(1, Math.round(fixedNewVal));
-        const otherIdx = target.map((_, i) => i).filter(i => i !== fixedIndex);
-        const otherSum = sumNum(otherIdx.map(i => target[i])) || 1;
-        const remain = Math.max(1, totalW - clamped);
-        target[fixedIndex] = clamped;
-        for (const i of otherIdx) {
-            target[i] = Math.max(1, Math.round((target[i] / otherSum) * remain));
-        }
+    if (
+        typeof fixedIndex === 'number' &&
+        fixedIndex >= 0 &&
+        fixedIndex < cols.length &&
+        typeof fixedNewVal === 'number'
+    ) {
+        const safeFixed = Math.min(
+            Math.max(MIN_SCALED, Math.round(clampMm(fixedNewVal) * MM_SCALE)),
+            totalScaled - MIN_SCALED * Math.max(0, cols.length - 1)
+        );
+        const otherIdx = rawScaled.map((_, i) => i).filter(i => i !== fixedIndex);
+        const otherWeights = otherIdx.map(i => rawScaled[i]);
+        const remainingScaled = Math.max(0, totalScaled - safeFixed);
+        const distributed = allocateScaled(remainingScaled, otherWeights, MIN_SCALED);
+        targetScaled = Array(cols.length).fill(MIN_SCALED);
+        targetScaled[fixedIndex] = safeFixed;
+        otherIdx.forEach((idx, pos) => {
+            targetScaled[idx] = distributed[pos] ?? MIN_SCALED;
+        });
     } else {
-        const k = totalW / sumW;
-        target = target.map(v => Math.max(1, Math.round(v * k)));
+        targetScaled = allocateScaled(totalScaled, rawScaled, MIN_SCALED);
     }
 
-    const diff = totalW - sumNum(target);
-    if (diff !== 0 && target.length > 0) {
-        target[target.length - 1] = Math.max(1, target[target.length - 1] + diff);
+    const diff = totalScaled - sumNum(targetScaled);
+    if (diff !== 0 && targetScaled.length > 0) {
+        const last = targetScaled.length - 1;
+        targetScaled[last] = Math.max(MIN_SCALED, targetScaled[last] + diff);
     }
 
-    return cols.map((c, i) => ({ ...c, width_ratio: target[i] }));
+    return cols.map((c, i) => ({ ...c, width_ratio: fromScaled(targetScaled[i]) }));
 }
 
 
@@ -130,8 +223,8 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const getGrid = (): GridWindowConfig | undefined => (d as any)?.options?.gridWindow;
     const grid = getGrid();
 
-    const [widthStr, setWidthStr] = useState(String(d.width_mm || ''));
-    const [heightStr, setHeightStr] = useState(String(d.height_mm || ''));
+    const [widthStr, setWidthStr] = useState(typeof d.width_mm === 'number' ? formatMm(d.width_mm) : '');
+    const [heightStr, setHeightStr] = useState(typeof d.height_mm === 'number' ? formatMm(d.height_mm) : '');
     const [qtyStr, setQtyStr] = useState(String(d.qty ?? 1));
 
     // --- Per-row and per-anta string states for safe editing ---
@@ -144,8 +237,8 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     }, [d.qty]);
 
     useEffect(() => {
-        setWidthStr(String(d.width_mm || ''));
-        setHeightStr(String(d.height_mm || ''));
+        setWidthStr(typeof d.width_mm === 'number' ? formatMm(d.width_mm) : '');
+        setHeightStr(typeof d.height_mm === 'number' ? formatMm(d.height_mm) : '');
     }, [d.width_mm, d.height_mm]);
 
     // Sync string states from grid structure/values
@@ -155,10 +248,10 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const nextSashCounts: Record<number, string> = {};
         const nextColWidths: Record<string, string> = {};
         grid.rows.forEach((r, ri) => {
-            nextRowHeights[ri] = String(Math.round(r.height_ratio || 1));
+            nextRowHeights[ri] = formatMm(r.height_ratio ?? 0);
             nextSashCounts[ri] = String(r.cols.length);
             r.cols.forEach((c, ci) => {
-                nextColWidths[`${ri}.${ci}`] = String(Math.round(c.width_ratio || 1));
+                nextColWidths[`${ri}.${ci}`] = formatMm(c.width_ratio ?? 0);
             });
         });
         setRowHeightStr(nextRowHeights);
@@ -225,34 +318,39 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     };
 
     const handleMeasureUpdate = (key: 'width_mm' | 'height_mm', value: string) => {
-        // Se è vuoto al blur, non committare nulla: lascia lo stato locale vuoto
         if (value === '') return;
-
-        const nextTotal = Math.max(100, Math.round(Number(value)) || 100);
+        const parsed = parseMmInput(value);
+        if (parsed === null) return;
+        const commitTotal = roundMm(Math.max(100, parsed));
 
         if (key === 'width_mm') {
             const nextRows = grid.rows.map((r) => {
                 if (autoSplit) {
                     const count = Math.max(1, r.cols.length);
-                    const equal = Math.max(1, Math.round(nextTotal / count));
-                    const cols = r.cols.map((c) => ({ ...c, width_ratio: equal }));
-                    const diff = nextTotal - sumNum(cols.map(c => c.width_ratio as number));
-                    if (diff !== 0) cols[cols.length - 1].width_ratio = Math.max(1, (cols[cols.length - 1].width_ratio as number) + diff);
-                    return { ...r, cols };
+                    const distributed = splitEvenly(commitTotal, count);
+                    return {
+                        ...r,
+                        cols: r.cols.map((c, idx) => ({
+                            ...c,
+                            width_ratio: distributed[idx] ?? distributed[distributed.length - 1] ?? commitTotal / count,
+                        })),
+                    };
                 }
-                return { ...r, cols: rebalanceColsToTotal(r.cols, nextTotal) };
+                return { ...r, cols: rebalanceColsToTotal(r.cols, commitTotal) };
             });
 
             applyPatch(
-                { width_mm: nextTotal },
-                { width_mm: nextTotal, rows: nextRows }
+                { width_mm: commitTotal },
+                { width_mm: commitTotal, rows: nextRows }
             );
+            setWidthStr(formatMm(commitTotal));
         } else {
-            const nextRows = rebalanceRowsToTotal(grid.rows, nextTotal);
+            const nextRows = rebalanceRowsToTotal(grid.rows, commitTotal);
             applyPatch(
-                { height_mm: nextTotal },
-                { height_mm: nextTotal, rows: nextRows }
+                { height_mm: commitTotal },
+                { height_mm: commitTotal, rows: nextRows }
             );
+            setHeightStr(formatMm(commitTotal));
         }
     };
 
@@ -261,13 +359,11 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const nextRows = [...grid.rows, createNewRow()];
         let resized = nextRows;
         if (autoSplit) {
-            // distribuzione uniforme in mm
-            const each = Math.max(1, Math.round(totalH / nextRows.length));
-            resized = nextRows.map(r => ({ ...r, height_ratio: each }));
-            const diff = totalH - sumNum(resized.map(r => r.height_ratio as number));
-            if (diff !== 0) {
-                resized[resized.length - 1].height_ratio = Math.max(1, (resized[resized.length - 1].height_ratio as number) + diff);
-            }
+            const distributed = splitEvenly(totalH, nextRows.length);
+            resized = nextRows.map((r, idx) => ({
+                ...r,
+                height_ratio: distributed[idx] ?? distributed[distributed.length - 1] ?? totalH / nextRows.length,
+            }));
         } else {
             resized = rebalanceRowsToTotal(nextRows, totalH);
         }
@@ -296,10 +392,11 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             newCols = newCols.map((c) => ({ ...c, glazing: (c as any).glazing ?? grid.glazing }));
 
             if (autoSplit) {
-                const equal = Math.max(1, Math.round(totalW / count));
-                const cols = newCols.map(c => ({ ...c, width_ratio: equal }));
-                const diff = totalW - sumNum(cols.map(c => c.width_ratio as number));
-                if (diff !== 0) cols[cols.length - 1].width_ratio = Math.max(1, (cols[cols.length - 1].width_ratio as number) + diff);
+                const distributed = splitEvenly(totalW, count);
+                const cols = newCols.map((c, idx) => ({
+                    ...c,
+                    width_ratio: distributed[idx] ?? distributed[distributed.length - 1] ?? totalW / count,
+                }));
                 return { ...row, cols };
             }
             // no autoSplit: ribilancia proporzionalmente
@@ -377,14 +474,15 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
 
     // --- Handlers for safe editing of numeric fields (row/cols) ---
     const onRowHeightChange = (i: number, v: string) => {
-        if (v === '' || /^\d+$/.test(v)) setRowHeightStr(prev => ({ ...prev, [i]: v }));
+        if (allowMmInput(v)) setRowHeightStr(prev => ({ ...prev, [i]: v }));
     };
     const onRowHeightBlur = (i: number) => {
         const raw = rowHeightStr[i] ?? '';
-        if (raw === '') return; // don't commit empty
-        const n = Math.max(1, Number(raw) || 1);
-        updateRowHeightMm(i, n);
-        setRowHeightStr(prev => ({ ...prev, [i]: String(n) }));
+        if (raw === '') return;
+        const parsed = parseMmInput(raw);
+        if (parsed === null) return;
+        updateRowHeightMm(i, parsed);
+        setRowHeightStr(prev => ({ ...prev, [i]: formatMm(parsed) }));
     };
 
     const onSashCountChange = (i: number, v: string) => {
@@ -398,15 +496,16 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     };
 
     const onColWidthChange = (ri: number, ci: number, v: string) => {
-        if (v === '' || /^\d+$/.test(v)) setColWidthStr(prev => ({ ...prev, [`${ri}.${ci}`]: v }));
+        if (allowMmInput(v)) setColWidthStr(prev => ({ ...prev, [`${ri}.${ci}`]: v }));
     };
     const onColWidthBlur = (ri: number, ci: number) => {
         const key = `${ri}.${ci}`;
         const raw = colWidthStr[key] ?? '';
-        if (raw === '') return; // don't commit empty
-        const n = Math.max(1, Number(raw) || 1);
-        updateColWidthMm(ri, ci, n);
-        setColWidthStr(prev => ({ ...prev, [key]: String(n) }));
+        if (raw === '') return;
+        const parsed = parseMmInput(raw);
+        if (parsed === null) return;
+        updateColWidthMm(ri, ci, parsed);
+        setColWidthStr(prev => ({ ...prev, [key]: formatMm(parsed) }));
     };
 
     return (
@@ -434,20 +533,16 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                         <input
                             className="input"
                             type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
+                            inputMode="decimal"
+                            pattern="\\d+([.,]\\d{0,1})?"
                             value={widthStr}
                             onChange={(e) => {
                                 const v = e.target.value;
-                                // consenti vuoto o solo cifre
-                                if (v === '' || /^\d+$/.test(v)) setWidthStr(v);
+                                if (allowMmInput(v)) setWidthStr(v);
                             }}
                             onBlur={() => {
+                                if (widthStr === '') return;
                                 handleMeasureUpdate('width_mm', widthStr);
-                                if (widthStr !== '') {
-                                    const n = Math.max(100, Math.round(Number(widthStr)) || 100);
-                                    setWidthStr(String(n));
-                                }
                             }}
                         />
                     </div>
@@ -457,19 +552,16 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                         <input
                             className="input"
                             type="text"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
+                            inputMode="decimal"
+                            pattern="\\d+([.,]\\d{0,1})?"
                             value={heightStr}
                             onChange={(e) => {
                                 const v = e.target.value;
-                                if (v === '' || /^\d+$/.test(v)) setHeightStr(v);
+                                if (allowMmInput(v)) setHeightStr(v);
                             }}
                             onBlur={() => {
+                                if (heightStr === '') return;
                                 handleMeasureUpdate('height_mm', heightStr);
-                                if (heightStr !== '') {
-                                    const n = Math.max(100, Math.round(Number(heightStr)) || 100);
-                                    setHeightStr(String(n));
-                                }
                             }}
                         />
                     </div>
@@ -515,9 +607,9 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                     <input
                                         className="input"
                                         type="text"
-                                        inputMode="numeric"
-                                        pattern="[0-9]*"
-                                        value={rowHeightStr[rowIndex] ?? String(Math.round(row.height_ratio || 1))}
+                                        inputMode="decimal"
+                                        pattern="\\d+([.,]\\d{0,1})?"
+                                        value={rowHeightStr[rowIndex] ?? formatMm(row.height_ratio ?? 0)}
                                         onChange={(e) => onRowHeightChange(rowIndex, e.target.value)}
                                         onBlur={() => onRowHeightBlur(rowIndex)}
                                         onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
@@ -538,7 +630,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                         onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
                                     />
                                     <div className="mt-1 text-xs text-gray-500">
-                                        {`≈ ${Math.round(grid.width_mm / Math.max(1, row.cols.length))} mm ad anta`}
+                                        {`≈ ${formatMm(grid.width_mm / Math.max(1, row.cols.length))} mm ad anta`}
                                     </div>
                                 </div>
                                 {grid.rows.length > 1 && (
@@ -593,7 +685,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                     })()}
                                     {(() => {
                                         // Compute the TOTAL width per-anta (including telai/montanti) from ratios
-                                        const colTotalMm = Math.round(col.width_ratio || 1);
+                                        const colTotalMm = formatMm(col.width_ratio ?? 0);
 
                                         return (
                                             <div className="mt-2">
@@ -603,16 +695,16 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                                         : "Imposta larghezza TOTALE anta (mm)"}
                                                 </div>
                                                 {autoSplit ? (
-                                                    <div className="text-xs text-gray-600">Larghezza totale stimata: <b>{Math.round(grid.width_mm / Math.max(1, row.cols.length))} mm</b></div>
+                                                    <div className="text-xs text-gray-600">Larghezza totale stimata: <b>{formatMm(grid.width_mm / Math.max(1, row.cols.length))} mm</b></div>
                                                 ) : (
                                                     <>
                                                         <label className="text-xs text-gray-500">Larghezza Anta {rowIndex + 1}.{colIndex + 1} (totale mm)</label>
                                                         <input
                                                             className="input"
                                                             type="text"
-                                                            inputMode="numeric"
-                                                            pattern="[0-9]*"
-                                                            value={colWidthStr[`${rowIndex}.${colIndex}`] ?? String(colTotalMm)}
+                                                            inputMode="decimal"
+                                                            pattern="\\d+([.,]\\d{0,1})?"
+                                                            value={colWidthStr[`${rowIndex}.${colIndex}`] ?? colTotalMm}
                                                             onChange={(e) => onColWidthChange(rowIndex, colIndex, e.target.value)}
                                                             onBlur={() => onColWidthBlur(rowIndex, colIndex)}
                                                             onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}

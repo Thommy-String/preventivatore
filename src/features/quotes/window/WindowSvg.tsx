@@ -46,32 +46,44 @@ function makeFallbackCfg(): GridWindowConfig {
 }
 
 const sum = (a: number[]) => (a && a.length ? a.reduce((s, v) => s + v, 0) : 0);
-const distributeWidths = (total: number, ratios: number[]) => {
+const distributeWidths = (total: number, ratios: number[], decimalPlaces = 0) => {
     if (!ratios.length) return [];
-    const safeTotal = Math.round(total);
+    const scale = Math.pow(10, Math.max(0, decimalPlaces));
+    const scaledTotal = Math.round(total * scale);
     const ratioSum = sum(ratios);
+
     if (ratioSum <= 0) {
-        const base = Math.floor(safeTotal / ratios.length);
-        const remainder = safeTotal - base * ratios.length;
-        return ratios.map((_, idx) => (idx === ratios.length - 1 ? base + remainder : base));
+        const base = Math.floor(scaledTotal / ratios.length);
+        const remainder = scaledTotal - base * ratios.length;
+        return ratios.map((_, idx) => (base + (idx === ratios.length - 1 ? remainder : 0)) / scale);
     }
-    const raw = ratios.map(r => (total * r) / ratioSum);
+
+    const raw = ratios.map(r => (scaledTotal * r) / ratioSum);
     const floors = raw.map(v => Math.floor(v));
-    let remainder = safeTotal - sum(floors);
+    let remainder = scaledTotal - sum(floors);
+    const result = floors.slice();
+
     if (remainder < 0) {
-        const result = floors.slice();
         for (let i = result.length - 1; i >= 0 && remainder < 0; i -= 1) {
             const decrease = Math.min(result[i], Math.abs(remainder));
             result[i] -= decrease;
             remainder += decrease;
         }
-        return result;
     }
-    const result = floors.slice();
+
     if (result.length) {
-        result[result.length - 1] += remainder;
+        const targetIdx = result.length - 1;
+        result[targetIdx] += remainder;
     }
-    return result;
+
+    return result.map(v => v / scale);
+};
+const formatMeasure = (value: number, decimals: number) => {
+    if (!Number.isFinite(value)) return "0";
+    if (decimals <= 0) return `${Math.round(value)}`;
+    const rounded = Number(value.toFixed(decimals));
+    const fixed = rounded.toFixed(decimals);
+    return fixed.replace(/\.?0+$/, "");
 };
 
 function glassFill(glazing: GridWindowConfig["glazing"]) {
@@ -173,6 +185,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     const desiredMeasureFont = Math.max(baseFont * 10.2, baseFont + 80, width_mm / 60, height_mm / 60);
     const sashFontSize = Math.min(Math.max(desiredMeasureFont, MIN_MEASURE_FONT), MAX_MEASURE_FONT);
     const totalFontSize = sashFontSize;
+    const sashMeasureDecimals = 1;
 
     const labelGap = Math.max(26, Math.min(48, baseDim / 9));
     const padRight = Math.max(6, baseFont * 0.5);
@@ -210,7 +223,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
         const ratioValues = row.cols.map(c => Number.isFinite(c.width_ratio) && c.width_ratio > 0 ? c.width_ratio : 1);
         const ratioSum = sum(ratioValues);
         const safeRatioSum = ratioSum > 0 ? ratioSum : row.cols.length;
-        const labelNumbers = distributeWidths(width_mm, ratioValues);
+        const labelNumbers = distributeWidths(width_mm, ratioValues, sashMeasureDecimals);
 
         let xCursor = frame_mm;
         const colLabels: Array<{ x: number; text: string; start: number; end: number }> = [];
@@ -240,8 +253,9 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
             const outerStart = Math.max(0, Math.min(width_mm, outerStartRaw));
             const outerEnd = Math.max(0, Math.min(width_mm, outerEndRaw));
             const outerWidth = Math.max(0, outerEnd - outerStart);
-            const labelText = colIdx < labelNumbers.length ? labelNumbers[colIdx] : Math.round(outerWidth);
-            colLabels.push({ x: (outerStart + outerEnd) / 2, text: `${labelText}`, start: outerStart, end: outerEnd });
+            const labelValue = colIdx < labelNumbers.length ? labelNumbers[colIdx] : outerWidth;
+            const labelText = formatMeasure(labelValue, sashMeasureDecimals);
+            colLabels.push({ x: (outerStart + outerEnd) / 2, text: labelText, start: outerStart, end: outerEnd });
 
             // ## BLOCCO MANIGLIA: Stile e Posizionamento Definitivi
             if (col.handle) {
