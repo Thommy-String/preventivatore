@@ -15,6 +15,11 @@ export async function gridWindowToPngBlob(
   widthPx = 640,
   heightPx = 640
 ): Promise<Blob> {
+  const cfg = {
+    ...(grid || {}),
+    showDims: true,
+  };
+
   // 1) mount off-screen
   const container = document.createElement("div");
   container.style.position = "fixed";
@@ -29,7 +34,7 @@ export async function gridWindowToPngBlob(
   const root = ReactDOMClient.createRoot(container);
   root.render(
     <div style={{ width: widthPx, height: heightPx }}>
-      <WindowSvg cfg={grid} />
+      <WindowSvg cfg={cfg} />
     </div>
   );
 

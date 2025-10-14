@@ -55,6 +55,8 @@ export type GridWindowConfig = {
       leaf?: { state: LeafState }
       /** override del tipo di vetro per la singola anta; se assente eredita da GridWindowConfig.glazing */
       glazing?: GridWindowConfig['glazing']
+      /** presenza della maniglia */
+      handle?: boolean
     }>
   }>
 }

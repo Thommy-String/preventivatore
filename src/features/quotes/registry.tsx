@@ -59,7 +59,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
           frame_mm: 60,
           mullion_mm: 40,
           glazing: "doppio",
-          showDims: false,
+          showDims: true,
           rows: [
             {
               height_ratio: 1,

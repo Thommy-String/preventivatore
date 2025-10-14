@@ -843,10 +843,10 @@ export default function QuotePDF(props: QuotePDFProps) {
 
                                             // Common texts
                                             const widthText = (it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)
-                                                ? `${String(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)} mm`
+                                                ? String(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)
                                                 : "—";
                                             const heightText = (it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
-                                                ? `${String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)} mm`
+                                                ? String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
                                                 : "—";
 
                                             // Apply "smart" placement only for proportional drawings
@@ -864,69 +864,67 @@ export default function QuotePDF(props: QuotePDFProps) {
                                                 );
                                             }
 
-                                            // ---- Proportional drawings (finestra, cassonetto) ----
-                                            // Wrapper box and its inner padding (must match s.itemPhotoWrap.padding)
-                                            const WRAP_W = 170;
-                                            const WRAP_H = 170;
-                                            const PAD = 6; // <-- s.itemPhotoWrap.padding
-                                            const INNER_W = WRAP_W - PAD * 2;
-                                            const INNER_H = WRAP_H - PAD * 2;
+                                            if (kind === "cassonetto") {
+                                                const WRAP_W = 170;
+                                                const WRAP_H = 170;
+                                                const PAD = 6; // <-- s.itemPhotoWrap.padding
+                                                const INNER_W = WRAP_W - PAD * 2;
+                                                const INNER_H = WRAP_H - PAD * 2;
 
-                                            const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-                                            const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-                                            const hasDims = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
+                                                const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
+                                                const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
+                                                const hasDims = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
 
-                                            // Estimate margins produced by "contain" within the INNER box (only marginY needed).
-                                            let marginY = 0;
-                                            if (hasDims) {
-                                                const ar = w / h;
-                                                const arBox = INNER_W / INNER_H;
-                                                if (ar >= arBox) {
-                                                    // Wide: width touches INNER_W, height shrinks
-                                                    const imgH = INNER_W / ar;
-                                                    marginY = Math.max(0, (INNER_H - imgH) / 2);
+                                                let marginY = 0;
+                                                if (hasDims) {
+                                                    const ar = w / h;
+                                                    const arBox = INNER_W / INNER_H;
+                                                    if (ar >= arBox) {
+                                                        const imgH = INNER_W / ar;
+                                                        marginY = Math.max(0, (INNER_H - imgH) / 2);
+                                                    }
                                                 }
+
+                                                const GAP = 4;
+                                                const centerX = WRAP_W / 2;
+                                                const centerY = PAD + INNER_H / 2;
+
+                                                // colloca la larghezza poco sotto l'immagine ma all'interno del contenitore
+                                                const widthLabelTop = PAD + (INNER_H - marginY) + GAP + 6;
+
+                                                const widthLabel = Number.isFinite(w) ? String(Math.round(w)) : "—";
+                                                const heightLabel = Number.isFinite(h) ? String(Math.round(h)) : "—";
+
+                                                return (
+                                                    <>
+                                                        <Text
+                                                            style={{
+                                                                position: "absolute",
+                                                                top: widthLabelTop,
+                                                                left: centerX - 48,
+                                                                width: 96,
+                                                                textAlign: "center",
+                                                                fontSize: 12,
+                                                                color: "#333",
+                                                            }}
+                                                        >
+                                                            {widthLabel}
+                                                        </Text>
+                                                        <View
+                                                            style={{
+                                                                position: "absolute",
+                                                                left: -10,
+                                                                top: centerY,
+                                                                transform: "rotate(-90deg)",
+                                                            }}
+                                                        >
+                                                            <Text style={{ fontSize: 12, color: "#333" }}>{heightLabel}</Text>
+                                                        </View>
+                                                    </>
+                                                );
                                             }
 
-                                            const GAP = 4;
-                                            const centerX = WRAP_W / 2;
-                                            const centerY = PAD + INNER_H / 2;
-
-                                            // Larghezza: subito sotto l’immagine reale
-                                            const widthLabelTop = PAD + (INNER_H - marginY) + GAP;
-
-                                            // Altezza: a sinistra dell’immagine reale, ruotata
-
-                                            return (
-                                                <>
-                                                    {/* Larghezza (sotto l’immagine, centrata) */}
-                                                    <Text
-                                                        style={{
-                                                            position: "absolute",
-                                                            top: widthLabelTop,
-                                                            left: centerX - 60,
-                                                            width: 120,
-                                                            textAlign: "center",
-                                                            fontSize: 10,
-                                                            color: "#333",
-                                                        }}
-                                                    >
-                                                        {widthText}
-                                                    </Text>
-
-                                                    {/* Altezza (a sinistra dell’immagine, ruotata e centrata verticalmente) */}
-                                                    <View
-                                                        style={{
-                                                            position: "absolute",
-                                                            left: -22,
-                                                            top: centerY,
-                                                            transform: "rotate(-90deg)",
-                                                        }}
-                                                    >
-                                                        <Text style={{ fontSize: 10, color: "#333" }}>{heightText}</Text>
-                                                    </View>
-                                                </>
-                                            );
+                                            return null;
                                         })()}
                                     </View>
 

@@ -20,12 +20,13 @@ const openingOptions: { value: LeafState; label: string }[] = [
 // Funzioni Helper
 const createNewRow = (): GridWindowConfig['rows'][0] => ({
     height_ratio: 1,
-    cols: [{ width_ratio: 1, leaf: { state: 'fissa' } }],
+    cols: [{ width_ratio: 1, leaf: { state: 'fissa' }, handle: false }],
 });
 
 const createNewSash = (): GridWindowConfig['rows'][0]['cols'][0] => ({
     width_ratio: 1,
     leaf: { state: 'fissa' },
+    handle: false,
 });
 
 // Valori fissi per telaio e montante
@@ -173,7 +174,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                 frame_mm: FRAME_MM, mullion_mm: MULLION_MM,
                 rows: [{
                     height_ratio: (d.height_mm || 1500),
-                    cols: [{ width_ratio: (d.width_mm || 1200), leaf: { state: 'fissa' } }]
+                    cols: [{ width_ratio: (d.width_mm || 1200), leaf: { state: 'fissa' }, handle: false }]
                 }],
                 glazing: 'doppio',
                 showDims: true,
@@ -311,9 +312,33 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const updateSashOpening = (rowIndex: number, colIndex: number, newState: LeafState) => {
         const newRows = grid.rows.map((row, rIdx) => {
             if (rIdx === rowIndex) {
-                const newCols = row.cols.map((col, cIdx) =>
-                    cIdx === colIndex ? { ...col, leaf: { state: newState } } : col
-                );
+                const newCols = row.cols.map((col, cIdx) => {
+                    if (cIdx !== colIndex) return col;
+                    const nextCol = {
+                        ...col,
+                        leaf: { ...(col.leaf ?? {}), state: newState },
+                    } as typeof col;
+                    if (newState === 'fissa') {
+                        nextCol.handle = false;
+                    }
+                    return nextCol;
+                });
+                return { ...row, cols: newCols };
+            }
+            return row;
+        });
+        handleRowsChange(newRows);
+    };
+
+    const updateSashHandle = (rowIndex: number, colIndex: number, enabled: boolean) => {
+        const newRows = grid.rows.map((row, rIdx) => {
+            if (rIdx === rowIndex) {
+                const newCols = row.cols.map((col, cIdx) => {
+                    if (cIdx !== colIndex) return col;
+                    const state = col.leaf?.state ?? 'fissa';
+                    if (state === 'fissa') return { ...col, handle: false };
+                    return { ...col, handle: enabled };
+                });
                 return { ...row, cols: newCols };
             }
             return row;
@@ -545,6 +570,27 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                             <option value="satinato">Satinato</option>
                                         </select>
                                     </div>
+                                    {(() => {
+                                        const state = col.leaf?.state ?? 'fissa';
+                                        const canHaveHandle = state !== 'fissa';
+                                        const handleChecked = Boolean(col.handle);
+                                        const inputId = `handle-${rowIndex}-${colIndex}`;
+                                        return (
+                                            <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+                                                <input
+                                                    id={inputId}
+                                                    type="checkbox"
+                                                    className="h-4 w-4"
+                                                    checked={handleChecked}
+                                                    disabled={!canHaveHandle}
+                                                    onChange={(e) => updateSashHandle(rowIndex, colIndex, e.target.checked)}
+                                                />
+                                                <label htmlFor={inputId} className={!canHaveHandle ? 'text-gray-400 line-through' : ''}>
+                                                    Maniglia
+                                                </label>
+                                            </div>
+                                        );
+                                    })()}
                                     {(() => {
                                         // Compute the TOTAL width per-anta (including telai/montanti) from ratios
                                         const colTotalMm = Math.round(col.width_ratio || 1);

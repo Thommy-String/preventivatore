@@ -1,7 +1,6 @@
 import * as React from "react";
 
 // --- Tipi ---
-// Ritorno alle proporzioni (ratio) per la distribuzione interna dello spazio
 export type LeafState =
     | "fissa"
     | "apre_sx"
@@ -21,7 +20,7 @@ export interface GridWindowConfig {
     showDims?: boolean;
     rows: Array<{
         height_ratio: number;
-        cols: Array<{ width_ratio: number; leaf?: { state: LeafState }; glazing?: GridWindowConfig['glazing'] }>;
+        cols: Array<{ width_ratio: number; leaf?: { state: LeafState }; glazing?: GridWindowConfig['glazing']; handle?: boolean }>;
     }>;
 }
 
@@ -36,11 +35,44 @@ function makeFallbackCfg(): GridWindowConfig {
     return {
         width_mm: 1200, height_mm: 1500, frame_mm: 70, mullion_mm: 60,
         glazing: "doppio", showDims: true,
-        rows: [{ height_ratio: 1, cols: [{ width_ratio: 1, leaf: { state: "apre_sx" } }] }]
+        rows: [{
+            height_ratio: 1,
+            cols: [
+                { width_ratio: 1, leaf: { state: "apre_sx" }, handle: true },
+                { width_ratio: 1, leaf: { state: "apre_dx" }, handle: true }
+            ]
+        }]
     };
 }
 
 const sum = (a: number[]) => (a && a.length ? a.reduce((s, v) => s + v, 0) : 0);
+const distributeWidths = (total: number, ratios: number[]) => {
+    if (!ratios.length) return [];
+    const safeTotal = Math.round(total);
+    const ratioSum = sum(ratios);
+    if (ratioSum <= 0) {
+        const base = Math.floor(safeTotal / ratios.length);
+        const remainder = safeTotal - base * ratios.length;
+        return ratios.map((_, idx) => (idx === ratios.length - 1 ? base + remainder : base));
+    }
+    const raw = ratios.map(r => (total * r) / ratioSum);
+    const floors = raw.map(v => Math.floor(v));
+    let remainder = safeTotal - sum(floors);
+    if (remainder < 0) {
+        const result = floors.slice();
+        for (let i = result.length - 1; i >= 0 && remainder < 0; i -= 1) {
+            const decrease = Math.min(result[i], Math.abs(remainder));
+            result[i] -= decrease;
+            remainder += decrease;
+        }
+        return result;
+    }
+    const result = floors.slice();
+    if (result.length) {
+        result[result.length - 1] += remainder;
+    }
+    return result;
+};
 
 function glassFill(glazing: GridWindowConfig["glazing"]) {
     switch (glazing) {
@@ -56,16 +88,15 @@ function isSatin(glazing: GridWindowConfig["glazing"]) {
     return glazing === "satinato";
 }
 
-
 // --- Componenti di Disegno ---
 
 function OpeningGlyph({ x, y, w, h, state, stroke, strokeWidth }: { x: number; y: number; w: number; h: number; state: LeafState; stroke: string; strokeWidth: number }) {
     const dash = `${strokeWidth * 5} ${strokeWidth * 5}`;
-
     const drawVasistas = () => <polyline points={`${x},${y + h} ${x + w / 2},${y} ${x + w},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;
-    // VERSIONE NUOVA (CORRETTA)
     const drawApreSx = () => <polyline points={`${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;
     const drawApreDx = () => <polyline points={`${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`} stroke={stroke} strokeDasharray={dash} strokeWidth={strokeWidth} fill="none" />;
+    
+    // ... (codice per le frecce, non rilevante per la maniglia)
     const drawArrow = (direction: 'left' | 'right') => {
         const arrowHeight = Math.min(h * 0.5, 100);
         const arrowWidth = arrowHeight * 3;
@@ -73,11 +104,9 @@ function OpeningGlyph({ x, y, w, h, state, stroke, strokeWidth }: { x: number; y
         const midX = x + w / 2;
         const startX = direction === 'left' ? midX + arrowWidth / 2 : midX - arrowWidth / 2;
         const endX = direction === 'left' ? midX - arrowWidth / 2 : midX + arrowWidth / 2;
-
         const arrowHead = direction === 'left'
             ? `${endX + arrowHeight / 2},${midY - arrowHeight / 2} ${endX},${midY} ${endX + arrowHeight / 2},${midY + arrowHeight / 2}`
             : `${endX - arrowHeight / 2},${midY - arrowHeight / 2} ${endX},${midY} ${endX - arrowHeight / 2},${midY + arrowHeight / 2}`;
-
         return (
             <g stroke={stroke} strokeWidth={strokeWidth * 1.5} fill="none" strokeLinecap="round" strokeLinejoin="round">
                 <line x1={startX} y1={midY} x2={endX} y2={midY} />
@@ -99,123 +128,251 @@ function OpeningGlyph({ x, y, w, h, state, stroke, strokeWidth }: { x: number; y
     }
 }
 
+type HandlePlacement = 'left' | 'right' | 'top' | null;
+
+// ## Logica di Posizionamento Corretta
+// Questa funzione determina su quale lato dell'anta va la maniglia.
+function handlePlacementForState(state?: LeafState): HandlePlacement {
+    switch (state) {
+        // Cerniere a SX (apre_sx), quindi la maniglia va sul montante DESTRO dell'anta.
+        case 'apre_sx':
+        case 'scorrevole_sx':
+        case 'apre_sx+vasistas':
+            return 'right'; 
+        // Cerniere a DX (apre_dx), quindi la maniglia va sul montante SINISTRO dell'anta.
+        case 'apre_dx':
+        case 'scorrevole_dx':
+        case 'apre_dx+vasistas':
+            return 'left'; 
+        // Apertura a vasistas, la maniglia va sul traverso SUPERIORE dell'anta.
+        case 'vasistas':
+            return 'top'; 
+        default:
+            return null;
+    }
+}
+
 // --- Renderer SVG Principale ---
 function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     const safe = cfg ?? makeFallbackCfg();
 
     const { width_mm, height_mm, rows, frame_mm, mullion_mm, glazing } = safe;
+    const showDims = safe.showDims !== false;
 
-    // Calcolo delle dimensioni interne disponibili per i vetri
     const innerW = width_mm - frame_mm * 2;
     const innerH = height_mm - frame_mm * 2;
     const totalRowsGapY = (rows.length - 1) * mullion_mm;
     const usableH = innerH - totalRowsGapY;
     const totalRowRatios = sum(rows.map(r => r.height_ratio));
 
-    // --- Scala dinamica basata sul lato corto (per quote sempre vicine) ---
-    const baseDim = Math.max(60, Math.min(width_mm, height_mm)); // usa il lato corto, con un minimo
-    const strokeWidth = Math.max(1.0, Math.min(5.0, baseDim / 400)); const fontSize = Math.max(9, Math.min(24, baseDim / 28));
+    const baseDim = Math.max(60, Math.min(width_mm, height_mm));
+    const strokeWidth = Math.max(1.0, Math.min(5.0, baseDim / 400));
+    const baseFont = Math.max(9, Math.min(24, baseDim / 28));
+    const MIN_MEASURE_FONT = 100;
+    const MAX_MEASURE_FONT = 200;
+    const desiredMeasureFont = Math.max(baseFont * 10.2, baseFont + 80, width_mm / 60, height_mm / 60);
+    const sashFontSize = Math.min(Math.max(desiredMeasureFont, MIN_MEASURE_FONT), MAX_MEASURE_FONT);
+    const totalFontSize = sashFontSize;
 
-    // --- Spazio fisso per quote vicino al bordo dell'oggetto ---
-    const labelGap = Math.max(10, Math.min(22, baseDim / 18)); // distanza costante “vicina”
-    const padTop = Math.max(6, fontSize * 0.5);
-    const padRight = Math.max(6, fontSize * 0.5);
-    const padBottom = labelGap + fontSize * 1.1; // spazio per la quota L in basso
-    const padLeft = labelGap + fontSize * 1.1; // spazio per la quota H a sinistra
+    const labelGap = Math.max(26, Math.min(48, baseDim / 9));
+    const padRight = Math.max(6, baseFont * 0.5);
+    const padLeft = labelGap + totalFontSize * 1.8;
+
+    const topRowIndices = rows.length > 0 ? [0] : [];
+    const bottomRowIndices = rows.length > 1 ? rows.map((_, idx) => idx).filter((idx) => idx !== 0) : [];
+    const topRowOrder = new Map<number, number>();
+    topRowIndices.forEach((idx, order) => topRowOrder.set(idx, order));
+    const bottomRowOrder = new Map<number, number>();
+    bottomRowIndices.forEach((idx, order) => bottomRowOrder.set(idx, order));
+
+    const sashLabelBaseOffset = Math.max(70, sashFontSize * 1.15);
+    const sashLabelStep = Math.max(48, sashFontSize);
+
+    const topLabelsArea = topRowIndices.length > 0 ? sashLabelBaseOffset + (topRowIndices.length - 1) * sashLabelStep + sashFontSize : 0;
+    const bottomLabelsArea = bottomRowIndices.length > 0 ? sashLabelBaseOffset + (bottomRowIndices.length - 1) * sashLabelStep + sashFontSize : 0;
+    const bottomStackHeight = bottomLabelsArea;
+
+    const basePadTop = Math.max(6, baseFont * 0.5);
+    const basePadBottom = labelGap + baseFont * 1.1;
+    const padTop = basePadTop + topLabelsArea;
+    const padBottom = basePadBottom + bottomLabelsArea + totalFontSize * 1.4 + labelGap;
 
     const satinPatternId = React.useMemo(() => `satin-dots-${Math.random().toString(36).slice(2, 8)}`, []);
+    const dimensionLineDash = `${strokeWidth * 3.5} ${strokeWidth * 2.2}`;
+    const handleColor = '#333';
+
+    const drawing = rows.reduce((acc, row, rowIdx) => {
+        const rowH = (usableH * row.height_ratio) / totalRowRatios;
+        const y0 = frame_mm + acc.offsetY;
+
+        const totalColsGapX = (row.cols.length - 1) * mullion_mm;
+        const usableW = innerW - totalColsGapX;
+        const ratioValues = row.cols.map(c => Number.isFinite(c.width_ratio) && c.width_ratio > 0 ? c.width_ratio : 1);
+        const ratioSum = sum(ratioValues);
+        const safeRatioSum = ratioSum > 0 ? ratioSum : row.cols.length;
+        const labelNumbers = distributeWidths(width_mm, ratioValues);
+
+        let xCursor = frame_mm;
+        const colLabels: Array<{ x: number; text: string; start: number; end: number }> = [];
+
+        row.cols.forEach((col, colIdx) => {
+            const startX = xCursor;
+            const colW = (usableW * ratioValues[colIdx]) / safeRatioSum;
+            
+            const sashInset = frame_mm * 0.15;
+            const gx = startX + sashInset;
+            const gy = y0 + sashInset;
+            const gw = colW - sashInset * 2;
+            const gh = rowH - sashInset * 2;
+
+            const sashGlazing = col.glazing ?? glazing;
+
+            if (colIdx > 0) {
+                const mx = startX - (mullion_mm / 2);
+                acc.nodes.push(<line key={`vm-${rowIdx}-${colIdx}`} x1={mx} y1={y0} x2={mx} y2={y0 + rowH} stroke={stroke} strokeWidth={strokeWidth} />);
+            }
+
+            acc.nodes.push(<g key={`g-${rowIdx}-${colIdx}`}><rect x={gx} y={gy} width={gw} height={gh} fill={glassFill(sashGlazing)} stroke={stroke} strokeWidth={strokeWidth / 1.5} />{isSatin(sashGlazing) && (<rect x={gx} y={gy} width={gw} height={gh} fill={`url(#${satinPatternId})`} opacity={0.6} />)}</g>);
+            acc.nodes.push(<OpeningGlyph key={`o-${rowIdx}-${colIdx}`} x={gx} y={gy} w={gw} h={gh} state={col.leaf?.state ?? "fissa"} stroke={stroke} strokeWidth={strokeWidth} />);
+
+            const outerStartRaw = colIdx === 0 ? 0 : startX - (mullion_mm / 2);
+            const outerEndRaw = colIdx === row.cols.length - 1 ? width_mm : startX + colW + (mullion_mm / 2);
+            const outerStart = Math.max(0, Math.min(width_mm, outerStartRaw));
+            const outerEnd = Math.max(0, Math.min(width_mm, outerEndRaw));
+            const outerWidth = Math.max(0, outerEnd - outerStart);
+            const labelText = colIdx < labelNumbers.length ? labelNumbers[colIdx] : Math.round(outerWidth);
+            colLabels.push({ x: (outerStart + outerEnd) / 2, text: `${labelText}`, start: outerStart, end: outerEnd });
+
+            // ## BLOCCO MANIGLIA: Stile e Posizionamento Definitivi
+            if (col.handle) {
+                const placement = handlePlacementForState(col.leaf?.state);
+                let handleSvg = null;
+
+                // Dimensioni relative al telaio, per uno stile consistente
+                const vRectWidth = frame_mm * 0.22;
+                const vRectHeight = frame_mm * 1.0;
+                const hRectWidth = frame_mm * 0.75;
+                const hRectHeight = frame_mm * 0.22;
+
+                if (placement === 'left' || placement === 'right') {
+                    // Centro verticale
+                    const y = y0 + rowH / 2;
+                    // Centro orizzontale, calcolato per essere SUL TELAIO
+                    const x = placement === 'left'
+                        ? startX + frame_mm / 2
+                        : startX + colW - frame_mm / 2;
+
+                    handleSvg = (
+                        <g transform={`translate(${x}, ${y})`} fill={handleColor}>
+                            <rect x={-vRectWidth / 2} y={-vRectHeight / 2} width={vRectWidth} height={vRectHeight} />
+                            <rect x={-hRectWidth / 2} y={-vRectHeight / 2 - hRectHeight} width={hRectWidth} height={hRectHeight} />
+                        </g>
+                    );
+                } else if (placement === 'top') {
+                    // Centro orizzontale
+                    const x = startX + colW / 2;
+                    // Centro verticale, calcolato per essere SUL TELAIO
+                    const y = y0 + frame_mm / 2;
+
+                    handleSvg = (
+                        <g transform={`translate(${x}, ${y})`} fill={handleColor}>
+                            <rect x={-vRectHeight / 2} y={-vRectWidth / 2} width={vRectHeight} height={vRectWidth} />
+                            <rect x={vRectHeight / 2} y={-hRectWidth / 2} width={hRectHeight} height={hRectWidth} />
+                        </g>
+                    );
+                }
+
+                if (handleSvg) {
+                    acc.nodes.push(<g key={`handle-${rowIdx}-${colIdx}`}>{handleSvg}</g>);
+                }
+            }
+
+            xCursor += colW + mullion_mm;
+        });
+
+        if (rowIdx < rows.length - 1) {
+            const ty = y0 + rowH + (mullion_mm / 2);
+            acc.nodes.push(<line key={`hz-${rowIdx}`} x1={frame_mm} y1={ty} x2={width_mm - frame_mm} y2={ty} stroke={stroke} strokeWidth={strokeWidth} />);
+        }
+
+        if (colLabels.length > 0) {
+            let labelY: number | null = null, position: "top" | "bottom" | null = null;
+            if (topRowOrder.has(rowIdx)) {
+                labelY = -(sashLabelBaseOffset + topRowOrder.get(rowIdx)! * sashLabelStep);
+                position = "top";
+            } else if (bottomRowOrder.has(rowIdx)) {
+                labelY = height_mm + sashLabelBaseOffset + bottomRowOrder.get(rowIdx)! * sashLabelStep;
+                position = "bottom";
+            }
+            if (labelY !== null && position) {
+                acc.rowLabels.push({ rowIdx, y: labelY, position, rowTop: y0, rowBottom: y0 + rowH, labels: colLabels });
+            }
+        }
+
+        acc.offsetY += rowH + mullion_mm;
+        return acc;
+    }, {
+        nodes: [] as React.ReactNode[],
+        offsetY: 0,
+        rowLabels: [] as Array<{ rowIdx: number; y: number; position: "top" | "bottom"; rowTop: number; rowBottom: number; labels: Array<{ x: number; text: string; start: number; end: number }>; }>
+    });
+
+    const totalLabelY = height_mm + bottomStackHeight + labelGap + totalFontSize * 0.9;
+    const leftLabelX = -(labelGap + totalFontSize * 0.75);
+    const labelLineGap = totalFontSize * 0.6;
 
     return (
         <svg
             viewBox={`${-padLeft} ${-padTop} ${width_mm + padLeft + padRight} ${height_mm + padTop + padBottom}`}
-            width="100%"
-            height="100%"
-            preserveAspectRatio="xMidYMid meet"
-            role="img"
-            aria-label="Anteprima finestra"
-        >
+            width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Anteprima finestra">
             <defs>
                 <pattern id={satinPatternId} patternUnits="userSpaceOnUse" width={strokeWidth * 8} height={strokeWidth * 8}>
                     <rect x="0" y="0" width={strokeWidth * 8} height={strokeWidth * 8} fill="transparent" />
                     <circle cx={strokeWidth * 2} cy={strokeWidth * 2} r={strokeWidth * 0.8} fill="#d1d5db" />
                 </pattern>
             </defs>
-
-            {/* Disegno Telaio */}
             <rect x={0} y={0} width={width_mm} height={height_mm} rx={radius} ry={radius} fill="#fdfdfd" />
             <rect x={strokeWidth / 2} y={strokeWidth / 2} width={width_mm - strokeWidth} height={height_mm - strokeWidth} rx={radius} ry={radius} fill="none" stroke={stroke} strokeWidth={strokeWidth} />
             <rect x={frame_mm} y={frame_mm} width={innerW} height={innerH} fill="none" stroke={stroke} strokeWidth={strokeWidth / 1.5} />
-
-            {/* Disegno Righe e Ante */}
-            {rows.reduce((acc, row, rowIdx) => {
-                // Calcola l'altezza reale della riga in base alla proporzione
-                const rowH = (usableH * row.height_ratio) / totalRowRatios;
-                const y0 = frame_mm + acc.offsetY;
-
-                const totalColsGapX = (row.cols.length - 1) * mullion_mm;
-                const usableW = innerW - totalColsGapX;
-                const totalColRatios = sum(row.cols.map(c => c.width_ratio));
-
-                let xCursor = frame_mm;
-
-                row.cols.forEach((col, colIdx) => {
-                    // Calcola la larghezza reale dell'anta in base alla proporzione
-                    const colW = (usableW * col.width_ratio) / totalColRatios;
-                    const sashInset = Math.max(2, frame_mm * 0.15); // Piccolo bordo interno per il profilo dell'anta
-                    const gx = xCursor + sashInset;
-                    const gy = y0 + sashInset;
-                    const gw = colW - sashInset * 2;
-                    const gh = rowH - sashInset * 2;
-
-                    const sashGlazing = (col as any).glazing ?? glazing;
-
-                    // Disegna il montante verticale (se non è la prima anta)
-                    if (colIdx > 0) {
-                        const mx = xCursor - (mullion_mm / 2);
-                        acc.nodes.push(<line key={`vm-${rowIdx}-${colIdx}`} x1={mx} y1={y0} x2={mx} y2={y0 + rowH} stroke={stroke} strokeWidth={strokeWidth} />);
-                    }
-
-                    // Disegna il vetro e il simbolo di apertura
-                    acc.nodes.push(
-                        <g key={`g-${rowIdx}-${colIdx}`}>
-                            <rect x={gx} y={gy} width={gw} height={gh} fill={glassFill(sashGlazing)} stroke={stroke} strokeWidth={strokeWidth / 1.5} />
-                            {isSatin(sashGlazing) && (
-                                <rect x={gx} y={gy} width={gw} height={gh} fill={`url(#${satinPatternId})`} opacity={0.6} />
-                            )}
-                        </g>
-                    );
-                    acc.nodes.push(<OpeningGlyph key={`o-${rowIdx}-${colIdx}`} x={gx} y={gy} w={gw} h={gh} state={col.leaf?.state ?? "fissa"} stroke={stroke} strokeWidth={strokeWidth} />);
-
-                    xCursor += colW + mullion_mm;
-                });
-
-                // Disegna il traverso orizzontale (se non è l'ultima riga)
-                if (rowIdx < rows.length - 1) {
-                    const ty = y0 + rowH + (mullion_mm / 2);
-                    acc.nodes.push(<line key={`hz-${rowIdx}`} x1={frame_mm} y1={ty} x2={width_mm - frame_mm} y2={ty} stroke={stroke} strokeWidth={strokeWidth} />);
-                }
-
-                acc.offsetY += rowH + mullion_mm;
-                return acc;
-            }, { nodes: [] as React.ReactNode[], offsetY: 0 }).nodes}
-
-            {/* Disegno Quote */}
-            {safe.showDims && (
-                <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#374151', fontSize }}>
-                    {/* Larghezza: sempre labelGap sotto il bordo inferiore dell'oggetto */}
-                    <text x={width_mm / 2} y={height_mm + labelGap}>{`L ${Math.round(width_mm)}`}</text>
-                    {/* Altezza: sempre labelGap a sinistra del bordo sinistro, ruotata */}
-                    <text
-                        x={-labelGap}
-                        y={height_mm / 2}
-                        transform={`rotate(-90, ${-labelGap}, ${height_mm / 2})`}
-                    >
-                        {`H ${Math.round(height_mm)}`}
-                    </text>
-                </g>
+            {drawing.nodes}
+            {showDims && drawing.rowLabels.length > 0 && (
+                <>
+                    <g stroke={stroke} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
+                        {drawing.rowLabels.map(row => {
+                            const fromY = row.position === "top" ? 0 : height_mm;
+                            const targetY = row.position === "top" ? row.y + labelLineGap : row.y - labelLineGap;
+                            return row.labels.flatMap((label, idx) => ([
+                                <line key={`row-ext-start-${row.rowIdx}-${idx}`} x1={label.start} y1={fromY} x2={label.start} y2={targetY} />,
+                                <line key={`row-ext-end-${row.rowIdx}-${idx}`} x1={label.end} y1={fromY} x2={label.end} y2={targetY} />,
+                            ]));
+                        })}
+                    </g>
+                    <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#1f2937', fontSize: sashFontSize }}>
+                        {drawing.rowLabels.map(({ rowIdx, y, labels }) =>
+                            labels.map((label, idx) => (
+                                <text key={`row-label-${rowIdx}-${idx}`} x={label.x} y={y} dominantBaseline="middle">{label.text}</text>
+                            ))
+                        )}
+                    </g>
+                </>
+            )}
+            {showDims && (
+                <>
+                    <g stroke={stroke} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
+                        <line x1={0} y1={height_mm} x2={0} y2={totalLabelY - labelLineGap} />
+                        <line x1={width_mm} y1={height_mm} x2={width_mm} y2={totalLabelY - labelLineGap} />
+                        <line x1={0} y1={0} x2={leftLabelX + labelLineGap} y2={0} />
+                        <line x1={0} y1={height_mm} x2={leftLabelX + labelLineGap} y2={height_mm} />
+                    </g>
+                    <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#1f2937', fontSize: totalFontSize }}>
+                        <text x={width_mm / 2} y={totalLabelY} dominantBaseline="middle">{Math.round(width_mm)}</text>
+                        <text x={leftLabelX} y={height_mm / 2} transform={`rotate(-90, ${leftLabelX}, ${height_mm / 2})`} dominantBaseline="middle">{Math.round(height_mm)}</text>
+                    </g>
+                </>
             )}
         </svg>
     );
 }
+
 export default WindowSvg;
 export { WindowSvg };
