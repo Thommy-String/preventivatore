@@ -259,8 +259,10 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
             {/* Form and Custom Fields */}
             <div className="space-y-4">
               {Form ? <Form draft={draft as any} onChange={onChange as any} /> : null}
-              {/* Shared custom fields for every kind */}
-              <CustomFieldsSection draft={draft as any} onChange={onChange as any} />
+              {/* Shared custom fields for every kind tranne le voci custom, che hanno già la sezione nel form dedicato */}
+              {draft.kind !== "custom" ? (
+                <CustomFieldsSection draft={draft as any} onChange={onChange as any} />
+              ) : null}
             </div>
           </div>
         </div>

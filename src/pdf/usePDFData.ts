@@ -226,12 +226,18 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       po = (img || feats.length > 0) ? { imageUrl: img, features: feats } : null;
     }
 
+    const showShippingIncluded =
+      typeof q.shipping_included === 'boolean' ? q.shipping_included :
+      typeof q.shippingIncluded === 'boolean' ? q.shippingIncluded :
+      true;
+
     return {
       companyLogoUrl: isStr(q.companyLogoUrl) ? q.companyLogoUrl : null,
       quoteNumber: isStr(q.number) ? q.number : null,
 
       issueDate,
       installTime,
+      showShippingIncluded,
       totalMq: isNum(q.total_mq) ? q.total_mq : (isNum(q.totalMq) ? q.totalMq : null),
       profileSystem,
       vatRateLabel,

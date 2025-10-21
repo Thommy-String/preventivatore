@@ -20,6 +20,7 @@ export type QuotePDFProps = {
     quoteNumber?: string | null;
     issueDate?: string | null;            // ISO yyyy-mm-dd
     installTime?: string | null;          // Tempi di posa
+    showShippingIncluded?: boolean | null;
     totalMq?: number | null;              // m²
     profileSystem?: string | null;        // es. WDS 76 MD
     vatRateLabel?: string | null;         // "IVA 22%"
@@ -497,6 +498,7 @@ export default function QuotePDF(props: QuotePDFProps) {
         quoteNumber,
         issueDate,
         installTime,
+        showShippingIncluded,
         customer,
         catTotals,
         mountingCost,
@@ -509,6 +511,8 @@ export default function QuotePDF(props: QuotePDFProps) {
     } = props || {};
 
     const itemsSafe = normalizeItems(items);
+
+    const shippingIncluded = showShippingIncluded !== false;
 
     const hasWindows = itemsSafe.some((it: any) => {
         const k = String(it?.kind || '').toLowerCase();
@@ -640,10 +644,12 @@ export default function QuotePDF(props: QuotePDFProps) {
                                     <Text style={s.label}>Ferramenta</Text>
                                     <Text wrap={false}>WINKHAUS + HOPPE</Text>
                                 </View>
-                                <View style={{ flex: 1, paddingLeft: 8 }}>
-                                    <Text style={s.label}>Servizi</Text>
-                                    <Text wrap={false}>Trasporto incluso</Text>
-                                </View>
+                                {shippingIncluded && (
+                                    <View style={{ flex: 1, paddingLeft: 8 }}>
+                                        <Text style={s.label}>Servizi</Text>
+                                        <Text wrap={false}>Trasporto incluso</Text>
+                                    </View>
+                                )}
                             </View>
                         )}
                     </View>
@@ -782,6 +788,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                     {itemsSafe.length > 0 ? (
                         itemsSafe.map((it: any, i: number) => {
                             const isCustom = it?.kind === 'custom';
+                            const shouldBreak = i > 0 && i % 2 === 0;
 
                             // Dettagli base (solo per voci non custom)
                             const basePairs: Array<[string, string]> = isCustom ? [] : detailPairs(it);
@@ -828,6 +835,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                             return (
                                 <View
                                     wrap={false}
+                                    break={shouldBreak}
                                     key={`card-${it?.id || it?.kind || "k"}-${i}`}
                                     style={[s.itemCard, { minHeight: minH }]}
                                 >

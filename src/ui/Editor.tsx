@@ -2,6 +2,7 @@
 import { useParams, Link } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadQuoteItemImage } from '../lib/uploadImages'
 import { ArrowLeft, FileText, User, Building, Copy, Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../components/ui/Button'
@@ -33,6 +34,7 @@ type Quote = {
   created_at: string | null
   issue_date: string | null
   install_time: string | null
+  shipping_included?: boolean | null
   total_mq: number | null
   profile_system: string | null
   notes: string | null
@@ -51,6 +53,8 @@ type TermsSettings = { validity_label?: string | null, conditions?: string | nul
 import { ItemCard } from '../features/quotes/components/ItemCard'
 import { ItemModal } from '../features/quotes/modals/ItemModal'
 import { ProfileOverview } from '../components/editor/ProfileOverview'
+
+const DEFAULT_INSTALL_TIME = '4-6 settimane'
 
 
 // Convert a Blob to a data URL (browser-safe, no Buffer)
@@ -161,6 +165,8 @@ export default function Editor() {
   const [discountMode, setDiscountMode] = useState<'pct' | 'final' | null>(null);
   const [discountPct, setDiscountPct] = useState<number | null>(null);       // es. 10 = 10%
   const [discountFinal, setDiscountFinal] = useState<number | null>(null);   // nuovo totale (IVA esclusa)
+  const [isMigratingImages, setIsMigratingImages] = useState(false);
+  const migrationFailuresRef = useRef<Set<string>>(new Set());
 
   // Persist discount to DB whenever it changes (so it survives reloads and is visible on other devices)
   useEffect(() => {
@@ -303,41 +309,44 @@ export default function Editor() {
   async function saveDraft() {
     if (!draft) return
     let toSave: any = { ...draft }
+    const quoteIdStr = quote?.id ? String(quote.id) : null
 
-    // --- Auto-genera PNG per Cassonetto (solo data URL, nessun upload) ---
-    if (!toSave.__pickedFile && String(toSave.kind).toLowerCase() === 'cassonetto') {
+    const uploadBlobToStorage = async (blob: Blob, filename: string): Promise<string | null> => {
+      if (!quoteIdStr) return null
       try {
-        const cfg = {
-          width_mm: Number(toSave.width_mm) || 0,
-          height_mm: Number(toSave.height_mm) || 0,
-          depth_mm: (toSave.depth_mm ?? null),
-          celino_mm: (toSave.celino_mm ?? toSave.extension_mm ?? null),
-        } as const;
-        if (cfg.width_mm > 0 && cfg.height_mm > 0) {
-          const blob = await cassonettoToPngBlob(cfg as any, 640, 640);
-          const dataUrl = await blobToDataURL(blob);
-          toSave.image_url = dataUrl;
-          // anteprima locale
-          // @ts-ignore
-          toSave.__previewUrl = dataUrl;
-        }
-      } catch (e) {
-        console.warn('Rasterizzazione cassonetto → PNG fallita', e);
+        const file = new File([blob], filename, { type: blob.type || 'image/png' })
+        const url = await uploadQuoteItemImage(file, quoteIdStr)
+        return url || null
+      } catch (err) {
+        console.warn('Upload immagine generata fallito', err)
+        return null
       }
     }
 
-    // --- Se l’utente ha caricato un file: convertilo in data URL (niente upload) ---
     const pickedFile: File | undefined = (toSave as any).__pickedFile
     if (pickedFile) {
+      let uploaded: string | null = null
+      if (quoteIdStr) {
+        try {
+          uploaded = await uploadQuoteItemImage(pickedFile, quoteIdStr)
+        } catch (err) {
+          console.warn('Upload file personalizzato fallito', err)
+        }
+      }
       try {
-        const dataUrl = await blobToDataURL(pickedFile);
-        toSave.image_url = dataUrl;
-        // @ts-ignore
-        toSave.__previewUrl = dataUrl;
+        if (uploaded) {
+          toSave.image_url = uploaded
+          // @ts-ignore
+          toSave.__previewUrl = uploaded
+        } else {
+          const dataUrl = await blobToDataURL(pickedFile)
+          toSave.image_url = dataUrl
+          // @ts-ignore
+          toSave.__previewUrl = dataUrl
+        }
       } catch (err: any) {
-        console.warn('Conversione file → data URL fallita', err);
+        console.warn('Conversione file → data URL fallita', err)
       } finally {
-        // rimuovi i marker non serializzabili
         // @ts-ignore
         delete toSave.__pickedFile
       }
@@ -345,6 +354,73 @@ export default function Editor() {
       // in ogni caso non persistiamo il File
       // @ts-ignore
       delete toSave.__pickedFile
+    }
+
+    // --- Genera o riallinea l'immagine per finestre (grid) e cassonetti ---
+    const isCassonetto = String(toSave.kind).toLowerCase() === 'cassonetto'
+    if (!pickedFile && isCassonetto) {
+      try {
+        const cfg = {
+          width_mm: Number(toSave.width_mm) || 0,
+          height_mm: Number(toSave.height_mm) || 0,
+          depth_mm: (toSave.depth_mm ?? null),
+          celino_mm: (toSave.celino_mm ?? toSave.extension_mm ?? null),
+        } as const
+        if (cfg.width_mm > 0 && cfg.height_mm > 0) {
+          const blob = await cassonettoToPngBlob(cfg as any, 640, 640)
+          const uploaded = await uploadBlobToStorage(blob, `cassonetto-${toSave.id || Date.now()}.png`)
+          if (uploaded) {
+            toSave.image_url = uploaded
+            // @ts-ignore
+            toSave.__previewUrl = uploaded
+          } else {
+            const dataUrl = await blobToDataURL(blob)
+            toSave.image_url = dataUrl
+            // @ts-ignore
+            toSave.__previewUrl = dataUrl
+          }
+        }
+      } catch (e) {
+        console.warn('Rasterizzazione cassonetto → PNG fallita', e)
+      }
+    }
+
+    const hasGridWindow = Boolean((toSave as any)?.options?.gridWindow)
+    if (!pickedFile && hasGridWindow) {
+      try {
+        const blob = await gridWindowToPngBlob((toSave as any).options.gridWindow, 640, 640)
+        const uploaded = await uploadBlobToStorage(blob, `finestra-${toSave.id || Date.now()}.png`)
+        if (uploaded) {
+          toSave.image_url = uploaded
+          // @ts-ignore
+          toSave.__previewUrl = uploaded
+        } else {
+          const dataUrl = await blobToDataURL(blob)
+          toSave.image_url = dataUrl
+          // @ts-ignore
+          toSave.__previewUrl = dataUrl
+        }
+      } catch (e) {
+        console.warn('Rasterizzazione finestra → PNG fallita', e)
+      }
+    }
+
+    // --- Se rimangono data URL (es. vecchie voci), prova a caricarle su storage ---
+    if (typeof toSave.image_url === 'string' && toSave.image_url.startsWith('data:')) {
+      try {
+        const res = await fetch(toSave.image_url)
+        if (res.ok) {
+          const blob = await res.blob()
+          const uploaded = await uploadBlobToStorage(blob, `item-${toSave.id || Date.now()}.png`)
+          if (uploaded) {
+            toSave.image_url = uploaded
+            // @ts-ignore
+            toSave.__previewUrl = uploaded
+          }
+        }
+      } catch (e) {
+        console.warn('Upload immagine da data URL fallito', e)
+      }
     }
 
     // Nota: __previewUrl può rimanere in memoria locale; la persistenza su DB lo rimuove già (vedi effetto items_json)
@@ -575,17 +651,97 @@ export default function Editor() {
 
   useEffect(() => {
     if (!quote) return
-    // Sanitize items before persisting: drop transient fields and any blob: URLs
-    const payload = (items as any[]).map((it) => {
-      if (!it || typeof it !== 'object') return it
-      const { __pickedFile, __previewUrl, ...rest } = it as any
-      if (typeof rest.image_url === 'string' && rest.image_url.startsWith('blob:')) {
+    if (!quote.install_time || !quote.install_time.trim()) {
+      updateField('install_time', DEFAULT_INSTALL_TIME as any)
+    }
+    if (quote.shipping_included == null) {
+      updateField('shipping_included', true as any)
+    }
+  }, [quote])
+
+  useEffect(() => {
+    if (!quote?.id) return
+    if (isMigratingImages) return
+    const arr: any[] = Array.isArray(items) ? items : []
+    const needUpload = arr
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item, idx }) => {
+        const raw = typeof item?.image_url === 'string' ? item.image_url : null
+        if (!raw || !raw.startsWith('data:')) return false
+        const key = String(item?.id ?? `idx-${idx}`)
+        return !migrationFailuresRef.current.has(key)
+      })
+    if (needUpload.length === 0) return
+
+    let cancelled = false
+    setIsMigratingImages(true)
+
+    ;(async () => {
+      const next = arr.slice()
+      let mutated = false
+      for (const { item, idx } of needUpload) {
+        const key = String(item?.id ?? `idx-${idx}`)
+        try {
+          const res = await fetch(String(item.image_url))
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const blob = await res.blob()
+          const fileName = `item-${key}-${Date.now()}.png`
+          const file = new File([blob], fileName, { type: blob.type || 'image/png' })
+          const url = await uploadQuoteItemImage(file, String(quote.id))
+          if (cancelled) return
+          if (url) {
+            next[idx] = { ...(item as any), image_url: url, __previewUrl: (item as any).__previewUrl ?? url }
+            mutated = true
+          } else {
+            migrationFailuresRef.current.add(key)
+          }
+        } catch (err) {
+          migrationFailuresRef.current.add(key)
+          console.warn('Migrazione immagine base64 fallita', err)
+        }
+      }
+      if (!cancelled && mutated) {
+        setItems(next as any)
+      }
+      if (!cancelled) {
+        setIsMigratingImages(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      setIsMigratingImages(false)
+    }
+  }, [quote?.id, items, isMigratingImages, setItems])
+
+  useEffect(() => {
+    if (!quote) return
+    if (isMigratingImages) return
+
+    const entries = Array.isArray(items)
+      ? items.map((it: any, idx: number) => ({
+          item: it,
+          key: String(it?.id ?? `idx-${idx}`),
+          image: typeof it?.image_url === 'string' ? it.image_url : null,
+        }))
+      : []
+
+    const pendingDataUpload = entries.some(
+      ({ image, key }) => !!image && image.startsWith('data:') && !migrationFailuresRef.current.has(key)
+    )
+    if (pendingDataUpload) return
+
+    // Sanitize items before persistere: drop transient fields e URL temporanei
+    const payload = entries.map(({ item }) => {
+      if (!item || typeof item !== 'object') return item
+      const { __pickedFile, __previewUrl, ...rest } = item as any
+      if (typeof rest.image_url === 'string' && (rest.image_url.startsWith('blob:') || rest.image_url.startsWith('data:'))) {
         delete rest.image_url
       }
       return rest
     })
     debouncedSave({ items_json: payload } as any)
-  }, [items])
+  }, [items, isMigratingImages])
 
   useEffect(() => {
     if (!quote) return
@@ -822,8 +978,8 @@ export default function Editor() {
               <input
                 className="input"
                 placeholder="es. 4-6 settimane"
-                value={quote.install_time ?? '4-6 settimane'}
-                onChange={(e) => updateField('install_time', e.target.value || null)}
+                value={quote.install_time ?? DEFAULT_INSTALL_TIME}
+                onChange={(e) => updateField('install_time', (e.target.value || DEFAULT_INSTALL_TIME) as any)}
               />
             </div>
             <div>
@@ -853,6 +1009,19 @@ export default function Editor() {
                   <option value="4">4%</option>
                 </select>
               </div>
+            </div>
+
+            <div className="sm:col-span-2 flex items-center gap-2 pt-1">
+              <input
+                id="shipping_included"
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                checked={quote.shipping_included !== false}
+                onChange={(e) => updateField('shipping_included', e.target.checked as any)}
+              />
+              <label htmlFor="shipping_included" className="text-sm text-gray-600">
+                Mostra “Trasporto incluso” nel PDF
+              </label>
             </div>
 
           </div>
