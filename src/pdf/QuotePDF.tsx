@@ -707,7 +707,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 const label = safeText(r.category, "-");
                                 const k = `row-${label}-${Number.isFinite(r.amount) ? r.amount : 0}-${i}`;
                                 const showWindowsM2 = /finestr|serramenti/i.test(label) && windowsM2 > 0;
-                                const showShuttersM2 = /(persian|serrand)/i.test(label) && shuttersM2 > 0;
+                                const showShuttersM2 = /(persian|serrand|tapparell|avvolgibil)/i.test(label) && shuttersM2 > 0;
                                 const pieces = (r as any).pieces as number | null;
                                 return (
                                     <View key={k} style={s.tr}>

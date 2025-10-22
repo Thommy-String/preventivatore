@@ -1,6 +1,6 @@
 //src/ui/Editor.tsx
-import { useParams, Link } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadQuoteItemImage } from '../lib/uploadImages'
 import { ArrowLeft, FileText, User, Building, Copy, Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
@@ -67,8 +67,28 @@ function blobToDataURL(blob: Blob): Promise<string> {
   });
 }
 
+// Convert data URLs to File/Blob without using fetch (works on Safari too)
+function dataUrlToFile(dataUrl: string, fileName: string): File {
+  const [metadata, base64] = dataUrl.split(',');
+  if (!metadata || !base64) throw new Error('URL dati dell\'immagine non valido');
+  const mimeMatch = metadata.match(/data:(.*?)(;base64)?$/i);
+  const mimeType = mimeMatch?.[1] ?? 'application/octet-stream';
+  const binary = atob(base64);
+  const buffer = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    buffer[i] = binary.charCodeAt(i);
+  }
+  if (typeof File === 'function') {
+    return new File([buffer], fileName, { type: mimeType });
+  }
+  const blob = new Blob([buffer], { type: mimeType });
+  (blob as any).name = fileName;
+  return blob as File;
+}
+
 export default function Editor() {
   const { id } = useParams()
+  const navigate = useNavigate()
 
   // Header (DB)
   const [quote, setQuote] = useState<Quote | null>(null)
@@ -682,11 +702,8 @@ export default function Editor() {
       for (const { item, idx } of needUpload) {
         const key = String(item?.id ?? `idx-${idx}`)
         try {
-          const res = await fetch(String(item.image_url))
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          const blob = await res.blob()
           const fileName = `item-${key}-${Date.now()}.png`
-          const file = new File([blob], fileName, { type: blob.type || 'image/png' })
+          const file = dataUrlToFile(String(item.image_url), fileName)
           const url = await uploadQuoteItemImage(file, String(quote.id))
           if (cancelled) return
           if (url) {
@@ -793,6 +810,17 @@ export default function Editor() {
         ? Math.max(0, discountFinal)
         : totalExcluded;
 
+  const handleBackClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const historyState = typeof window !== 'undefined' ? window.history.state : null;
+    const idx = typeof historyState?.idx === 'number' ? historyState.idx : null;
+    if (idx !== null && idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/', { replace: true });
+    }
+  };
+
   if (!quote) {
     return <div className="animate-pulse h-8 w-40 rounded bg-gray-200" />
   }
@@ -802,7 +830,11 @@ export default function Editor() {
       {/* Toolbar titolo */}
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <Link to="/" className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900">
+          <Link
+            to="/"
+            onClick={handleBackClick}
+            className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
+          >
             <ArrowLeft size={16} /> Indietro
           </Link>
           <h1>
