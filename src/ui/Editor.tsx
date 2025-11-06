@@ -331,18 +331,6 @@ export default function Editor() {
     let toSave: any = { ...draft }
     const quoteIdStr = quote?.id ? String(quote.id) : null
 
-    const uploadBlobToStorage = async (blob: Blob, filename: string): Promise<string | null> => {
-      if (!quoteIdStr) return null
-      try {
-        const file = new File([blob], filename, { type: blob.type || 'image/png' })
-        const url = await uploadQuoteItemImage(file, quoteIdStr)
-        return url || null
-      } catch (err) {
-        console.warn('Upload immagine generata fallito', err)
-        return null
-      }
-    }
-
     const pickedFile: File | undefined = (toSave as any).__pickedFile
     if (pickedFile) {
       let uploaded: string | null = null
@@ -358,11 +346,15 @@ export default function Editor() {
           toSave.image_url = uploaded
           // @ts-ignore
           toSave.__previewUrl = uploaded
+          // @ts-ignore
+          delete toSave.__needsUpload
         } else {
           const dataUrl = await blobToDataURL(pickedFile)
           toSave.image_url = dataUrl
           // @ts-ignore
           toSave.__previewUrl = dataUrl
+          // @ts-ignore
+          toSave.__needsUpload = true
         }
       } catch (err: any) {
         console.warn('Conversione file → data URL fallita', err)
@@ -388,17 +380,12 @@ export default function Editor() {
         } as const
         if (cfg.width_mm > 0 && cfg.height_mm > 0) {
           const blob = await cassonettoToPngBlob(cfg as any, 640, 640)
-          const uploaded = await uploadBlobToStorage(blob, `cassonetto-${toSave.id || Date.now()}.png`)
-          if (uploaded) {
-            toSave.image_url = uploaded
-            // @ts-ignore
-            toSave.__previewUrl = uploaded
-          } else {
-            const dataUrl = await blobToDataURL(blob)
-            toSave.image_url = dataUrl
-            // @ts-ignore
-            toSave.__previewUrl = dataUrl
-          }
+          const dataUrl = await blobToDataURL(blob)
+          toSave.image_url = dataUrl
+          // @ts-ignore
+          toSave.__previewUrl = dataUrl
+          // @ts-ignore
+          delete toSave.__needsUpload
         }
       } catch (e) {
         console.warn('Rasterizzazione cassonetto → PNG fallita', e)
@@ -409,34 +396,35 @@ export default function Editor() {
     if (!pickedFile && hasGridWindow) {
       try {
         const blob = await gridWindowToPngBlob((toSave as any).options.gridWindow, 640, 640)
-        const uploaded = await uploadBlobToStorage(blob, `finestra-${toSave.id || Date.now()}.png`)
-        if (uploaded) {
-          toSave.image_url = uploaded
-          // @ts-ignore
-          toSave.__previewUrl = uploaded
-        } else {
-          const dataUrl = await blobToDataURL(blob)
-          toSave.image_url = dataUrl
-          // @ts-ignore
-          toSave.__previewUrl = dataUrl
-        }
+        const dataUrl = await blobToDataURL(blob)
+        toSave.image_url = dataUrl
+        // @ts-ignore
+        toSave.__previewUrl = dataUrl
+        // @ts-ignore
+        delete toSave.__needsUpload
       } catch (e) {
         console.warn('Rasterizzazione finestra → PNG fallita', e)
       }
     }
 
     // --- Se rimangono data URL (es. vecchie voci), prova a caricarle su storage ---
-    if (typeof toSave.image_url === 'string' && toSave.image_url.startsWith('data:')) {
+    if (
+      typeof toSave.image_url === 'string' &&
+      toSave.image_url.startsWith('data:') &&
+      // @ts-ignore
+      toSave.__needsUpload &&
+      quoteIdStr
+    ) {
       try {
-        const res = await fetch(toSave.image_url)
-        if (res.ok) {
-          const blob = await res.blob()
-          const uploaded = await uploadBlobToStorage(blob, `item-${toSave.id || Date.now()}.png`)
-          if (uploaded) {
-            toSave.image_url = uploaded
-            // @ts-ignore
-            toSave.__previewUrl = uploaded
-          }
+        const fileName = `item-${toSave.id || Date.now()}.png`
+        const file = dataUrlToFile(String(toSave.image_url), fileName)
+        const uploaded = await uploadQuoteItemImage(file, quoteIdStr)
+        if (uploaded) {
+          toSave.image_url = uploaded
+          // @ts-ignore
+          toSave.__previewUrl = uploaded
+          // @ts-ignore
+          delete toSave.__needsUpload
         }
       } catch (e) {
         console.warn('Upload immagine da data URL fallito', e)
@@ -686,6 +674,8 @@ export default function Editor() {
     const needUpload = arr
       .map((item, idx) => ({ item, idx }))
       .filter(({ item, idx }) => {
+        const wantsUpload = Boolean((item as any)?.__needsUpload)
+        if (!wantsUpload) return false
         const raw = typeof item?.image_url === 'string' ? item.image_url : null
         if (!raw || !raw.startsWith('data:')) return false
         const key = String(item?.id ?? `idx-${idx}`)
@@ -707,7 +697,9 @@ export default function Editor() {
           const url = await uploadQuoteItemImage(file, String(quote.id))
           if (cancelled) return
           if (url) {
-            next[idx] = { ...(item as any), image_url: url, __previewUrl: (item as any).__previewUrl ?? url }
+            const updated: any = { ...(item as any), image_url: url, __previewUrl: (item as any).__previewUrl ?? url }
+            delete updated.__needsUpload
+            next[idx] = updated
             mutated = true
           } else {
             migrationFailuresRef.current.add(key)
@@ -740,18 +732,20 @@ export default function Editor() {
           item: it,
           key: String(it?.id ?? `idx-${idx}`),
           image: typeof it?.image_url === 'string' ? it.image_url : null,
+          needsUpload: Boolean(it?.__needsUpload),
         }))
       : []
 
     const pendingDataUpload = entries.some(
-      ({ image, key }) => !!image && image.startsWith('data:') && !migrationFailuresRef.current.has(key)
+      ({ image, key, needsUpload }) =>
+        needsUpload && !!image && image.startsWith('data:') && !migrationFailuresRef.current.has(key)
     )
     if (pendingDataUpload) return
 
     // Sanitize items before persistere: drop transient fields e URL temporanei
     const payload = entries.map(({ item }) => {
       if (!item || typeof item !== 'object') return item
-      const { __pickedFile, __previewUrl, ...rest } = item as any
+      const { __pickedFile, __previewUrl, __needsUpload, ...rest } = item as any
       if (typeof rest.image_url === 'string' && (rest.image_url.startsWith('blob:') || rest.image_url.startsWith('data:'))) {
         delete rest.image_url
       }
