@@ -149,12 +149,25 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
     const f = e.target.files?.[0];
     if (!f) return;
     const localUrl = URL.createObjectURL(f);
+    const prev = (draft as any)?.__previewUrl;
+    if (prev && prev.startsWith('blob:')) {
+      URL.revokeObjectURL(prev);
+    }
     fileToDataUrl(f)
       .then((dataUrl) => {
-        onChange({ ...(draft as any), __previewUrl: localUrl, image_url: dataUrl });
+        onChange({
+          ...(draft as any),
+          __previewUrl: localUrl,
+          __pickedFile: f,
+          image_url: dataUrl,
+        });
       })
       .catch(() => {
-        onChange({ ...(draft as any), __previewUrl: localUrl });
+        onChange({
+          ...(draft as any),
+          __previewUrl: localUrl,
+          __pickedFile: f,
+        });
       });
   }
 

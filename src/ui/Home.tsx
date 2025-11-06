@@ -1,5 +1,5 @@
 //src/ui/Home.tsx
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
@@ -228,6 +228,7 @@ type QuoteRow = {
 }
 
 const PAGE_SIZE = 12
+const MONTH_TOTALS_LIMIT = 20000
 const STATUS_ORDER: QuoteRow['status'][] = ['bozza', 'inviato', 'accettato', 'rifiutato', 'scaduto']
 
 // Keep only the most recent quote for each reference_key; attach groupCount for badge.
@@ -295,6 +296,7 @@ export default function Home() {
   const [debounced, setDebounced] = useState('')
   const [filters, setFilters] = useState<Set<QuoteRow['status']>>(new Set())
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [monthTotals, setMonthTotals] = useState<Record<string, number>>({})
   const sentinelRef = useRef<HTMLDivElement | null>(null)
 
   // debounce search
@@ -318,6 +320,19 @@ export default function Home() {
   useEffect(() => { void loadPage(1, true) }, [])
   useEffect(() => { void loadPage(1, true) }, [Array.from(filters).join(','), debounced])
 
+  const applyFilters = useCallback((query: any) => {
+    let q = query
+    if (filters.size > 0) {
+      q = q.in('status', Array.from(filters))
+    }
+    if (debounced) {
+      const term = debounced
+      const or = `customer_name.ilike.%${term}%,number.ilike.%${term}%,job_address.ilike.%${term}%,reference.ilike.%${term}%`
+      q = q.or(or)
+    }
+    return q
+  }, [filters, debounced])
+
   // Infinite scroll
   useEffect(() => {
     if (!hasMore || loading) return
@@ -338,24 +353,78 @@ export default function Home() {
   async function loadPage(p = 1, reset = false) {
     try {
       setLoading(true)
+      if (reset) setMonthTotals({})
       const from = (p - 1) * PAGE_SIZE
       const to = from + PAGE_SIZE - 1
+      const dataQuery = applyFilters(
+        supabase
+          .from('quotes')
+          .select('id, number, status, customer_name, job_address, created_at, validity_days, reference, reference_key')
+          .order('created_at', { ascending: false })
+          .range(from, to)
+      )
 
-      let query = supabase
-        .from('quotes')
-        .select('id, number, status, customer_name, job_address, created_at, validity_days, reference, reference_key')
-        .order('created_at', { ascending: false })
-        .range(from, to)
+      const groupedTotalsQuery = reset
+        ? applyFilters(
+            supabase
+              .from('quotes')
+              .select('reference_key, created_at')
+              .not('reference_key', 'is', null)
+              .order('created_at', { ascending: false })
+              .range(0, MONTH_TOTALS_LIMIT - 1)
+          )
+        : null
 
-      if (filters.size > 0) query = query.in('status', Array.from(filters))
-      if (debounced) {
-        const term = debounced
-        const or = `customer_name.ilike.%${term}%,number.ilike.%${term}%,job_address.ilike.%${term}%,reference.ilike.%${term}%`
-        query = query.or(or)
-      }
+      const noRefTotalsQuery = reset
+        ? applyFilters(
+            supabase
+              .from('quotes')
+              .select('id, created_at')
+              .is('reference_key', null)
+              .order('created_at', { ascending: false })
+              .range(0, MONTH_TOTALS_LIMIT - 1)
+          )
+        : null
 
-      const { data, error } = await query
+      const emptyResult = { data: null, error: null } as const
+
+      const [dataResult, groupedTotalsResult, noRefTotalsResult] = await Promise.all([
+        dataQuery,
+        groupedTotalsQuery ?? Promise.resolve(emptyResult),
+        noRefTotalsQuery ?? Promise.resolve(emptyResult),
+      ])
+
+      const { data, error } = dataResult
       if (error) throw error
+
+      if (reset) {
+        if (groupedTotalsResult?.error) throw groupedTotalsResult.error
+        if (noRefTotalsResult?.error) throw noRefTotalsResult.error
+
+        const totals: Record<string, number> = {}
+        const bump = (date: string | null | undefined) => {
+          const key = monthKey(date)
+          totals[key] = (totals[key] ?? 0) + 1
+        }
+
+        if (Array.isArray(groupedTotalsResult?.data)) {
+          const seenRef = new Set<string>()
+          for (const row of groupedTotalsResult.data as { reference_key: string | null; created_at: string | null }[]) {
+            const ref = typeof row.reference_key === 'string' ? row.reference_key : null
+            if (!ref || seenRef.has(ref)) continue
+            seenRef.add(ref)
+            bump(row.created_at)
+          }
+        }
+
+        if (Array.isArray(noRefTotalsResult?.data)) {
+          for (const row of noRefTotalsResult.data as { created_at: string | null }[]) {
+            bump(row.created_at)
+          }
+        }
+
+        setMonthTotals(totals)
+      }
 
       const arr = (data ?? []) as QuoteRow[]
       setHasMore(arr.length === PAGE_SIZE)
@@ -472,7 +541,6 @@ export default function Home() {
       {/* Header title + CTA */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-3">
-          
           <div>
             <h1 className="leading-tight">Preventivi</h1>
             <div className="mt-0.5 text-sm text-gray-600">Gestisci e crea preventivi per i tuoi clienti</div>
@@ -558,30 +626,33 @@ export default function Home() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {groupedByMonth.map((group) => (
-            <div key={group.key} className="space-y-3">
-              <div className="md:sticky md:top-[96px] md:z-10 md:bg-[color:var(--bg)]/85 md:backdrop-blur border-b py-1">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold text-gray-800 capitalize">{group.label}</div>
-                  <div className="text-xs text-gray-500">{group.items.length} preventivi</div>
+          {groupedByMonth.map((group) => {
+            const totalForMonth = monthTotals[group.key] ?? group.items.length
+            return (
+              <div key={group.key} className="space-y-3">
+                <div className="md:sticky md:top-[96px] md:z-10 md:bg-[color:var(--bg)]/85 md:backdrop-blur border-b py-1">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-gray-800 capitalize">{group.label}</div>
+                    <div className="text-xs text-gray-500">{totalForMonth} preventivi</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {group.items.map(q => (
+                    <CardQuote
+                      key={q.id}
+                      q={q}
+                      onOpen={() => nav(`/quotes/${q.id}`)}
+                      onDuplicate={() => toast.info('Duplica: in arrivo')}
+                      onPdf={() => toast.info('PDF: in arrivo')}
+                      onDelete={() => handleDeleteQuote(q)}
+                      onDeleteDisabled={deletingId === q.id}
+                      onFilterByReference={(ref) => setSearch(ref)}
+                    />
+                  ))}
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {group.items.map(q => (
-                  <CardQuote
-                    key={q.id}
-                    q={q}
-                    onOpen={() => nav(`/quotes/${q.id}`)}
-                    onDuplicate={() => toast.info('Duplica: in arrivo')}
-                    onPdf={() => toast.info('PDF: in arrivo')}
-                    onDelete={() => handleDeleteQuote(q)}
-                    onDeleteDisabled={deletingId === q.id}
-                    onFilterByReference={(ref) => setSearch(ref)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+            )
+          })}
           {loading && (
             <div className="grid md:grid-cols-2 gap-4">
               {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`s-${i}`} />)}

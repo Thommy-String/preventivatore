@@ -354,7 +354,7 @@ export default function Editor() {
           // @ts-ignore
           toSave.__previewUrl = dataUrl
           // @ts-ignore
-          toSave.__needsUpload = true
+          toSave.__needsUpload = 'user-file'
         }
       } catch (err: any) {
         console.warn('Conversione file → data URL fallita', err)
@@ -412,7 +412,13 @@ export default function Editor() {
       typeof toSave.image_url === 'string' &&
       toSave.image_url.startsWith('data:') &&
       // @ts-ignore
-      toSave.__needsUpload &&
+      (
+        // @ts-ignore
+        toSave.__needsUpload === 'user-file' ||
+        // support legacy boolean flag
+        // @ts-ignore
+        toSave.__needsUpload === true
+      ) &&
       quoteIdStr
     ) {
       try {
@@ -674,7 +680,8 @@ export default function Editor() {
     const needUpload = arr
       .map((item, idx) => ({ item, idx }))
       .filter(({ item, idx }) => {
-        const wantsUpload = Boolean((item as any)?.__needsUpload)
+        const flag = (item as any)?.__needsUpload
+        const wantsUpload = flag === 'user-file' || flag === true
         if (!wantsUpload) return false
         const raw = typeof item?.image_url === 'string' ? item.image_url : null
         if (!raw || !raw.startsWith('data:')) return false
@@ -732,7 +739,7 @@ export default function Editor() {
           item: it,
           key: String(it?.id ?? `idx-${idx}`),
           image: typeof it?.image_url === 'string' ? it.image_url : null,
-          needsUpload: Boolean(it?.__needsUpload),
+          needsUpload: (it?.__needsUpload === 'user-file' || it?.__needsUpload === true),
         }))
       : []
 
