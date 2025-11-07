@@ -79,15 +79,23 @@ const s = StyleSheet.create({
         flexDirection: "row",
     },
     itemPhotoWrap: {
-        width: 170,
-        height: 170,
+        width: 210,
+        height: 210,
         backgroundColor: 'transparent',
         borderRadius: 6,
         alignItems: "center",
         justifyContent: "center",
         padding: 6,
         position: "relative",
-        marginRight: 12,
+        marginRight: 14,
+        marginLeft: -8,
+    },
+    itemPhotoWrapLarge: {
+        width: 320,
+        height: 320,
+        padding: 4,
+        marginLeft: -18,
+        marginRight: 20,
     },
     dimW: {
         position: "absolute",
@@ -823,7 +831,14 @@ export default function QuotePDF(props: QuotePDFProps) {
                             const description = describeItem(it);
 
                             const pairCount = pairs.length;
-                            const minH = Math.max(260, 80 + Math.min(40, pairCount * 7));
+                            const kindSlug = String(it?.kind || "").toLowerCase();
+                            const hasGridWindowDrawing = Boolean((it as any)?.options?.gridWindow);
+                            const wantsLargeWindowDrawing = hasGridWindowDrawing && ["finestra", "portafinestra", "scorrevole"].includes(kindSlug);
+                            const minPhotoHeight = wantsLargeWindowDrawing ? 360 : 260;
+                            const minH = Math.max(minPhotoHeight, 80 + Math.min(40, pairCount * 7));
+                            const photoWrapStyle = wantsLargeWindowDrawing
+                                ? [s.itemPhotoWrap, s.itemPhotoWrapLarge]
+                                : s.itemPhotoWrap;
 
                             // Riferimento opzionale (sia "reference" che "riferimento")
                             const reference = typeof it?.reference === 'string' && it.reference.trim()
@@ -839,7 +854,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                     key={`card-${it?.id || it?.kind || "k"}-${i}`}
                                     style={[s.itemCard, { minHeight: minH }]}
                                 >
-                                    <View style={s.itemPhotoWrap}>
+                                    <View style={photoWrapStyle}>
                                         {(() => {
                                             const raw = typeof it?.image_url === 'string' ? it.image_url : '';
                                             const imgSrc = raw && !raw.startsWith('blob:') ? raw : imageFor(it?.kind);
@@ -847,8 +862,6 @@ export default function QuotePDF(props: QuotePDFProps) {
                                         })()}
 
                                         {(() => {
-                                            const kind = String(it?.kind || "").toLowerCase();
-
                                             // Common texts
                                             const widthText = (it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)
                                                 ? String(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)
@@ -858,7 +871,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                                 : "—";
 
                                             // Apply "smart" placement only for proportional drawings
-                                            const isProportional = kind === "finestra" || kind === "cassonetto";
+                                            const isProportional = kindSlug === "finestra" || kindSlug === "cassonetto";
 
                                             if (!isProportional) {
                                                 // Fixed positions (icons, tapparella, zanzariera, persiana, ecc.)
@@ -872,7 +885,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                                 );
                                             }
 
-                                            if (kind === "cassonetto") {
+                                            if (kindSlug === "cassonetto") {
                                                 const WRAP_W = 170;
                                                 const WRAP_H = 170;
                                                 const PAD = 6; // <-- s.itemPhotoWrap.padding

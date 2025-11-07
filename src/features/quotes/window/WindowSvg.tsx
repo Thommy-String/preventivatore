@@ -204,7 +204,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
 
     const labelGap = Math.max(26, Math.min(48, baseDim / 9));
     let padRight = Math.max(6, baseFont * 0.5);
-    const padLeft = labelGap + totalFontSize * 1.8;
+    const padLeft = labelGap + totalFontSize * 1.3;
 
     const topRowIndices = rows.length > 0 ? [0] : [];
     const bottomRowIndices = rows.length > 1 ? rows.map((_, idx) => idx).filter((idx) => idx !== 0) : [];
@@ -234,6 +234,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
         const y0 = frame_mm + acc.offsetY;
         const rowTopMm = acc.offsetMm;
         const rowMm = row.height_ratio > 0 ? row.height_ratio : height_mm / Math.max(1, rows.length);
+        acc.rowDimensions.push({ rowIdx, top: y0, bottom: y0 + rowH, heightMm: rowMm });
 
         const totalColsGapX = (row.cols.length - 1) * mullion_mm;
         const usableW = innerW - totalColsGapX;
@@ -452,14 +453,23 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
 
         if (colLabels.length > 0 && rowHasNewSegment) {
             let labelY: number | null = null, position: "top" | "bottom" | null = null;
+            let skipForTopDuplicate = false;
+
             if (topRowOrder.has(rowIdx)) {
-                labelY = -(sashLabelBaseOffset + topRowOrder.get(rowIdx)! * sashLabelStep);
-                position = "top";
+                const singleFullWidth = colLabels.length === 1
+                    && Math.abs(colLabels[0].start) < 0.5
+                    && Math.abs(colLabels[0].end - width_mm) < 0.5;
+                if (singleFullWidth) {
+                    skipForTopDuplicate = true;
+                } else {
+                    labelY = -(sashLabelBaseOffset + topRowOrder.get(rowIdx)! * sashLabelStep);
+                    position = "top";
+                }
             } else if (bottomRowOrder.has(rowIdx)) {
                 labelY = height_mm + sashLabelBaseOffset + bottomRowOrder.get(rowIdx)! * sashLabelStep;
                 position = "bottom";
             }
-            if (labelY !== null && position) {
+            if (!skipForTopDuplicate && labelY !== null && position) {
                 acc.rowLabels.push({ rowIdx, y: labelY, position, rowTop: y0, rowBottom: y0 + rowH, labels: colLabels });
             }
         }
@@ -472,9 +482,25 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
         offsetY: 0,
         offsetMm: 0,
         rowLabels: [] as Array<{ rowIdx: number; y: number; position: "top" | "bottom"; rowTop: number; rowBottom: number; labels: Array<{ x: number; text: string; start: number; end: number }>; }>,
+        rowDimensions: [] as Array<{ rowIdx: number; top: number; bottom: number; heightMm: number }>,
         seenSegments: new Set<string>(),
         rowBars: new Map<number, RowBarInfo>()
     });
+
+    const rowHeightSegments = rows.length > 1
+        ? drawing.rowDimensions
+            .map(({ top, bottom, heightMm }) => {
+                const safeHeight = Math.max(0, heightMm);
+                if (safeHeight <= 0.05) return null;
+                return {
+                    startPx: top,
+                    endPx: bottom,
+                    midPx: (top + bottom) / 2,
+                    label: formatMeasure(safeHeight, sashMeasureDecimals)
+                };
+            })
+            .filter((seg): seg is { startPx: number; endPx: number; midPx: number; label: string } => Boolean(seg))
+        : [];
 
     const barDimensionRows = Array.from(drawing.rowBars.entries())
         .map(([rowIdx, info]) => {
@@ -522,22 +548,45 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     const rightDimensionBaseOffset = labelGap + totalFontSize * 1.4;
     const rightDimensionSpacing = totalFontSize * 1.8;
 
-    if (barDimensionRows.length > 0) {
-        const requiredPad = rightDimensionBaseOffset + (barDimensionRows.length - 1) * rightDimensionSpacing + totalFontSize * 1.6;
+    const totalRightGroups = (rowHeightSegments.length ? 1 : 0) + barDimensionRows.length;
+
+    if (totalRightGroups > 0) {
+        const requiredPad = rightDimensionBaseOffset + (totalRightGroups - 1) * rightDimensionSpacing + totalFontSize * 1.6;
         padRight = Math.max(padRight, requiredPad);
     }
 
-    const rightDimensionGroups = barDimensionRows.map((entry, idx) => {
-        const lineX = width_mm + rightDimensionBaseOffset + idx * rightDimensionSpacing;
+    type DimensionSegment = { startPx: number; endPx: number; midPx: number; label: string };
+    type DimensionGroup = {
+        lineX: number;
+        extX: number;
+        textX: number;
+        segments: DimensionSegment[];
+        boundaries: number[];
+    };
+
+    const rightDimensionGroups: DimensionGroup[] = [];
+    let dimensionGroupIndex = 0;
+    const pushDimensionGroup = (segments: DimensionSegment[], boundaries: number[]) => {
+        if (!segments.length) return;
+        const sortedBoundaries = boundaries.slice().sort((a, b) => a - b);
+        const lineX = width_mm + rightDimensionBaseOffset + dimensionGroupIndex * rightDimensionSpacing;
         const extX = lineX - totalFontSize * 0.6;
         const textX = lineX + totalFontSize * 0.45;
-        return {
-            lineX,
-            extX,
-            textX,
-            segments: entry.segments,
-            boundaries: entry.boundaries
-        };
+        rightDimensionGroups.push({ lineX, extX, textX, segments, boundaries: sortedBoundaries });
+        dimensionGroupIndex += 1;
+    };
+
+    if (rowHeightSegments.length) {
+        const boundarySet = new Set<number>();
+        rowHeightSegments.forEach(seg => {
+            boundarySet.add(seg.startPx);
+            boundarySet.add(seg.endPx);
+        });
+        pushDimensionGroup(rowHeightSegments, Array.from(boundarySet));
+    }
+
+    barDimensionRows.forEach(entry => {
+        pushDimensionGroup(entry.segments, entry.boundaries);
     });
 
     const totalLabelY = height_mm + bottomStackHeight + labelGap + totalFontSize * 0.9;
