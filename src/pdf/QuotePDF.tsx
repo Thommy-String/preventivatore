@@ -90,13 +90,6 @@ const s = StyleSheet.create({
         marginRight: 14,
         marginLeft: -8,
     },
-    itemPhotoWrapLarge: {
-        width: 320,
-        height: 320,
-        padding: 4,
-        marginLeft: -18,
-        marginRight: 20,
-    },
     dimW: {
         position: "absolute",
         bottom: -18,
@@ -122,7 +115,11 @@ const s = StyleSheet.create({
         paddingVertical: 3,
         paddingHorizontal: 3
     },
-    photo: { width: "100%", height: "100%", objectFit: "contain" },
+    photo: {
+        width: 170,
+        height: 170,
+        objectFit: "contain",
+    },
 
     itemContent: {
         flex: 1,
@@ -832,13 +829,9 @@ export default function QuotePDF(props: QuotePDFProps) {
 
                             const pairCount = pairs.length;
                             const kindSlug = String(it?.kind || "").toLowerCase();
-                            const hasGridWindowDrawing = Boolean((it as any)?.options?.gridWindow);
-                            const wantsLargeWindowDrawing = hasGridWindowDrawing && ["finestra", "portafinestra", "scorrevole"].includes(kindSlug);
-                            const minPhotoHeight = wantsLargeWindowDrawing ? 360 : 260;
+                            const minPhotoHeight = 260;
                             const minH = Math.max(minPhotoHeight, 80 + Math.min(40, pairCount * 7));
-                            const photoWrapStyle = wantsLargeWindowDrawing
-                                ? [s.itemPhotoWrap, s.itemPhotoWrapLarge]
-                                : s.itemPhotoWrap;
+                            const photoWrapStyle = s.itemPhotoWrap;
 
                             // Riferimento opzionale (sia "reference" che "riferimento")
                             const reference = typeof it?.reference === 'string' && it.reference.trim()

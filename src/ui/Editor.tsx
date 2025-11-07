@@ -567,6 +567,7 @@ export default function Editor() {
           phone: quote.customer_phone || null,
           vat: extractedVat,
         },
+        showShippingIncluded: quote.shipping_included !== false,
         catTotals,
         totalExcluded,
         validityDays: quote.validity_days ?? 15,
