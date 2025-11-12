@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useQuoteStore } from "../stores/useQuoteStore";
 import type { QuotePDFProps } from "./QuotePDF";
+import { normalizeSurfaceEntries } from "../features/quotes/utils/surfaceSelections";
 
 // Debug helper: taglia le stringhe nei log
 const __short = (s?: string) =>
@@ -147,6 +148,8 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       ? manualTotals.map((r: any) => ({
           label: isStr(r?.label) ? r.label : (isStr(r?.category) ? r.category : "-"),
           amount: isNum(r?.amount) ? r.amount : 0,
+          pieces: isNum((r as any)?.pieces) && (r as any).pieces > 0 ? (r as any).pieces : null,
+          surfaces: normalizeSurfaceEntries((r as any)?.surfaces),
         }))
       : [];
 

@@ -9,9 +9,17 @@ import cassonettoImg from "../assets/images/cassonetto.png";
 import persianaImg from "../assets/images/persiana.png";
 import tapparellaImg from "../assets/images/tapparella.png";
 import xInfissiLogo from "../assets/images/x-infissi-logo.png";
+import type { ManualTotalSurfaceEntry } from "../features/quotes/types";
+import { buildSurfaceSummary, formatMq, normalizeSurfaceEntries } from "../features/quotes/utils/surfaceSelections";
 
 // Accept both shapes: `{category, amount}` or `{label, amount}`
-export type CategoryTotalInput = { category?: string | null; label?: string | null; amount?: number | null; pieces?: number | null }
+export type CategoryTotalInput = {
+    category?: string | null;
+    label?: string | null;
+    amount?: number | null;
+    pieces?: number | null;
+    surfaces?: ManualTotalSurfaceEntry[] | null;
+}
 
 type Customer = { name?: string | null; address?: string | null; email?: string | null; phone?: string | null; vat?: string | null };
 
@@ -258,6 +266,7 @@ function normalizeTotals(input?: CategoryTotalInput[] | null) {
         pieces: (typeof (r as any)?.pieces === "number" && Number.isFinite((r as any).pieces) && (r as any).pieces > 0)
             ? (r as any).pieces
             : null,
+        surfaces: normalizeSurfaceEntries((r as any)?.surfaces),
     }));
 }
 
@@ -524,36 +533,6 @@ export default function QuotePDF(props: QuotePDFProps) {
         return k === 'finestra' || k === 'portafinestra' || k === 'scorrevole' || /serrament/i.test(k);
     });
 
-
-
-    // Superficie solo finestre (finestra, portafinestra, scorrevole)
-    const windowsM2 = itemsSafe.reduce((acc: number, it: any) => {
-        const kind = String(it?.kind || "").toLowerCase();
-        if (!["finestra", "portafinestra", "scorrevole"].includes(kind)) return acc;
-        const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-        const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-        const q = Number(it?.qty ?? 1);
-        if (Number.isFinite(w) && Number.isFinite(h)) {
-            const m2 = (w * h) / 1_000_000;
-            return acc + (Number.isFinite(q) ? m2 * q : m2);
-        }
-        return acc;
-    }, 0);
-
-    // Superficie persiane / serrande (tapparelle)
-    const shuttersM2 = itemsSafe.reduce((acc: number, it: any) => {
-        const kind = String(it?.kind || "").toLowerCase();
-        if (!["persiana", "tapparella"].includes(kind)) return acc;
-        const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza);
-        const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
-        const q = Number(it?.qty ?? 1);
-        if (Number.isFinite(w) && Number.isFinite(h)) {
-            const m2 = (w * h) / 1_000_000;
-            return acc + (Number.isFinite(q) ? m2 * q : m2);
-        }
-        return acc;
-    }, 0);
-
     const totals = normalizeTotals(catTotals);
     const mnt = typeof mountingCost === 'number' && Number.isFinite(mountingCost) ? mountingCost : 0;
     const fallbackTotal = totals.reduce((s, r) => s + r.amount, 0) + mnt;
@@ -711,9 +690,8 @@ export default function QuotePDF(props: QuotePDFProps) {
                             totals.map((r, i) => {
                                 const label = safeText(r.category, "-");
                                 const k = `row-${label}-${Number.isFinite(r.amount) ? r.amount : 0}-${i}`;
-                                const showWindowsM2 = /finestr|serramenti/i.test(label) && windowsM2 > 0;
-                                const showShuttersM2 = /(persian|serrand|tapparell|avvolgibil)/i.test(label) && shuttersM2 > 0;
                                 const pieces = (r as any).pieces as number | null;
+                                const surfaceRows = buildSurfaceSummary((r as any).surfaces, itemsSafe as any);
                                 return (
                                     <View key={k} style={s.tr}>
                                         <Text style={[s.td, { flex: 2 }]}>
@@ -721,12 +699,13 @@ export default function QuotePDF(props: QuotePDFProps) {
                                             {typeof pieces === "number" && pieces > 0 ? (
                                                 <Text style={s.piecesNote}> · {pieces} pezzi </Text>
                                             ) : null}
-                                            {showWindowsM2 ? (
-                                                <Text style={s.piecesNote}> · {windowsM2.toFixed(2)} m²</Text>
-                                            ) : null}
-                                            {showShuttersM2 ? (
-                                                <Text style={s.piecesNote}> · {shuttersM2.toFixed(2)} m²</Text>
-                                            ) : null}
+                                            {surfaceRows.map((row) => (
+                                                <Text key={`${k}-${row.id}`} style={s.piecesNote}>
+                                                    {" "}
+                                                    · {formatMq(row.mq)}
+                                                    {row.missingDimensions > 0 ? ` (${row.missingDimensions} senza dimensioni)` : ""}
+                                                </Text>
+                                            ))}
                                         </Text>
                                         <Text style={[s.td, s.right]}>{euro(r.amount)}</Text>
                                     </View>

@@ -1,6 +1,6 @@
 //src/ui/Editor.tsx
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadQuoteItemImage } from '../lib/uploadImages'
 import { ArrowLeft, FileText, User, Building, Copy, Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
@@ -12,12 +12,21 @@ import { BadgePercent, X } from "lucide-react";
 
 // Store & Quote items
 import { useQuoteStore } from '../stores/useQuoteStore'
-import type { QuoteItem } from '../features/quotes/types'
+import type { ManualTotalRow, ManualTotalSurfaceEntry, QuoteItem, SurfaceGroupId } from '../features/quotes/types'
 import { registry } from '../features/quotes/registry'
 import { euro } from '../features/quotes/utils/pricing'
 import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal'
 import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
+import {
+  SURFACE_GROUPS,
+  buildSurfaceSummary,
+  computeItemSurfaceMq,
+  describeDimensions,
+  formatMq,
+  getGroupForItem,
+  normalizeSurfaceEntries,
+} from '../features/quotes/utils/surfaceSelections'
 
 // Types for the Quote header (DB)
 type Quote = {
@@ -38,7 +47,7 @@ type Quote = {
   total_mq: number | null
   profile_system: string | null
   notes: string | null
-  manual_totals?: { id: string; label: string; amount: number }[]
+  manual_totals?: ManualTotalRow[]
   discount_json?: {
     mode: 'pct' | 'final';
     pct?: number | null;
@@ -55,6 +64,30 @@ import { ItemModal } from '../features/quotes/modals/ItemModal'
 import { ProfileOverview } from '../components/editor/ProfileOverview'
 
 const DEFAULT_INSTALL_TIME = '4-6 settimane'
+
+const createEmptyManualRow = (): ManualTotalRow => ({
+  id: crypto.randomUUID(),
+  label: '',
+  amount: 0,
+  pieces: null,
+})
+
+const cleanManualRow = (row: any): ManualTotalRow => {
+  const id = typeof row?.id === 'string' ? row.id : crypto.randomUUID()
+  const label = typeof row?.label === 'string' ? row.label : ''
+  const amountVal = Number(row?.amount)
+  const amount = Number.isFinite(amountVal) ? amountVal : 0
+  const pieces = typeof row?.pieces === 'number' && Number.isFinite(row.pieces) ? row.pieces : null
+  const surfaces = normalizeSurfaceEntries(row?.surfaces)
+  const base: ManualTotalRow = { id, label, amount, pieces }
+  if (surfaces.length > 0) base.surfaces = surfaces
+  return base
+}
+
+const hydrateManualTotals = (rows: any): ManualTotalRow[] => {
+  if (!Array.isArray(rows)) return []
+  return rows.map(cleanManualRow)
+}
 
 
 // Convert a Blob to a data URL (browser-safe, no Buffer)
@@ -86,6 +119,24 @@ function dataUrlToFile(dataUrl: string, fileName: string): File {
   return blob as File;
 }
 
+const capitalizeKind = (value: string) =>
+  value
+    .split(/[\s_\-]+/)
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(' ')
+
+const titleForItem = (it: QuoteItem | null | undefined) => {
+  if (!it) return 'Voce'
+  const freeTitle = typeof (it as any)?.title === 'string' ? (it as any).title.trim() : ''
+  if (freeTitle) return freeTitle
+  const kind = String((it as any)?.kind ?? '').toLowerCase()
+  if (kind && kind in registry) {
+    return registry[kind as keyof typeof registry]?.label ?? capitalizeKind(kind)
+  }
+  return kind ? capitalizeKind(kind) : 'Voce'
+}
+
 export default function Editor() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -97,13 +148,31 @@ export default function Editor() {
   const [saving, setSaving] = useState(false)
 
   // Riepilogo costi (manuale per categoria)
-  const [manualTotals, setManualTotals] = useState<{ id: string; label: string; amount: number; pieces?: number | null }[]>([])
+  const [manualTotals, setManualTotals] = useState<ManualTotalRow[]>([])
+  const [surfaceRowId, setSurfaceRowId] = useState<string | null>(null)
+  const surfaceModalRow = surfaceRowId ? manualTotals.find((r) => r.id === surfaceRowId) ?? null : null
+
+  type ManualRowPatch = Partial<Omit<ManualTotalRow, 'id'>> & { surfaces?: ManualTotalSurfaceEntry[] | null }
 
   const addTotalRow = () =>
-    setManualTotals(r => [...r, { id: crypto.randomUUID(), label: '', amount: 0, pieces: null }])
+    setManualTotals((rows) => [...rows, createEmptyManualRow()])
 
-  const updateRow = (id: string, patch: Partial<{ label: string; amount: number; pieces?: number | null }>) =>
-    setManualTotals(r => r.map(x => x.id === id ? { ...x, ...patch } : x))
+  const updateRow = (id: string, patch: ManualRowPatch) =>
+    setManualTotals((rows) =>
+      rows.map((row) => {
+        if (row.id !== id) return row
+        const next: ManualTotalRow = { ...row, ...patch }
+        if (Object.prototype.hasOwnProperty.call(patch, 'surfaces')) {
+          const normalized = normalizeSurfaceEntries(patch?.surfaces)
+          if (normalized.length > 0) {
+            next.surfaces = normalized
+          } else {
+            delete next.surfaces
+          }
+        }
+        return next
+      })
+    )
 
   const removeRow = (id: string) =>
     setManualTotals(r => r.filter(x => x.id !== id))
@@ -300,7 +369,7 @@ export default function Editor() {
     ? items
     : (items && typeof items === 'object')
       ? Object.values(items as any)
-      : [];
+      : []
   const setItems = useQuoteStore(s => s.setItems)
   const addItem = useQuoteStore(s => s.addItem)
   const replaceItem = useQuoteStore(s => s.replaceItem)
@@ -527,6 +596,7 @@ export default function Editor() {
         label: r.label || '-',
         amount: Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0,
         pieces: (typeof r.pieces === 'number' && isFinite(r.pieces) && r.pieces > 0) ? r.pieces : null,
+        surfaces: r.surfaces ? normalizeSurfaceEntries(r.surfaces) : undefined,
       }));
       const totalExcluded = catTotals.reduce((s, r) => s + (r.amount || 0), 0);
 
@@ -619,7 +689,7 @@ export default function Editor() {
         .maybeSingle()
       if (error) { toast.error(error.message); return }
       setQuote(data as any)
-      setManualTotals(((data as any)?.manual_totals) ?? [])
+      setManualTotals(hydrateManualTotals((data as any)?.manual_totals))
       const savedItems = Array.isArray((data as any)?.items_json) ? (data as any).items_json : []
       setItems(savedItems as any)
       setProfileOverview(((data as any)?.profile_overview) ?? null)
@@ -1077,96 +1147,130 @@ export default function Editor() {
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {manualTotals.map((row) => (
-              <div
-                key={row.id}
-                className={`rounded-lg border p-3 bg-white/60 ${dragTotalId===row.id ? 'ring-2 ring-gray-300' : ''}`}
-                draggable
-                onDragStart={(e) => onTotalDragStart(e, row.id)}
-                onDragOver={onTotalDragOver}
-                onDrop={(e) => onTotalDrop(e, row.id)}
-              >
-                <div className="space-y-2">
-                  {/* Top row: Title + Delete (inline on mobile) */}
-                  <div className="flex items-center gap-2">
-                    <span className="cursor-grab text-gray-400 hover:text-gray-700" title="Trascina per riordinare">
-                      <GripVertical size={16} />
-                    </span>
-                    <input
-                      className="input flex-1 min-w-0"
-                      placeholder="Es. Finestre / Portoncino cantina / Montaggio…"
-                      value={row.label}
-                      onChange={(e) => updateRow(row.id, { label: e.target.value })}
-                    />
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                        aria-label="Sposta su"
-                        title="Sposta su"
-                        onClick={() => moveTotalRow(row.id, -1)}
-                      >
-                        <ArrowUp size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                        aria-label="Sposta giù"
-                        title="Sposta giù"
-                        onClick={() => moveTotalRow(row.id, +1)}
-                      >
-                        <ArrowDown size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                        aria-label="Rimuovi riga"
-                        onClick={() => removeRow(row.id)}
-                        title="Rimuovi"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Amount (second row) */}
-                  <div className="flex items-center gap-2">
-                    {/* Pezzi opzionale */}
-                    <div className="w-20">
+            {manualTotals.map((row) => {
+              const summary = buildSurfaceSummary(row.surfaces, itemsArray as any[])
+              return (
+                <div
+                  key={row.id}
+                  className={`rounded-lg border p-3 bg-white/60 ${dragTotalId===row.id ? 'ring-2 ring-gray-300' : ''}`}
+                  draggable
+                  onDragStart={(e) => onTotalDragStart(e, row.id)}
+                  onDragOver={onTotalDragOver}
+                  onDrop={(e) => onTotalDrop(e, row.id)}
+                >
+                  <div className="space-y-2">
+                    {/* Top row: Title + Delete (inline on mobile) */}
+                    <div className="flex items-center gap-2">
+                      <span className="cursor-grab text-gray-400 hover:text-gray-700" title="Trascina per riordinare">
+                        <GripVertical size={16} />
+                      </span>
                       <input
-                        className="input w-full text-right"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        placeholder="pz."
-                        value={piecesStr[row.id] ?? (typeof row.pieces === 'number' ? String(row.pieces) : '')}
-                        onChange={(e) => onPiecesChange(row.id, e.target.value)}
-                        onBlur={() => onPiecesBlur(row.id)}
-                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                        onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                        className="input flex-1 min-w-0"
+                        placeholder="Es. Finestre / Portoncino cantina / Montaggio…"
+                        value={row.label}
+                        onChange={(e) => updateRow(row.id, { label: e.target.value })}
                       />
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                          aria-label="Sposta su"
+                          title="Sposta su"
+                          onClick={() => moveTotalRow(row.id, -1)}
+                        >
+                          <ArrowUp size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                          aria-label="Sposta giù"
+                          title="Sposta giù"
+                          onClick={() => moveTotalRow(row.id, +1)}
+                        >
+                          <ArrowDown size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
+                          aria-label="Rimuovi riga"
+                          onClick={() => removeRow(row.id)}
+                          title="Rimuovi"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Importo */}
-                    <div className="flex-1 sm:flex-none sm:w-40">
-                      <input
-                        className="input w-full text-right"
-                        type="text"
-                        inputMode="decimal"
-                        // allow comma or dot while typing; we'll sanitize on blur
-                        value={amountStr[row.id] ?? (row.amount === 0 ? '' : String(row.amount))}
-                        onChange={(e) => onAmountChange(row.id, e.target.value)}
-                        onBlur={() => onAmountBlur(row.id)}
-                        onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                        onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
-                        placeholder="0,00"
-                      />
+                    {/* Amount (second row) */}
+                    <div className="flex items-center gap-2">
+                      {/* Pezzi opzionale */}
+                      <div className="w-20">
+                        <input
+                          className="input w-full text-right"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="pz."
+                          value={piecesStr[row.id] ?? (typeof row.pieces === 'number' ? String(row.pieces) : '')}
+                          onChange={(e) => onPiecesChange(row.id, e.target.value)}
+                          onBlur={() => onPiecesBlur(row.id)}
+                          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                          onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                        />
+                      </div>
+
+                      {/* Importo */}
+                      <div className="flex-1 sm:flex-none sm:w-40">
+                        <input
+                          className="input w-full text-right"
+                          type="text"
+                          inputMode="decimal"
+                          // allow comma or dot while typing; we'll sanitize on blur
+                          value={amountStr[row.id] ?? (row.amount === 0 ? '' : String(row.amount))}
+                          onChange={(e) => onAmountChange(row.id, e.target.value)}
+                          onBlur={() => onAmountBlur(row.id)}
+                          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                          onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                          placeholder="0,00"
+                        />
+                      </div>
+                      <span className="hidden sm:inline text-sm text-gray-500">€</span>
                     </div>
-                    <span className="hidden sm:inline text-sm text-gray-500">€</span>
+
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-gray-200 bg-white/70 px-3 py-2 text-xs">
+                      <div className="flex flex-1 flex-wrap items-center gap-1.5">
+                        {summary.length === 0 ? (
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">
+                            Nessuna metratura collegata
+                          </span>
+                        ) : (
+                          summary.map((s) => (
+                            <span
+                              key={`${row.id}-${s.id}`}
+                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 font-medium text-gray-700"
+                            >
+                              <span className="text-gray-900">{formatMq(s.mq)}</span>
+                              {s.missingDimensions > 0 && (
+                                <span className="text-[10px] text-amber-700">
+                                  · {s.missingDimensions} senza dimensioni
+                                </span>
+                              )}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-emerald-700 hover:text-emerald-900"
+                        onClick={() => setSurfaceRowId(row.id)}
+                      >
+                        Configura metratura
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
 
@@ -1368,6 +1472,19 @@ export default function Editor() {
           onSave={saveDraft}
         />
       )}
+
+      <SurfaceModal
+        open={!!surfaceModalRow}
+        row={surfaceModalRow}
+        items={itemsArray as QuoteItem[]}
+        onClose={() => setSurfaceRowId(null)}
+        onSave={(entries) => {
+          if (surfaceModalRow) {
+            updateRow(surfaceModalRow.id, { surfaces: entries })
+          }
+          setSurfaceRowId(null)
+        }}
+      />
     </div>
   )
 }
@@ -1379,4 +1496,287 @@ function useDebouncedCallback<T extends (...args: any[]) => any>(fn: T, delay = 
     if (t.current) clearTimeout(t.current)
     t.current = setTimeout(() => fn(...args), delay)
   }
+}
+
+type SurfaceModalProps = {
+  open: boolean
+  row: ManualTotalRow | null
+  items: QuoteItem[]
+  onClose: () => void
+  onSave: (entries: ManualTotalSurfaceEntry[]) => void
+}
+
+type DraftEntry = { mode: 'all' | 'subset'; itemIds: string[] }
+type DraftState = Partial<Record<SurfaceGroupId, DraftEntry>>
+
+function SurfaceModal({ open, row, items, onClose, onSave }: SurfaceModalProps) {
+  const [draft, setDraft] = useState<DraftState>({})
+
+  const groupedItems = useMemo(() => {
+    const base: Record<SurfaceGroupId, QuoteItem[]> = {
+      windows: [],
+      persiane: [],
+      tapparelle: [],
+      zanzariere: [],
+      cassonetti: [],
+      custom: [],
+    }
+    items.forEach((item) => {
+      const group = getGroupForItem(item as QuoteItem)
+      if (!group) return
+      base[group] = [...base[group], item]
+    })
+    return base
+  }, [items])
+
+  useEffect(() => {
+    if (!open || !row) return
+    const normalized = normalizeSurfaceEntries(row?.surfaces)
+    const next: DraftState = {}
+    normalized.forEach((entry) => {
+      const allowed = new Set((groupedItems[entry.group] ?? []).map((it) => String(it.id)))
+      const filtered = entry.itemIds?.filter((id) => allowed.has(String(id))) ?? []
+      next[entry.group] = { mode: entry.mode, itemIds: entry.mode === 'subset' ? filtered : [] }
+    })
+    setDraft(next)
+  }, [open, row, groupedItems])
+
+  useEffect(() => {
+    setDraft((prev) => {
+      const next: DraftState = {}
+      Object.entries(prev).forEach(([group, entry]) => {
+        const metaId = group as SurfaceGroupId
+        const available = groupedItems[metaId] ?? []
+        if (available.length === 0) return
+        if (entry.mode === 'subset') {
+          const allowed = new Set(available.map((it) => String(it.id)))
+          const filtered = entry.itemIds.filter((id) => allowed.has(id))
+          next[metaId] = { mode: 'subset', itemIds: filtered }
+        } else {
+          next[metaId] = entry
+        }
+      })
+      return next
+    })
+  }, [groupedItems])
+
+  const availableGroups = useMemo(
+    () => SURFACE_GROUPS.filter((meta) => (groupedItems[meta.id]?.length ?? 0) > 0),
+    [groupedItems]
+  )
+
+  const rawEntries = useMemo<ManualTotalSurfaceEntry[]>(() => {
+    return Object.entries(draft).map(([group, entry]) => ({
+      group: group as SurfaceGroupId,
+      mode: entry.mode,
+      itemIds: entry.itemIds,
+    }))
+  }, [draft])
+
+  const normalizedEntries = useMemo(
+    () => normalizeSurfaceEntries(rawEntries),
+    [rawEntries]
+  )
+
+  const summaryRows = useMemo(
+    () => buildSurfaceSummary(normalizedEntries, items),
+    [normalizedEntries, items]
+  )
+
+  const summaryByGroup = useMemo(() => {
+    const map = new Map<SurfaceGroupId, (typeof summaryRows)[number]>()
+    summaryRows.forEach((row) => map.set(row.id, row))
+    return map
+  }, [summaryRows])
+
+  const invalidSubsetGroups = rawEntries
+    .filter((entry) => entry.mode === 'subset' && (!entry.itemIds || entry.itemIds.length === 0))
+    .map((entry) => entry.group)
+  const hasInvalidSubset = invalidSubsetGroups.length > 0
+
+  const currentMode = (groupId: SurfaceGroupId): 'none' | 'all' | 'subset' => {
+    const entry = draft[groupId]
+    return entry ? entry.mode : 'none'
+  }
+
+  const currentSelection = (groupId: SurfaceGroupId) => draft[groupId]?.itemIds ?? []
+
+  const setMode = (groupId: SurfaceGroupId, mode: 'none' | 'all' | 'subset') => {
+    setDraft((prev) => {
+      const next = { ...prev }
+      if (mode === 'none') {
+        delete next[groupId]
+        return next
+      }
+      const existing = next[groupId]
+      next[groupId] = {
+        mode: mode === 'all' ? 'all' : 'subset',
+        itemIds: mode === 'subset' ? (existing?.itemIds ?? []) : [],
+      }
+      return next
+    })
+  }
+
+  const toggleItem = (groupId: SurfaceGroupId, itemId: string) => {
+    setDraft((prev) => {
+      const entry = prev[groupId] ?? { mode: 'subset', itemIds: [] }
+      if (entry.mode !== 'subset') return prev
+      const exists = entry.itemIds.includes(itemId)
+      const ids = exists ? entry.itemIds.filter((id) => id !== itemId) : [...entry.itemIds, itemId]
+      return { ...prev, [groupId]: { mode: 'subset', itemIds: ids } }
+    })
+  }
+
+  const handleSave = () => {
+    onSave(normalizedEntries)
+    onClose()
+  }
+
+  if (!open || !row) return null
+
+  const rowTitle = row.label?.trim() ? row.label : 'Voce senza titolo'
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-x-0 top-10 mx-auto flex w-full max-w-4xl flex-col rounded-2xl bg-white p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-wide text-gray-500">Metratura collegata</div>
+            <div className="text-xl font-semibold text-gray-900">{rowTitle}</div>
+          </div>
+          <button className="text-sm text-gray-500 hover:text-gray-800" onClick={onClose}>
+            Chiudi
+          </button>
+        </div>
+
+        {summaryRows.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            {summaryRows.map((s) => (
+              <span
+                key={s.id}
+                className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 font-medium text-emerald-800"
+              >
+                <span className="text-emerald-900">{formatMq(s.mq)}</span>
+                {s.missingDimensions > 0 && (
+                  <span className="text-[10px] text-amber-700">
+                    · {s.missingDimensions} senza dimensioni
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+            Seleziona quali voci del preventivo contribuire devono contribuire alla metratura mostrata accanto a questa categoria.
+          </div>
+        )}
+
+        <div className="mt-4 space-y-4 overflow-y-auto pr-1" style={{ maxHeight: '60vh' }}>
+          {availableGroups.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white/80 px-4 py-6 text-center text-sm text-gray-500">
+              Nessuna voce del preventivo dispone di dimensioni per calcolare la metratura.
+            </div>
+          ) : (
+            availableGroups.map((meta) => {
+              const mode = currentMode(meta.id)
+              const selections = currentSelection(meta.id)
+              const groupItems = groupedItems[meta.id] ?? []
+              const summary = summaryByGroup.get(meta.id)
+              const showSubset = mode === 'subset'
+              const subsetInvalid = showSubset && selections.length === 0
+
+              return (
+                <div key={meta.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="font-medium text-gray-900">{meta.label}</div>
+                      <div className="text-xs text-gray-500">
+                        {groupItems.length} voce{groupItems.length === 1 ? '' : 'i'} disponibili
+                      </div>
+                    </div>
+                    {summary && (
+                      <div className="text-xs font-semibold text-emerald-700">
+                        {formatMq(summary.mq)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
+                    {(['none', 'all', 'subset'] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        className={`rounded-full border px-3 py-1 transition ${
+                          mode === option
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        }`}
+                        onClick={() => setMode(meta.id, option)}
+                      >
+                        {option === 'none' && 'Nessuna'}
+                        {option === 'all' && 'Tutte'}
+                        {option === 'subset' && 'Seleziona voci'}
+                      </button>
+                    ))}
+                  </div>
+
+                  {showSubset && (
+                    <div className="mt-3 space-y-2">
+                      {groupItems.map((item) => {
+                        const itemId = String(item.id)
+                        const checked = selections.includes(itemId)
+                        const dims = describeDimensions(item)
+                        const mq = computeItemSurfaceMq(item)
+                        const qty = Number(item?.qty ?? 1)
+                        return (
+                          <label
+                            key={itemId}
+                            className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
+                              checked ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-gray-300'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                              checked={checked}
+                              onChange={() => toggleItem(meta.id, itemId)}
+                            />
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900">{titleForItem(item)}</div>
+                              <div className="text-[11px] text-gray-500">
+                                {dims ?? 'Dimensioni mancanti'}
+                                {mq > 0 && ` · ${formatMq(mq)}`}
+                              </div>
+                            </div>
+                            {qty > 1 && (
+                              <span className="text-[11px] text-gray-500">x{qty}</span>
+                            )}
+                          </label>
+                        )
+                      })}
+                      {subsetInvalid && (
+                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          Seleziona almeno una voce da includere.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <div className="mt-5 flex items-center justify-between border-t pt-3">
+          <div className="text-xs text-gray-500">
+            {summaryRows.length === 0 ? 'Nessuna metratura verrà stampata per questa categoria.' : 'I valori includono quantità e dimensioni (in m²).'}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Annulla</Button>
+            <Button onClick={handleSave} disabled={hasInvalidSubset}>Salva</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }

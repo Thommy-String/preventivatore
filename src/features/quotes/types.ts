@@ -209,3 +209,21 @@ export type DiscountModel = {
   /** totale scontato (IVA esclusa) calcolato */
   discountedTotal: number
 }
+
+// --- Riepilogo costi / metrature per categoria ---
+
+export type SurfaceGroupId = 'windows' | 'persiane' | 'tapparelle' | 'zanzariere' | 'cassonetti' | 'custom'
+
+export type ManualTotalSurfaceEntry = {
+  group: SurfaceGroupId
+  mode: 'all' | 'subset'
+  itemIds?: string[]
+}
+
+export type ManualTotalRow = {
+  id: string
+  label: string
+  amount: number
+  pieces?: number | null
+  surfaces?: ManualTotalSurfaceEntry[]
+}
