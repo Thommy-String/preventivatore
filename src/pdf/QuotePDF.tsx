@@ -868,34 +868,35 @@ export default function QuotePDF(props: QuotePDFProps) {
                                                 const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza);
                                                 const hasDims = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0;
 
-                                                let marginY = 0;
+                                                const widthLabel = Number.isFinite(w) ? String(Math.round(w)) : "—";
+                                                const heightLabel = Number.isFinite(h) ? String(Math.round(h)) : "—";
+                                                let widthLabelTop: number | undefined;
+
                                                 if (hasDims) {
                                                     const ar = w / h;
                                                     const arBox = INNER_W / INNER_H;
+                                                    let imgH = INNER_H;
                                                     if (ar >= arBox) {
-                                                        const imgH = INNER_W / ar;
-                                                        marginY = Math.max(0, (INNER_H - imgH) / 2);
+                                                        imgH = INNER_W / ar;
                                                     }
+                                                    const marginY = Math.max(0, (INNER_H - imgH) / 2);
+                                                    const GAP = 32; // distanza visiva sotto il disegno
+                                                    widthLabelTop = PAD + marginY + imgH + GAP;
                                                 }
 
-                                                const GAP = 4;
-                                                const centerX = WRAP_W / 2;
                                                 const centerY = PAD + INNER_H / 2;
-
-                                                // colloca la larghezza poco sotto l'immagine ma all'interno del contenitore
-                                                const widthLabelTop = PAD + (INNER_H - marginY) + GAP + 6;
-
-                                                const widthLabel = Number.isFinite(w) ? String(Math.round(w)) : "—";
-                                                const heightLabel = Number.isFinite(h) ? String(Math.round(h)) : "—";
+                                                const heightLabelY = centerY + 18; // abbassa leggermente la misura H
 
                                                 return (
                                                     <>
                                                         <Text
                                                             style={{
                                                                 position: "absolute",
-                                                                top: widthLabelTop,
-                                                                left: centerX - 48,
-                                                                width: 96,
+                                                                ...(widthLabelTop !== undefined
+                                                                    ? { top: widthLabelTop }
+                                                                    : { bottom: -4 }),
+                                                                left: 0,
+                                                                right: 0,
                                                                 textAlign: "center",
                                                                 fontSize: 12,
                                                                 color: "#333",
@@ -907,7 +908,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                                                             style={{
                                                                 position: "absolute",
                                                                 left: -10,
-                                                                top: centerY,
+                                                                top: heightLabelY,
                                                                 transform: "rotate(-90deg)",
                                                             }}
                                                         >
