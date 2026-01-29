@@ -467,6 +467,85 @@ export default function Home() {
     } finally { setLoading(false) }
   }
 
+  async function handleDuplicateQuote(q: QuoteRow) {
+    try {
+      setLoading(true)
+      // 1) fetch full quote record (we'll copy main fields stored on the quotes table)
+      const { data: src, error: es } = await supabase
+        .from('quotes')
+        .select('*')
+        .eq('id', q.id)
+        .maybeSingle()
+      if (es) throw es
+      if (!src) throw new Error('Preventivo non trovato')
+
+      // 2) unique suffix not required for DB-generated number
+
+      // 3) prepare payload copying main fields (items_json / manual_totals included)
+      const payload: any = {
+        status: 'bozza',
+        customer_type: src.customer_type ?? 'privato',
+        customer_name: src.customer_name ?? null,
+        customer_email: src.customer_email ?? null,
+        customer_phone: src.customer_phone ?? null,
+        job_address: src.job_address ?? null,
+        validity_days: src.validity_days ?? 15,
+        vat: src.vat ?? '22',
+        manual_totals: src.manual_totals ?? null,
+        items_json: src.items_json ?? null,
+        shipping_included: src.shipping_included ?? null,
+        profile_system: src.profile_system ?? null,
+        notes: src.notes ?? null,
+        // Do not copy reference_key to avoid grouping with original
+        reference: src.reference ?? null,
+      }
+
+      // ensure required DB columns that may be NOT NULL are provided (fallbacks)
+      if (Object.prototype.hasOwnProperty.call(src, 'years')) {
+        payload.years = src.years ?? 0
+      }
+
+      // create a new empty quote via backend function to ensure DB defaults and generated columns
+      const { data: created, error: ec } = await supabase.rpc('fn_create_quote', {
+        p_customer_type: payload.customer_type,
+        p_customer_name: payload.customer_name ?? 'Cliente duplicato',
+        p_customer_email: payload.customer_email ?? null,
+        p_customer_phone: payload.customer_phone ?? null,
+        p_job_address: payload.job_address ?? null,
+        p_price_list_id: null,
+        p_vat: payload.vat ?? '22',
+        p_validity_days: payload.validity_days ?? 15,
+        p_terms: null,
+        p_notes: null,
+      })
+      if (ec) throw ec
+      const res = Array.isArray(created) ? created[0] : created
+      const newId = res?.quote_id ?? res?.id
+      if (!newId) throw new Error('Errore creazione duplicato')
+
+      // now update the created quote with the copyable JSON/manual fields
+      const { error: eu } = await supabase.from('quotes').update({
+        manual_totals: payload.manual_totals,
+        items_json: payload.items_json,
+        shipping_included: payload.shipping_included,
+        profile_system: payload.profile_system,
+        notes: payload.notes,
+        reference: payload.reference ?? null,
+        // ensure years if present
+        years: payload.years ?? undefined,
+      }).eq('id', newId)
+      if (eu) throw eu
+
+      toast.success('Preventivo duplicato')
+      nav(`/quotes/${newId}`)
+    } catch (e: any) {
+      console.error(e)
+      toast.error(e?.message || 'Errore duplicazione preventivo')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleDeleteQuote(q: QuoteRow) {
     const confirmed = window.confirm(`Eliminare il preventivo ${q.number}? Questa azione è irreversibile.`)
     if (!confirmed) return
@@ -642,7 +721,7 @@ export default function Home() {
                       key={q.id}
                       q={q}
                       onOpen={() => nav(`/quotes/${q.id}`)}
-                      onDuplicate={() => toast.info('Duplica: in arrivo')}
+                      onDuplicate={() => void handleDuplicateQuote(q)}
                       onPdf={() => toast.info('PDF: in arrivo')}
                       onDelete={() => handleDeleteQuote(q)}
                       onDeleteDisabled={deletingId === q.id}

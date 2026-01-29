@@ -63,7 +63,7 @@ import { ItemCard } from '../features/quotes/components/ItemCard'
 import { ItemModal } from '../features/quotes/modals/ItemModal'
 import { ProfileOverview } from '../components/editor/ProfileOverview'
 
-const DEFAULT_INSTALL_TIME = '4-6 settimane'
+const DEFAULT_INSTALL_TIME = '6-8 settimane'
 
 const createEmptyManualRow = (): ManualTotalRow => ({
   id: crypto.randomUUID(),
@@ -1081,7 +1081,7 @@ export default function Editor() {
               <div className="text-xs text-gray-500">Termine di completamento</div>
               <input
                 className="input"
-                placeholder="es. 4-6 settimane"
+                placeholder="es. 6-8 settimane"
                 value={quote.install_time ?? DEFAULT_INSTALL_TIME}
                 onChange={(e) => updateField('install_time', (e.target.value || DEFAULT_INSTALL_TIME) as any)}
               />
