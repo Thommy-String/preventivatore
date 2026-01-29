@@ -245,7 +245,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                 style={{ aspectRatio }}
               >
                 {isWindow ? (
-                  <WindowSvg cfg={(draft as any).options.gridWindow} />
+                  <WindowSvg cfg={(draft as any).options.gridWindow} stroke={(draft as any).options?.gridWindow?.frame_color ?? (draft as any).color ?? '#222'} />
                 ) : isCassonetto ? (
                   (typeof (draft as any)?.image_url === 'string' && (draft as any).image_url.startsWith('data:')) ? (
                     <img src={(draft as any).image_url} alt={entry?.label || 'Anteprima'} className="max-w-full max-h-full object-contain" />

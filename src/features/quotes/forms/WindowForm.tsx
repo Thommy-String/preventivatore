@@ -2,8 +2,8 @@
 import { useState, useEffect } from "react";
 import type { ItemFormProps } from "../types";
 import type { WindowItem } from "../types";
-import type { GridWindowConfig, LeafState } from "../window/WindowSvg";
-import { Trash2 } from "lucide-react";
+import type { GridWindowConfig, LeafState } from "../types";
+import { Trash2, Lock, Unlock } from "lucide-react";
 
 // --- Costanti e Tipi ---
 const openingOptions: { value: LeafState; label: string }[] = [
@@ -172,14 +172,22 @@ function rebalanceColsToTotal(
     cols: GridWindowConfig['rows'][0]['cols'],
     totalW: number,
     fixedIndex?: number,
-    fixedNewVal?: number
+    fixedNewVal?: number,
+    lockedMask?: boolean[]
 ): GridWindowConfig['rows'][0]['cols'] {
     if (!cols.length) return cols;
     const totalScaled = Math.round(clampMm(totalW) * MM_SCALE);
     const baseValues = normalizeDimensionValues(cols.map(c => c.width_ratio ?? 0), totalW);
     const rawScaled = baseValues.map(toScaled);
-    let targetScaled: number[];
+    let targetScaled: number[] = Array(cols.length).fill(0);
 
+    const lockedIdxs = new Set<number>();
+    if (Array.isArray(lockedMask)) {
+        lockedMask.forEach((v, i) => { if (v) lockedIdxs.add(i); });
+    }
+
+    // If user edited a specific col, consider it fixed as well (uses fixedNewVal)
+    let fixedScaledForIndex: number | null = null;
     if (
         typeof fixedIndex === 'number' &&
         fixedIndex >= 0 &&
@@ -190,17 +198,31 @@ function rebalanceColsToTotal(
             Math.max(MIN_SCALED, Math.round(clampMm(fixedNewVal) * MM_SCALE)),
             totalScaled - MIN_SCALED * Math.max(0, cols.length - 1)
         );
-        const otherIdx = rawScaled.map((_, i) => i).filter(i => i !== fixedIndex);
-        const otherWeights = otherIdx.map(i => rawScaled[i]);
-        const remainingScaled = Math.max(0, totalScaled - safeFixed);
-        const distributed = allocateScaled(remainingScaled, otherWeights, MIN_SCALED);
-        targetScaled = Array(cols.length).fill(MIN_SCALED);
-        targetScaled[fixedIndex] = safeFixed;
-        otherIdx.forEach((idx, pos) => {
+        fixedScaledForIndex = safeFixed;
+        lockedIdxs.add(fixedIndex);
+    }
+
+    // Assign locked values (either the explicit fixed value, or current rawScaled)
+    lockedIdxs.forEach(i => {
+        targetScaled[i] = i === fixedIndex && fixedScaledForIndex !== null ? fixedScaledForIndex : rawScaled[i];
+    });
+
+    const sumLocked = sumNum(Array.from(lockedIdxs).map(i => targetScaled[i] || 0));
+    const remainingScaled = Math.max(0, totalScaled - sumLocked);
+
+    const unlockedIdxs = rawScaled.map((_, i) => i).filter(i => !lockedIdxs.has(i));
+    if (unlockedIdxs.length === 0) {
+        // nothing to distribute, fill last with remainder if needed
+        if (targetScaled.length > 0) {
+            const last = targetScaled.length - 1;
+            targetScaled[last] = Math.max(MIN_SCALED, targetScaled[last] + (totalScaled - sumNum(targetScaled)));
+        }
+    } else {
+        const weights = unlockedIdxs.map(i => rawScaled[i]);
+        const distributed = allocateScaled(remainingScaled, weights, MIN_SCALED);
+        unlockedIdxs.forEach((idx, pos) => {
             targetScaled[idx] = distributed[pos] ?? MIN_SCALED;
         });
-    } else {
-        targetScaled = allocateScaled(totalScaled, rawScaled, MIN_SCALED);
     }
 
     const diff = totalScaled - sumNum(targetScaled);
@@ -232,6 +254,18 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const [sashCountStr, setSashCountStr] = useState<Record<number, string>>({});
     const [colWidthStr, setColWidthStr] = useState<Record<string, string>>({});
     const [barOffsetStr, setBarOffsetStr] = useState<Record<string, string>>({});
+    const [colLocked, setColLocked] = useState<Record<string, boolean>>({});
+
+    const getRowLockedMask = (rowIndex: number) => {
+        const row = grid?.rows?.[rowIndex];
+        if (!row) return [] as boolean[];
+        return row.cols.map((_, ci) => Boolean(colLocked[`${rowIndex}.${ci}`]));
+    };
+
+    const toggleColLock = (rowIndex: number, colIndex: number) => {
+        const key = `${rowIndex}.${colIndex}`;
+        setColLocked(prev => ({ ...prev, [key]: !prev[key] }));
+    };
 
     useEffect(() => {
         setQtyStr(String(d.qty ?? 1));
@@ -249,12 +283,14 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const nextSashCounts: Record<number, string> = {};
         const nextColWidths: Record<string, string> = {};
         const nextBarOffsets: Record<string, string> = {};
+        const nextColLocked: Record<string, boolean> = {};
 
         grid.rows.forEach((r, ri) => {
             nextRowHeights[ri] = formatMm(r.height_ratio ?? 0);
             nextSashCounts[ri] = String(r.cols.length);
             r.cols.forEach((c, ci) => {
                 nextColWidths[`${ri}.${ci}`] = formatMm(c.width_ratio ?? 0);
+                nextColLocked[`${ri}.${ci}`] = colLocked[`${ri}.${ci}`] ?? false;
                 const bar = c.leaf?.horizontalBars?.[0];
                 if (bar && Number.isFinite(bar.offset_mm)) {
                     const rowHeight = r.height_ratio && r.height_ratio > 0
@@ -272,6 +308,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         setSashCountStr(nextSashCounts);
         setColWidthStr(nextColWidths);
         setBarOffsetStr(nextBarOffsets);
+        setColLocked(nextColLocked);
     }, [grid?.rows]);
 
     // Inizializzazione
@@ -339,7 +376,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const commitTotal = roundMm(Math.max(100, parsed));
 
         if (key === 'width_mm') {
-            const nextRows = grid.rows.map((r) => {
+            const nextRows = grid.rows.map((r, rIdx) => {
                 if (autoSplit) {
                     const count = Math.max(1, r.cols.length);
                     const distributed = splitEvenly(commitTotal, count);
@@ -351,7 +388,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                         })),
                     };
                 }
-                return { ...r, cols: rebalanceColsToTotal(r.cols, commitTotal) };
+                return { ...r, cols: rebalanceColsToTotal(r.cols, commitTotal, undefined, undefined, getRowLockedMask(rIdx)) };
             });
 
             applyPatch(
@@ -415,7 +452,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                 return { ...row, cols };
             }
             // no autoSplit: ribilancia proporzionalmente
-            return { ...row, cols: rebalanceColsToTotal(newCols, totalW) };
+            return { ...row, cols: rebalanceColsToTotal(newCols, totalW, undefined, undefined, getRowLockedMask(rowIndex)) };
         });
 
         handleRowsChange(nextRows);
@@ -515,7 +552,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const totalW = grid.width_mm;
         const nextRows = grid.rows.map((r, i) => {
             if (i !== rowIndex) return r;
-            return { ...r, cols: rebalanceColsToTotal(r.cols, totalW, colIndex, newWidthMm) };
+            return { ...r, cols: rebalanceColsToTotal(r.cols, totalW, colIndex, newWidthMm, getRowLockedMask(rowIndex)) };
         });
         handleRowsChange(nextRows);
     };
@@ -823,9 +860,20 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                                     <div className="text-xs text-gray-600">Larghezza totale stimata: <b>{formatMm(grid.width_mm / Math.max(1, row.cols.length))} mm</b></div>
                                                 ) : (
                                                     <>
-                                                        <label className="text-xs text-gray-500">Larghezza Anta {rowIndex + 1}.{colIndex + 1} (totale mm)</label>
+                                                        <div className="flex items-center gap-2">
+                                                            <label className="text-xs text-gray-500">Larghezza Anta {rowIndex + 1}.{colIndex + 1} (totale mm)</label>
+                                                            {(() => {
+                                                                const lockKey = `${rowIndex}.${colIndex}`;
+                                                                const isLocked = Boolean(colLocked[lockKey]);
+                                                                return (
+                                                                    <button type="button" title={isLocked ? 'Sblocco misura' : 'Blocca misura'} onClick={() => toggleColLock(rowIndex, colIndex)} className="p-1 rounded">
+                                                                        {isLocked ? <Lock size={16} /> : <Unlock size={16} />}
+                                                                    </button>
+                                                                );
+                                                            })()}
+                                                        </div>
                                                         <input
-                                                            className="input"
+                                                            className={`input ${Boolean(colLocked[`${rowIndex}.${colIndex}`]) ? 'bg-gray-100' : ''}`}
                                                             type="text"
                                                             inputMode="decimal"
                                                             pattern="\\d+([.,]\\d{0,1})?"
@@ -876,13 +924,22 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                     {/* Colore profilo */}
                     <div>
                         <label className="text-xs text-gray-500">Colore profilo</label>
-                        <input
-                            className="input"
-                            type="text"
-                            placeholder="Es. RAL 9016 Bianco"
-                            value={(d as any).color ?? ''}
-                            onChange={(e) => applyPatch({ color: e.target.value })}
-                        />
+                        <div className="flex items-center gap-2">
+                            <input
+                                className="input flex-1"
+                                type="text"
+                                placeholder="Es. RAL 9016 Bianco"
+                                value={(d as any).color ?? ''}
+                                onChange={(e) => applyPatch({ color: e.target.value })}
+                            />
+                            <input
+                                title="Colore telaio (anteprima)"
+                                type="color"
+                                value={(grid as any)?.frame_color ?? '#ffffff'}
+                                            onChange={(e) => applyPatch({}, ({ frame_color: e.target.value } as any))}
+                                className="w-10 h-8 p-0 rounded"
+                            />
+                        </div>
                     </div>
                     {/* Colore cerniere / ferramenta */}
                     <div>

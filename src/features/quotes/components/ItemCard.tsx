@@ -37,9 +37,10 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                       // 1) Disegno live per FINESTRA con griglia
                       (it.kind === 'finestra' && (it as any)?.options?.gridWindow)
                     ) ? (
-                      <WindowSvg
-                        cfg={(it as any).options.gridWindow}
-                      />
+                                            <WindowSvg
+                                                cfg={(it as any).options.gridWindow}
+                                                stroke={(it as any).options?.gridWindow?.frame_color ?? (it as any).color ?? '#222'}
+                                            />
                     ) : (
                       // 2) Disegno live per CASSONETTO (usa misure direttamente sull'item)
                       it.kind === 'cassonetto' ? (

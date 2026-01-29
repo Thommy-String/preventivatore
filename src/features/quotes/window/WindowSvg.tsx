@@ -1,22 +1,5 @@
 import * as React from "react";
-
-// --- Tipi ---
-export type LeafState =
-    | "fissa"
-    | "apre_sx"
-    | "apre_dx"
-    | "vasistas"
-    | "apre_sx+vasistas"
-    | "apre_dx+vasistas"
-    | "scorrevole_sx"
-    | "scorrevole_dx";
-
-type LeafConfig = {
-    state: LeafState;
-    spanId?: string;
-    spanLeader?: boolean;
-    horizontalBars?: Array<{ offset_mm: number; origin?: 'top' | 'bottom' }>;
-};
+import type { GridWindowConfig, LeafState } from "../types";
 
 type RowBarInfo = {
     positions: Array<{ absMm: number; absPx: number }>;
@@ -26,38 +9,10 @@ type RowBarInfo = {
     endPx: number;
 };
 
-export interface GridWindowConfig {
-    width_mm: number;
-    height_mm: number;
-    frame_mm: number;
-    mullion_mm: number;
-    glazing: "singolo" | "doppio" | "triplo" | "satinato";
-    showDims?: boolean;
-    rows: Array<{
-        height_ratio: number;
-        cols: Array<{ width_ratio: number; leaf?: LeafConfig; glazing?: GridWindowConfig['glazing']; handle?: boolean }>;
-    }>;
-}
-
 export interface WindowSvgProps {
     cfg?: GridWindowConfig;
     radius?: number;
     stroke?: string;
-}
-
-// --- Funzioni Helper ---
-function makeFallbackCfg(): GridWindowConfig {
-    return {
-        width_mm: 1200, height_mm: 1500, frame_mm: 70, mullion_mm: 60,
-        glazing: "doppio", showDims: true,
-        rows: [{
-            height_ratio: 1,
-            cols: [
-                { width_ratio: 1, leaf: { state: "apre_sx" }, handle: true },
-                { width_ratio: 1, leaf: { state: "apre_dx" }, handle: true }
-            ]
-        }]
-    };
 }
 
 const sum = (a: number[]) => (a && a.length ? a.reduce((s, v) => s + v, 0) : 0);
@@ -113,6 +68,20 @@ function glassFill(glazing: GridWindowConfig["glazing"]) {
 
 function isSatin(glazing: GridWindowConfig["glazing"]) {
     return glazing === "satinato";
+}
+
+function makeFallbackCfg(): GridWindowConfig {
+    return {
+        width_mm: 1200,
+        height_mm: 1500,
+        frame_mm: 60,
+        mullion_mm: 20,
+        glazing: 'doppio',
+        showDims: true,
+        rows: [
+            { height_ratio: 1, cols: [{ width_ratio: 1, leaf: { state: 'fissa' } }] }
+        ]
+    };
 }
 
 // --- Componenti di Disegno ---
@@ -222,12 +191,17 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
 
     const basePadTop = Math.max(6, baseFont * 0.5);
     const basePadBottom = labelGap + baseFont * 1.1;
-    const padTop = basePadTop + topLabelsArea;
-    const padBottom = basePadBottom + bottomLabelsArea + totalFontSize * 1.4 + labelGap;
+    let padTop = basePadTop + topLabelsArea;
+    let padBottom = basePadBottom + bottomLabelsArea + totalFontSize * 1.4 + labelGap;
+    // ensure frame stroke is visible in exported PDF (avoid being clipped)
+    padTop += strokeWidth;
+    padBottom += strokeWidth;
 
-    const satinPatternId = React.useMemo(() => `satin-dots-${Math.random().toString(36).slice(2, 8)}`, []);
+    const satinPatternId = React.useMemo(() => `satin-dots-pfeli3`, []);
     const dimensionLineDash = `${strokeWidth * 3.5} ${strokeWidth * 2.2}`;
     const handleColor = '#333';
+    const frameColor = (safe as any).frame_color ?? stroke;
+    const outlineColor = '#000';
 
     const drawing = rows.reduce((acc, row, rowIdx) => {
         const rowH = (usableH * row.height_ratio) / totalRowRatios;
@@ -274,12 +248,28 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
 
             const sashGlazing = col.glazing ?? glazing;
 
+            // draw vertical divider BEFORE the glass of this column when it's not the first column
             if (colIdx > 0) {
-                const mx = startX - (mullion_mm / 2);
-                acc.nodes.push(<line key={`vm-${rowIdx}-${colIdx}`} x1={mx} y1={y0} x2={mx} y2={y0 + rowH} stroke={stroke} strokeWidth={strokeWidth} />);
+                const vx = startX - (mullion_mm / 2); // center of the mullion gap
+                const rectX = vx - mullion_mm / 2; // left edge of mullion fill
+                const rectW = mullion_mm;
+
+                // filled area of the mullion (solid color)
+                acc.nodes.push(
+                    <rect
+                        key={`vm-fill-${rowIdx}-${colIdx}`}
+                        x={rectX}
+                        y={y0}
+                        width={rectW}
+                        height={rowH}
+                        fill={frameColor}
+                    />
+                );
+
+                // (removed small white gap to avoid white contour between mullion and glass)
             }
 
-            acc.nodes.push(<g key={`g-${rowIdx}-${colIdx}`}><rect x={gx} y={gy} width={gw} height={gh} fill={glassFill(sashGlazing)} stroke={stroke} strokeWidth={strokeWidth / 1.5} />{isSatin(sashGlazing) && (<rect x={gx} y={gy} width={gw} height={gh} fill={`url(#${satinPatternId})`} opacity={0.6} />)}</g>);
+            acc.nodes.push(<g key={`g-${rowIdx}-${colIdx}`}><rect x={gx} y={gy} width={gw} height={gh} fill={glassFill(sashGlazing)} stroke={outlineColor} strokeWidth={strokeWidth / 1.5} />{isSatin(sashGlazing) && (<rect x={gx} y={gy} width={gw} height={gh} fill={`url(#${satinPatternId})`} opacity={0.6} />)}</g>);
 
             const bars = col.leaf?.horizontalBars ?? [];
             if (bars.length && pxPerMmRow > 0) {
@@ -339,7 +329,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
                                 y1={finalTop}
                                 x2={bodyX + bodyWidth}
                                 y2={finalTop}
-                                stroke={stroke}
+                                stroke={outlineColor}
                                 strokeWidth={frameStroke}
                             />
                             <line
@@ -347,7 +337,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
                                 y1={finalBottom}
                                 x2={bodyX + bodyWidth}
                                 y2={finalBottom}
-                                stroke={stroke}
+                                stroke={outlineColor}
                                 strokeWidth={frameStroke}
                             />
                             {innerWidth > 0 && innerHeight > 0 && (
@@ -382,7 +372,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
                     );
                 });
             }
-            acc.nodes.push(<OpeningGlyph key={`o-${rowIdx}-${colIdx}`} x={gx} y={gy} w={gw} h={gh} state={col.leaf?.state ?? "fissa"} stroke={stroke} strokeWidth={strokeWidth} />);
+            acc.nodes.push(<OpeningGlyph key={`o-${rowIdx}-${colIdx}`} x={gx} y={gy} w={gw} h={gh} state={col.leaf?.state ?? "fissa"} stroke={outlineColor} strokeWidth={strokeWidth} />);
 
             const outerStartRaw = colIdx === 0 ? 0 : startX - (mullion_mm / 2);
             const outerEndRaw = colIdx === row.cols.length - 1 ? width_mm : startX + colW + (mullion_mm / 2);
@@ -446,10 +436,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
             xCursor += colW + mullion_mm;
         });
 
-        if (rowIdx < rows.length - 1) {
-            const ty = y0 + rowH + (mullion_mm / 2);
-            acc.nodes.push(<line key={`hz-${rowIdx}`} x1={frame_mm} y1={ty} x2={width_mm - frame_mm} y2={ty} stroke={stroke} strokeWidth={strokeWidth} />);
-        }
+        // horizontal divider lines removed to match requested style
 
         if (colLabels.length > 0 && rowHasNewSegment) {
             let labelY: number | null = null, position: "top" | "bottom" | null = null;
@@ -484,7 +471,9 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
         rowLabels: [] as Array<{ rowIdx: number; y: number; position: "top" | "bottom"; rowTop: number; rowBottom: number; labels: Array<{ x: number; text: string; start: number; end: number }>; }>,
         rowDimensions: [] as Array<{ rowIdx: number; top: number; bottom: number; heightMm: number }>,
         seenSegments: new Set<string>(),
-        rowBars: new Map<number, RowBarInfo>()
+        rowBars: new Map<number, RowBarInfo>(),
+        mullionLines: [] as Array<{ x: number; y1: number; y2: number; width: number }>,
+        horzLines: [] as Array<{ x1: number; x2: number; y: number; width: number }>
     });
 
     const rowHeightSegments = rows.length > 1
@@ -592,24 +581,26 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     const totalLabelY = height_mm + bottomStackHeight + labelGap + totalFontSize * 0.9;
     const leftLabelX = -(labelGap + totalFontSize * 0.75);
     const labelLineGap = totalFontSize * 0.6;
-
+    
     return (
         <svg
             viewBox={`${-padLeft} ${-padTop} ${width_mm + padLeft + padRight} ${height_mm + padTop + padBottom}`}
             width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Anteprima finestra">
             <defs>
-                <pattern id={satinPatternId} patternUnits="userSpaceOnUse" width={strokeWidth * 8} height={strokeWidth * 8}>
-                    <rect x="0" y="0" width={strokeWidth * 8} height={strokeWidth * 8} fill="transparent" />
-                    <circle cx={strokeWidth * 2} cy={strokeWidth * 2} r={strokeWidth * 0.8} fill="#d1d5db" />
+                <pattern id={satinPatternId} patternUnits="userSpaceOnUse" width={30} height={30}>
+                    <rect x="0" y="0" width={30} height={30} fill="transparent" />
+                    <circle cx={7.5} cy={7.5} r={3} fill="#d1d5db" />
                 </pattern>
             </defs>
-            <rect x={0} y={0} width={width_mm} height={height_mm} rx={radius} ry={radius} fill="#fdfdfd" />
-            <rect x={strokeWidth / 2} y={strokeWidth / 2} width={width_mm - strokeWidth} height={height_mm - strokeWidth} rx={radius} ry={radius} fill="none" stroke={stroke} strokeWidth={strokeWidth} />
-            <rect x={frame_mm} y={frame_mm} width={innerW} height={innerH} fill="none" stroke={stroke} strokeWidth={strokeWidth / 1.5} />
+            <rect x={0} y={0} width={width_mm} height={height_mm} rx={radius} ry={radius} fill={frameColor} />
+            <rect x={strokeWidth / 2} y={strokeWidth / 2} width={width_mm - strokeWidth} height={height_mm - strokeWidth} rx={radius} ry={radius} fill="none" stroke={outlineColor} strokeWidth={strokeWidth} />
+            <rect x={frame_mm} y={frame_mm} width={innerW} height={innerH} fill={frameColor} stroke="none" />
             {drawing.nodes}
+            {/* overlay strokes for mullions and traverses to ensure visible contours (stroke-only to avoid covering glass glyphs) */}
+            {/* mullion and horizontal dividers drawn as lines inside nodes; overlays removed to preserve exact line structure */}
             {showDims && drawing.rowLabels.length > 0 && (
                 <>
-                    <g stroke={stroke} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
+                    <g stroke={outlineColor} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
                         {drawing.rowLabels.map(row => {
                             const fromY = row.position === "top" ? 0 : height_mm;
                             const targetY = row.position === "top" ? row.y + labelLineGap : row.y - labelLineGap;
@@ -630,21 +621,21 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
             )}
             {showDims && (
                 <>
-                    <g stroke={stroke} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
+                    <g stroke={outlineColor} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
                         <line x1={0} y1={height_mm} x2={0} y2={totalLabelY - labelLineGap} />
                         <line x1={width_mm} y1={height_mm} x2={width_mm} y2={totalLabelY - labelLineGap} />
                         <line x1={0} y1={0} x2={leftLabelX + labelLineGap} y2={0} />
                         <line x1={0} y1={height_mm} x2={leftLabelX + labelLineGap} y2={height_mm} />
                     </g>
                     <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#1f2937', fontSize: totalFontSize }}>
-                        <text x={width_mm / 2} y={totalLabelY} dominantBaseline="middle">{Math.round(width_mm)}</text>
+                        {/* total width label removed per request */}
                         <text x={leftLabelX} y={height_mm / 2} transform={`rotate(-90, ${leftLabelX}, ${height_mm / 2})`} dominantBaseline="middle">{Math.round(height_mm)}</text>
                     </g>
                 </>
             )}
             {showDims && rightDimensionGroups.length > 0 && (
                 <>
-                    <g stroke={stroke} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
+                    <g stroke={outlineColor} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
                         {rightDimensionGroups.flatMap((group, groupIdx) =>
                             group.boundaries.map((y, boundaryIdx) => (
                                 <line key={`bar-ext-${groupIdx}-${boundaryIdx}`} x1={width_mm} y1={y} x2={group.extX} y2={y} />

@@ -34,7 +34,7 @@ export async function gridWindowToPngBlob(
   const root = ReactDOMClient.createRoot(container);
   root.render(
     <div style={{ width: widthPx, height: heightPx }}>
-      <WindowSvg cfg={cfg} />
+      <WindowSvg cfg={cfg} stroke={cfg.frame_color ?? '#222'} />
     </div>
   );
 
