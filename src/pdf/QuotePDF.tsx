@@ -51,6 +51,8 @@ export type QuotePDFProps = {
         imageUrl: string | null;
         features: { eyebrow?: string; title?: string; description?: string }[] | null;
     } | null;
+    showTotalIncl?: boolean | null; // show total including VAT under total excl
+    vatPercent?: number | null;     // numeric VAT percent to compute inclusive total
 };
 
 const s = StyleSheet.create({
@@ -111,8 +113,8 @@ const s = StyleSheet.create({
     dimHWrap: {
         position: "absolute",
         top: 0,
-        bottom: 0,
-        left: -20,
+        bottom: -18,
+        left: -6,
         alignItems: "center",
         justifyContent: "center"
     },
@@ -752,6 +754,19 @@ export default function QuotePDF(props: QuotePDFProps) {
                                 <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
                             </View>
                         )}
+                        {(() => {
+                            const showIncl = !!props.showTotalIncl;
+                            const vatPct = (typeof props.vatPercent === 'number' && Number.isFinite(props.vatPercent)) ? props.vatPercent : 22;
+                            const displayedFinal = hasDiscount ? discountedTotal : originalTotal;
+                            if (!showIncl) return null;
+                            const totalIncl = displayedFinal * (1 + vatPct / 100);
+                            return (
+                                <View style={[s.tr, { borderTopWidth: 0 }]}>
+                                    <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>TOTALE (IVA INCLUSA)</Text>
+                                    <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(totalIncl)}</Text>
+                                </View>
+                            );
+                        })()}
                     </View>
                 </View>
 
@@ -847,10 +862,35 @@ export default function QuotePDF(props: QuotePDFProps) {
 
                                             if (!isProportional) {
                                                 // Fixed positions (icons, tapparella, zanzariera, persiana, ecc.)
+                                                // Apply per-kind offsets so windows (proportional) stay untouched
+                                                const widthOffsetBottom = (() => {
+                                                    switch (kindSlug) {
+                                                        case 'persiana':
+                                                        case 'tapparella':
+                                                        case 'zanzariera':
+                                                        case 'custom':
+                                                            return -6;
+                                                        default:
+                                                            return -18;
+                                                    }
+                                                })();
+
+                                                const heightLeftOffset = (() => {
+                                                    switch (kindSlug) {
+                                                        case 'persiana':
+                                                        case 'tapparella':
+                                                        case 'zanzariera':
+                                                        case 'custom':
+                                                            return 6;
+                                                        default:
+                                                            return 6;
+                                                    }
+                                                })();
+
                                                 return (
                                                     <>
-                                                        <Text style={s.dimW}>{widthText}</Text>
-                                                        <View style={s.dimHWrap}>
+                                                        <Text style={[s.dimW, { bottom: widthOffsetBottom }]}>{widthText}</Text>
+                                                        <View style={[s.dimHWrap, { left: heightLeftOffset }]}>
                                                             <Text style={s.dimH}>{heightText}</Text>
                                                         </View>
                                                     </>

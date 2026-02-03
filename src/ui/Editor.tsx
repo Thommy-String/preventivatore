@@ -245,8 +245,44 @@ export default function Editor() {
   }, [quote?.id])
 
   function upsertNotes(nextPiva: string) {
-    const newNotes = nextPiva ? `P.IVA: ${nextPiva}` : ''
-    updateField('notes', newNotes || null)
+    setNoteKey('P.IVA', nextPiva || null)
+  }
+
+  // --- Notes helpers: parse simple `Key: value; KEY2: value2` format ---
+  function parseNotesMap(notes?: string | null) {
+    const map: Record<string, string> = {};
+    if (!notes) return map;
+    const parts = notes.split(';').map(p => p.trim()).filter(Boolean);
+    for (const p of parts) {
+      const m = p.match(/^([^:]+)\s*:\s*(.+)$/);
+      if (m) {
+        const k = m[1].trim();
+        const v = m[2].trim();
+        map[k.toUpperCase()] = v;
+      }
+    }
+    return map;
+  }
+
+  function serializeNotesMap(map: Record<string, string | null | undefined>) {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(map)) {
+      if (v == null || String(v).trim() === '') continue;
+      parts.push(`${k}: ${String(v)}`);
+    }
+    return parts.length ? parts.join('; ') : null;
+  }
+
+  function setNoteKey(key: string, value: string | null) {
+    const raw = quote?.notes ?? '';
+    const map = parseNotesMap(String(raw));
+    if (value == null || String(value).trim() === '') {
+      delete map[key.toUpperCase()];
+    } else {
+      map[key.toUpperCase()] = String(value).trim();
+    }
+    const next = serializeNotesMap(map as Record<string, string | null | undefined>);
+    updateField('notes', next as any);
   }
 
   // --- Sconto totale (solo UI) ---
@@ -622,6 +658,14 @@ export default function Editor() {
 
 
 
+      const notesMap = parseNotesMap(quote?.notes);
+      const computedShowTotalIncl = notesMap['SHOW_TOTAL_INCL'] === 'true';
+      const computedVatPercent = Number.isFinite(Number(notesMap['VAT_PERCENT']))
+        ? Number(notesMap['VAT_PERCENT'])
+        : Number.isFinite(Number(quote.vat))
+          ? Number(quote.vat)
+          : 22;
+
       const data = {
         companyLogoUrl: branding?.logo_url ?? null,
         quoteNumber: quote.number ?? null,
@@ -668,6 +712,8 @@ export default function Editor() {
           originalTotal: totalExcluded,              // prima dello sconto
           discountedTotal,                           // dopo lo sconto
         } : null,
+        showTotalIncl: computedShowTotalIncl,
+        vatPercent: computedVatPercent,
       };
 
       const element = <qpdf.default {...data} />;
@@ -1101,17 +1147,38 @@ export default function Editor() {
                 />
               </div>
 
+              {/* IVA select removed — use VAT percent in notes / VAT_PERCENT field */}
               <div>
-                <div className="text-xs text-gray-500">IVA</div>
-                <select
-                  className="input"
-                  value={quote.vat ?? '22'}
-                  onChange={(e) => updateField('vat', (e.target.value as any))}
-                >
-                  <option value="22">22%</option>
-                  <option value="10">10%</option>
-                  <option value="4">4%</option>
-                </select>
+                <div className="text-xs text-gray-500">Mostra totale IVA inclusa</div>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const notesMap = parseNotesMap(quote?.notes);
+                    const checked = notesMap['SHOW_TOTAL_INCL'] === 'true';
+                    const vatVal = notesMap['VAT_PERCENT'] ?? String(quote.vat ?? '22');
+                    return (
+                      <>
+                        <input
+                          id="show_total_incl"
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-emerald-600"
+                          checked={checked}
+                          onChange={(e) => setNoteKey('SHOW_TOTAL_INCL', e.target.checked ? 'true' : 'false')}
+                        />
+                        <input
+                          type="number"
+                          className="input w-24"
+                          min={0}
+                          max={100}
+                          value={vatVal}
+                          onChange={(e) => {
+                            const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Number(e.target.value)));
+                            setNoteKey('VAT_PERCENT', v == null ? null : String(v));
+                          }}
+                        />
+                      </>
+                    )
+                  })()}
+                </div>
               </div>
             </div>
 

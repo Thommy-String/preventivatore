@@ -245,6 +245,12 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const getGrid = (): GridWindowConfig | undefined => (d as any)?.options?.gridWindow;
     const grid = getGrid();
 
+    const interpretRowHeight = (r: GridWindowConfig['rows'][0]) => {
+        const raw = r.height_ratio ?? 0;
+        if (!raw || raw <= 0) return grid ? grid.height_mm / Math.max(1, grid.rows.length) : 0;
+        return raw <= 1.0001 && grid ? raw * grid.height_mm : raw;
+    };
+
     const [widthStr, setWidthStr] = useState(typeof d.width_mm === 'number' ? formatMm(d.width_mm) : '');
     const [heightStr, setHeightStr] = useState(typeof d.height_mm === 'number' ? formatMm(d.height_mm) : '');
     const [qtyStr, setQtyStr] = useState(String(d.qty ?? 1));
@@ -286,16 +292,14 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const nextColLocked: Record<string, boolean> = {};
 
         grid.rows.forEach((r, ri) => {
-            nextRowHeights[ri] = formatMm(r.height_ratio ?? 0);
+            nextRowHeights[ri] = formatMm(interpretRowHeight(r));
             nextSashCounts[ri] = String(r.cols.length);
             r.cols.forEach((c, ci) => {
                 nextColWidths[`${ri}.${ci}`] = formatMm(c.width_ratio ?? 0);
                 nextColLocked[`${ri}.${ci}`] = colLocked[`${ri}.${ci}`] ?? false;
                 const bar = c.leaf?.horizontalBars?.[0];
                 if (bar && Number.isFinite(bar.offset_mm)) {
-                    const rowHeight = r.height_ratio && r.height_ratio > 0
-                        ? r.height_ratio
-                        : grid.height_mm / Math.max(1, grid.rows.length);
+                    const rowHeight = interpretRowHeight(r);
                     const raw = Math.max(MIN_MM, Math.min(rowHeight, bar.offset_mm));
                     const bottomValue = bar.origin === 'bottom'
                         ? raw
@@ -499,9 +503,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         const frameVal = grid.frame_mm ?? FRAME_MM;
         const newRows = grid.rows.map((row, rIdx) => {
             if (rIdx !== rowIndex) return row;
-            const safeRowHeight = row.height_ratio && row.height_ratio > 0
-                ? row.height_ratio
-                : grid.height_mm / Math.max(1, grid.rows.length);
+            const safeRowHeight = interpretRowHeight(row);
             const baseMin = MULLION_MM / 2;
             const safeMin = Math.min(safeRowHeight / 2, Math.max(baseMin, frameVal * 0.12));
             const maxOffset = Math.max(safeMin, safeRowHeight - safeMin);
@@ -694,7 +696,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                         type="text"
                                         inputMode="decimal"
                                         pattern="\\d+([.,]\\d{0,1})?"
-                                        value={rowHeightStr[rowIndex] ?? formatMm(row.height_ratio ?? 0)}
+                                        value={rowHeightStr[rowIndex] ?? formatMm(interpretRowHeight(row))}
                                         onChange={(e) => onRowHeightChange(rowIndex, e.target.value)}
                                         onBlur={() => onRowHeightBlur(rowIndex)}
                                         onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
@@ -773,9 +775,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                         const bar = col.leaf?.horizontalBars?.[0];
                                         const hasBar = Boolean(bar);
                                         const checkboxId = `bar-${rowIndex}-${colIndex}`;
-                                        const rowHeight = row.height_ratio && row.height_ratio > 0
-                                            ? row.height_ratio
-                                            : grid.height_mm / Math.max(1, grid.rows.length);
+                                        const rowHeight = interpretRowHeight(row);
                                         let storedValue = '';
                                         if (bar && Number.isFinite(bar.offset_mm)) {
                                             const raw = Math.max(MIN_MM, Math.min(rowHeight, bar.offset_mm));

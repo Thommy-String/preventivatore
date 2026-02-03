@@ -200,6 +200,22 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       (isStr(q.vatRateLabel) && q.vatRateLabel) ||
       (vat ? `IVA ${vat}%` : "IVA 22%");
 
+    let showTotalIncl = typeof q.show_total_incl === 'boolean' ? q.show_total_incl : (typeof q.showTotalIncl === 'boolean' ? q.showTotalIncl : false);
+    let vatPercent = (typeof q.vat_percent === 'number' && Number.isFinite(q.vat_percent)) ? q.vat_percent : (vat ? Number(String(vat)) : 22);
+
+    // Fallback: try to parse from free-text `notes` if DB columns aren't present
+    try {
+      const notesRaw = typeof q.notes === 'string' ? q.notes : '';
+      if (!showTotalIncl) {
+        const mShow = notesRaw.match(/SHOW_TOTAL_INCL\s*:\s*(true|1|yes)/i);
+        showTotalIncl = !!mShow;
+      }
+      if (!(typeof vatPercent === 'number' && Number.isFinite(vatPercent))) {
+        const mVat = notesRaw.match(/VAT_PERCENT\s*:\s*(\d{1,3})/i);
+        if (mVat) vatPercent = Number(mVat[1]);
+      }
+    } catch {}
+
     // Dati cliente (con P.IVA/CF)
     const customer = {
       name: isStr(q.customer_name) ? q.customer_name : (isStr(q.customerName) ? q.customerName : null),
@@ -255,6 +271,8 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
 
       profileOverview: po,
 
+      showTotalIncl,
+      vatPercent,
       items: pdfSafeItems,
     };
   }, [quote, manualTotals, items, profileOverview]);

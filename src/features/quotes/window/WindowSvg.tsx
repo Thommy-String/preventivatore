@@ -149,7 +149,7 @@ function handlePlacementForState(state?: LeafState): HandlePlacement {
 }
 
 // --- Renderer SVG Principale ---
-function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
+function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
     const safe = cfg ?? makeFallbackCfg();
 
     const { width_mm, height_mm, rows, frame_mm, mullion_mm, glazing } = safe;
@@ -200,15 +200,16 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
     const satinPatternId = React.useMemo(() => `satin-dots-pfeli3`, []);
     const dimensionLineDash = `${strokeWidth * 3.5} ${strokeWidth * 2.2}`;
     const handleColor = '#333';
-    const frameColor = (safe as any).frame_color ?? stroke;
-    const outlineColor = '#000';
+    const frameColor = (safe as any).frame_color ?? '#ffffff';
+    // Ensure a visible contour: prefer explicit `outline_color`, otherwise default to black
+    const outlineColor = (safe as any).outline_color ?? '#000';
 
     const drawing = rows.reduce((acc, row, rowIdx) => {
-        const rowH = (usableH * row.height_ratio) / totalRowRatios;
+        const rowH = (usableH * row.height_ratio) / totalRowRatios; // actual row height in mm
         const y0 = frame_mm + acc.offsetY;
         const rowTopMm = acc.offsetMm;
-        const rowMm = row.height_ratio > 0 ? row.height_ratio : height_mm / Math.max(1, rows.length);
-        acc.rowDimensions.push({ rowIdx, top: y0, bottom: y0 + rowH, heightMm: rowMm });
+        const rowHeightMm = rowH;
+        acc.rowDimensions.push({ rowIdx, top: y0, bottom: y0 + rowH, heightMm: rowHeightMm });
 
         const totalColsGapX = (row.cols.length - 1) * mullion_mm;
         const usableW = innerW - totalColsGapX;
@@ -220,7 +221,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
         let xCursor = frame_mm;
         const colLabels: Array<{ x: number; text: string; start: number; end: number }> = [];
 
-        const pxPerMmRow = rowMm > 0 ? rowH / rowMm : 0;
+        const pxPerMmRow = rowHeightMm > 0 ? rowH / rowHeightMm : 0;
         const mullionPx = pxPerMmRow > 0 ? pxPerMmRow * mullion_mm : mullion_mm;
         let rowHasNewSegment = false;
 
@@ -229,9 +230,9 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
             rowBarInfo = {
                 positions: [],
                 startMm: rowTopMm,
-                endMm: rowTopMm + rowMm,
-                startPx: rowTopMm,
-                endPx: rowTopMm + rowMm,
+                endMm: rowTopMm + rowHeightMm,
+                startPx: y0,
+                endPx: y0 + rowH,
             };
             acc.rowBars.set(rowIdx, rowBarInfo);
         }
@@ -281,13 +282,13 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
 
                     const offsetBottomMm = bar?.origin === 'bottom'
                         ? rawOffset
-                        : rowMm - rawOffset;
+                        : rowHeightMm - rawOffset;
 
                     const baseMin = mullion_mm / 2;
-                    const safeMin = Math.min(rowMm / 2, Math.max(baseMin, frame_mm * 0.12));
-                    const safeMax = Math.max(safeMin, rowMm - safeMin);
+                    const safeMin = Math.min(rowHeightMm / 2, Math.max(baseMin, frame_mm * 0.12));
+                    const safeMax = Math.max(safeMin, rowHeightMm - safeMin);
                     const clampedBottomMm = Math.min(safeMax, Math.max(safeMin, offsetBottomMm));
-                    const offsetTopMm = rowMm - clampedBottomMm;
+                    const offsetTopMm = rowHeightMm - clampedBottomMm;
 
                     const centerY = y0 + offsetTopMm * pxPerMmRow;
                     const availableTop = y0 + (mullionPx / 2);
@@ -297,77 +298,27 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
                     const barHeight = Math.max(mullionPx * 0.7, strokeWidth * 4);
                     const barTop = Math.max(y0, clampedY - barHeight / 2);
                     const maxTop = y0 + rowH - barHeight;
-                    const finalTop = Math.min(barTop, maxTop);
-                    const finalBottom = finalTop + barHeight;
-
-                    const bodyX = startX;
-                    const bodyWidth = colW;
-                    const frameStroke = Math.max(strokeWidth / 1.5, 0.9);
-                    const innerInset = Math.max(frameStroke * 0.9, strokeWidth * 1.4);
-
-                    const innerWidth = bodyWidth - innerInset * 2;
-                    const innerHeight = barHeight - innerInset * 2;
-                    const innerX = bodyX + innerInset;
-                    const innerY = finalTop + innerInset;
+                    // compute top of bar but do not declare unused intermediates
+                    Math.min(barTop, maxTop);
 
                     if (pxPerMmRow > 0) {
                         const barMmAbs = rowTopMm + offsetTopMm;
                         rowBarInfo.positions.push({ absMm: barMmAbs, absPx: clampedY });
                     }
 
+                    // draw traverso as a filled piece matching the frame color, slightly thicker and inset horizontally,
+                    // with black contour lines above and below to match frame appearance
+                    const visualHeight = Math.max(2, Math.min(mullionPx * 1.15, barHeight * 0.95));
+                    const horizInset = Math.max(2, Math.min(colW * 0.06, frame_mm * 0.08));
+                    const rectX = startX + horizInset;
+                    const rectW = Math.max(1, colW - horizInset * 2);
+                    const topY = clampedY - visualHeight / 2;
+                    const contourStroke = Math.max(1, strokeWidth / 1.2);
                     acc.nodes.push(
                         <g key={`hb-${rowIdx}-${colIdx}-${barIdx}`}>
-                            <rect
-                                x={bodyX}
-                                y={finalTop}
-                                width={bodyWidth}
-                                height={barHeight}
-                                fill="#dfe3ea"
-                            />
-                            <line
-                                x1={bodyX}
-                                y1={finalTop}
-                                x2={bodyX + bodyWidth}
-                                y2={finalTop}
-                                stroke={outlineColor}
-                                strokeWidth={frameStroke}
-                            />
-                            <line
-                                x1={bodyX}
-                                y1={finalBottom}
-                                x2={bodyX + bodyWidth}
-                                y2={finalBottom}
-                                stroke={outlineColor}
-                                strokeWidth={frameStroke}
-                            />
-                            {innerWidth > 0 && innerHeight > 0 && (
-                                <rect
-                                    x={innerX}
-                                    y={innerY}
-                                    width={innerWidth}
-                                    height={innerHeight}
-                                    fill="#f8fafc"
-                                />
-                            )}
-                            <line
-                                x1={bodyX + frameStroke}
-                                y1={finalTop + frameStroke * 0.8}
-                                x2={bodyX + bodyWidth - frameStroke}
-                                y2={finalTop + frameStroke * 0.8}
-                                stroke="#ffffff"
-                                strokeWidth={frameStroke / 2}
-                                strokeLinecap="round"
-                                opacity={0.6}
-                            />
-                            <line
-                                x1={bodyX + frameStroke * 0.6}
-                                y1={finalBottom - frameStroke * 0.8}
-                                x2={bodyX + bodyWidth - frameStroke * 0.6}
-                                y2={finalBottom - frameStroke * 0.8}
-                                stroke="rgba(30, 41, 59, 0.25)"
-                                strokeWidth={frameStroke / 1.5}
-                                strokeLinecap="round"
-                            />
+                            <rect x={rectX} y={topY} width={rectW} height={visualHeight} fill={frameColor} />
+                            <line x1={rectX} y1={topY} x2={rectX + rectW} y2={topY} stroke={outlineColor} strokeWidth={contourStroke} strokeLinecap="square" />
+                            <line x1={rectX} y1={topY + visualHeight} x2={rectX + rectW} y2={topY + visualHeight} stroke={outlineColor} strokeWidth={contourStroke} strokeLinecap="square" />
                         </g>
                     );
                 });
@@ -436,7 +387,41 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
             xCursor += colW + mullion_mm;
         });
 
-        // horizontal divider lines removed to match requested style
+        if (rowIdx < rows.length - 1) {
+            const ty = y0 + rowH;
+            const rectY = ty - (mullion_mm / 2);
+            const rectX = frame_mm;
+            const rectW = innerW;
+            const rectH = mullion_mm;
+
+            // filled traversa (mullion) area
+            acc.nodes.push(
+                <rect
+                    key={`hz-fill-${rowIdx}`}
+                    x={rectX}
+                    y={rectY}
+                    width={rectW}
+                    height={rectH}
+                    fill={frameColor}
+                />
+            );
+
+            // crisp center stroke for sharper separation
+            const centerY = ty;
+            const hStroke = Math.max(1, strokeWidth * 1.2);
+            acc.nodes.push(
+                <line
+                    key={`hz-line-${rowIdx}`}
+                    x1={rectX}
+                    y1={centerY}
+                    x2={rectX + rectW}
+                    y2={centerY}
+                    stroke={outlineColor}
+                    strokeWidth={hStroke}
+                    strokeLinecap="square"
+                />
+            );
+        }
 
         if (colLabels.length > 0 && rowHasNewSegment) {
             let labelY: number | null = null, position: "top" | "bottom" | null = null;
@@ -462,7 +447,7 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
         }
 
         acc.offsetY += rowH + mullion_mm;
-        acc.offsetMm += row.height_ratio + (rowIdx < rows.length - 1 ? mullion_mm : 0);
+        acc.offsetMm += rowH + (rowIdx < rows.length - 1 ? mullion_mm : 0);
         return acc;
     }, {
         nodes: [] as React.ReactNode[],
@@ -628,7 +613,9 @@ function WindowSvg({ cfg, radius = 6, stroke = "#222" }: WindowSvgProps) {
                         <line x1={0} y1={height_mm} x2={leftLabelX + labelLineGap} y2={height_mm} />
                     </g>
                     <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#1f2937', fontSize: totalFontSize }}>
-                        {/* total width label removed per request */}
+                        {/* total width label (centered under drawing) */}
+                        <text x={width_mm / 2} y={totalLabelY + 6} dominantBaseline="hanging">{Math.round(width_mm)}</text>
+                        {/* height label (rotated at left) */}
                         <text x={leftLabelX} y={height_mm / 2} transform={`rotate(-90, ${leftLabelX}, ${height_mm / 2})`} dominantBaseline="middle">{Math.round(height_mm)}</text>
                     </g>
                 </>
