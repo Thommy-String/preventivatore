@@ -4,6 +4,8 @@ import { useShallow } from "zustand/react/shallow";
 import { useQuoteStore } from "../stores/useQuoteStore";
 import type { QuotePDFProps } from "./QuotePDF";
 import { normalizeSurfaceEntries } from "../features/quotes/utils/surfaceSelections";
+import { TERMS_PROFILES, buildTermsDocument, detectTermsProfile } from "../content/terms";
+import type { TermsDocument } from "../content/terms";
 
 // Debug helper: taglia le stringhe nei log
 const __short = (s?: string) =>
@@ -200,6 +202,23 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       (isStr(q.vatRateLabel) && q.vatRateLabel) ||
       (vat ? `IVA ${vat}%` : "IVA 22%");
 
+    const termsText = isStr(q.terms) ? q.terms : null;
+    let termsStructured: TermsDocument | null = (q as any)?.termsStructured && typeof (q as any).termsStructured === 'object'
+      ? (q as any).termsStructured as TermsDocument
+      : null;
+
+    if (!termsStructured && termsText) {
+      const fallbackProfile = detectTermsProfile(
+        termsText,
+        (q.customer_type === 'azienda' || q.customerType === 'azienda') ? 'azienda' : 'privato'
+      );
+      const profile = TERMS_PROFILES.find(p => p.id === fallbackProfile) ?? TERMS_PROFILES[0];
+      const rebuilt = buildTermsDocument(profile, validityDays ? { validityDays } : undefined);
+      if (rebuilt.text.trim() === termsText.trim()) {
+        termsStructured = rebuilt;
+      }
+    }
+
     let showTotalIncl = typeof q.show_total_incl === 'boolean' ? q.show_total_incl : (typeof q.showTotalIncl === 'boolean' ? q.showTotalIncl : false);
     let vatPercent = (typeof q.vat_percent === 'number' && Number.isFinite(q.vat_percent)) ? q.vat_percent : (vat ? Number(String(vat)) : 22);
 
@@ -267,7 +286,8 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       mountingCost: isNum(q.mountingCost) ? q.mountingCost : null,
       totalExcluded: isNum(q.totalExcluded) ? q.totalExcluded : null,
       validityLabel,
-      terms: isStr(q.terms) ? q.terms : null,
+      terms: termsText,
+      termsStructured,
 
       profileOverview: po,
 

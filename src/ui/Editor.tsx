@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadQuoteItemImage } from '../lib/uploadImages'
-import { ArrowLeft, FileText, User, Building, Copy, Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
+import { ArrowLeft, FileText, User, Building, Package, Copy, Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -18,6 +18,8 @@ import { euro } from '../features/quotes/utils/pricing'
 import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal'
 import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
+import { TERMS_PROFILES, GLOBAL_PAYMENT_NOTES, SUPPLY_ONLY_PLAN, buildTermsDocument } from '../content/terms'
+import type { TermsProfile } from '../content/terms'
 import {
   SURFACE_GROUPS,
   buildSurfaceSummary,
@@ -47,6 +49,7 @@ type Quote = {
   total_mq: number | null
   profile_system: string | null
   notes: string | null
+  terms?: string | null
   manual_totals?: ManualTotalRow[]
   discount_json?: {
     mode: 'pct' | 'final';
@@ -56,14 +59,24 @@ type Quote = {
 }
 
 type BrandingSettings = { logo_url?: string | null }
-type TermsSettings = { validity_label?: string | null, conditions?: string | null }
-
 // Modular components
 import { ItemCard } from '../features/quotes/components/ItemCard'
 import { ItemModal } from '../features/quotes/modals/ItemModal'
 import { ProfileOverview } from '../components/editor/ProfileOverview'
 
 const DEFAULT_INSTALL_TIME = '6-8 settimane'
+
+const EMPTY_TERMS_PROFILE: TermsProfile = {
+  id: 'privato',
+  label: 'Termini standard',
+  tagline: '',
+  summary: '',
+  validityTemplate: "VALIDITA' OFFERTA: {days} GG DALLA PRESENTE",
+  notesIntro: 'Note del cliente (termini particolari o richieste specifiche).',
+  paymentPlan: [],
+  sections: [],
+  privacy: { title: 'Privacy e trattamento dei dati', body: [] }
+}
 
 const createEmptyManualRow = (): ManualTotalRow => ({
   id: crypto.randomUUID(),
@@ -144,7 +157,6 @@ export default function Editor() {
   // Header (DB)
   const [quote, setQuote] = useState<Quote | null>(null)
   const [branding, setBranding] = useState<BrandingSettings | null>(null)
-  const [terms, setTerms] = useState<TermsSettings | null>(null)
   const [saving, setSaving] = useState(false)
 
   // Riepilogo costi (manuale per categoria)
@@ -421,6 +433,46 @@ export default function Editor() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const isModalOpen = !!draft
 
+  const defaultTermsProfile = TERMS_PROFILES[0] ?? EMPTY_TERMS_PROFILE
+
+  const termsDoc = useMemo(() => {
+    return buildTermsDocument(defaultTermsProfile, { validityDays: quote?.validity_days ?? 15 })
+  }, [defaultTermsProfile, quote?.validity_days])
+
+  const privatiProfile = TERMS_PROFILES.find((p) => p.id === 'privato') ?? defaultTermsProfile
+  const aziendaProfile = TERMS_PROFILES.find((p) => p.id === 'azienda') ?? defaultTermsProfile
+
+  const supplyOnlyColumn = {
+    id: 'supply',
+    icon: Package,
+    label: SUPPLY_ONLY_PLAN.label,
+    tagline: SUPPLY_ONLY_PLAN.tagline ?? SUPPLY_ONLY_PLAN.summary,
+    summary: SUPPLY_ONLY_PLAN.summary,
+    steps: SUPPLY_ONLY_PLAN.steps,
+  } as const
+
+  const SupplyIcon = supplyOnlyColumn.icon
+
+  const installColumns = [
+    {
+      id: 'privato',
+      icon: User,
+      label: privatiProfile.label,
+      tagline: privatiProfile.tagline,
+      summary: privatiProfile.summary,
+      steps: privatiProfile.paymentPlan,
+    },
+    {
+      id: 'azienda',
+      icon: Building,
+      label: aziendaProfile.label,
+      tagline: aziendaProfile.tagline,
+      summary: aziendaProfile.summary,
+      steps: aziendaProfile.paymentPlan,
+    },
+  ] as const
+
+
   function startAdd(kind: keyof typeof registry) {
     const base = registry[kind].makeDefaults()
     setEditingId(null)
@@ -685,10 +737,9 @@ export default function Editor() {
         catTotals,
         totalExcluded,
         validityDays: quote.validity_days ?? 15,
-        validityLabel: (terms?.validity_label && terms.validity_label.trim())
-          ? terms.validity_label
-          : `VALIDITÀ OFFERTA: ${quote.validity_days ?? 15} giorni`,
-        terms: terms?.conditions || null,
+        validityLabel: termsDoc.validityLabel || `VALIDITA' OFFERTA: ${quote.validity_days ?? 15} giorni`,
+        terms: termsDoc.text,
+        termsStructured: termsDoc,
 
         // passa gli items già normalizzati (no blob:)
         items: itemsForPdf,
@@ -755,6 +806,7 @@ export default function Editor() {
     })()
   }, [id, setItems])
 
+
   useEffect(() => {
     // Load app settings (branding + terms)
     ; (async () => {
@@ -764,13 +816,6 @@ export default function Editor() {
         .eq('key', 'branding')
         .maybeSingle()
       if (b?.value) setBranding(b.value as BrandingSettings)
-
-      const { data: t } = await supabase
-        .from('app_settings')
-        .select('value')
-        .eq('key', 'terms')
-        .maybeSingle()
-      if (t?.value) setTerms(t.value as TermsSettings)
     })()
   }, [])
 
@@ -846,6 +891,13 @@ export default function Editor() {
       setIsMigratingImages(false)
     }
   }, [quote?.id, items, isMigratingImages, setItems])
+
+  useEffect(() => {
+    if (!quote) return
+    if (!termsDoc.text) return
+    if (quote.terms === termsDoc.text) return
+    updateField('terms', termsDoc.text as Quote['terms'])
+  }, [quote?.terms, termsDoc.text])
 
   useEffect(() => {
     if (!quote) return
@@ -938,6 +990,33 @@ export default function Editor() {
       navigate('/', { replace: true });
     }
   };
+
+  const copyTermsToClipboard = async () => {
+    try {
+      const text = termsDoc.text || ''
+      if (!text) {
+        toast.error('Nessun testo disponibile da copiare')
+        return
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+      } else if (typeof document !== 'undefined') {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      toast.success('Testo delle condizioni copiato negli appunti')
+    } catch (error) {
+      console.error(error)
+      toast.error('Impossibile copiare il testo delle condizioni')
+    }
+  }
 
   if (!quote) {
     return <div className="animate-pulse h-8 w-40 rounded bg-gray-200" />
@@ -1515,10 +1594,137 @@ export default function Editor() {
 
       {/* Termini */}
       <Card>
-        <h2>Termini &amp; Condizioni</h2>
-        <p className="text-sm text-gray-600 mt-2">
-          Il contenuto viene inserito nella seconda pagina del PDF. Modulo di editing avanzato in arrivo.
-        </p>
+        <div className="space-y-1">
+          <h2>Termini &amp; Condizioni</h2>
+          <p className="text-sm text-gray-600">
+            Due colonne parallele mettono subito a confronto formule per privati e aziende; tutte le versioni vengono
+            incluse nel PDF insieme alle note generali e alla privacy aggiornata.
+          </p>
+        </div>
+
+        <div className="mt-6 space-y-6">
+          <div className="rounded-2xl border bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">Validità offerta</p>
+            <div className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">{termsDoc.validityLabel}</div>
+            <p className="mt-3 text-sm text-gray-600">
+              Questo quadro riassume formule economiche, note operative e privacy che si applicano a ogni preventivo,
+              indipendentemente dalla tipologia di cliente o dalla presenza di posa.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-start gap-4">
+              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-gray-700">
+                <SupplyIcon size={20} />
+              </span>
+              <div className="flex-1 min-w-[220px] space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-gray-500">{supplyOnlyColumn.label}</p>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <p className="text-xl font-semibold tracking-tight text-gray-900">{supplyOnlyColumn.tagline}</p>
+                  <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[11px] uppercase tracking-wide text-gray-600">
+                    Solo fornitura
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">{supplyOnlyColumn.summary}</p>
+              </div>
+              <div className="text-right text-xs text-gray-500">
+                <p>{termsDoc.validityLabel}</p>
+                <p>Adatta anche a ritiro materiale</p>
+              </div>
+            </div>
+            <ol className="mt-5 grid gap-3 md:grid-cols-2">
+              {supplyOnlyColumn.steps.map((step, idx) => (
+                <li key={`supply-${step.label}`} className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Step {idx + 1}</div>
+                  <div className="mt-2 text-base font-semibold text-gray-900">{step.label}</div>
+                  <p className="mt-1 text-sm text-gray-600">{step.description}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {installColumns.map((column) => {
+              const Icon = column.icon
+              return (
+                <div key={column.id} className="rounded-2xl border bg-white p-5 shadow-sm flex flex-col">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-900/5 text-gray-900">
+                        <Icon size={18} />
+                      </span>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.3em] text-gray-500">{column.label}</p>
+                        <p className="text-lg font-semibold text-gray-900">{column.tagline}</p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-medium text-gray-400">{column.steps.length} step</span>
+                  </div>
+                  <p className="mt-3 text-sm text-gray-600">{column.summary}</p>
+                  <ol className="mt-4 space-y-4 border-l border-gray-200 pl-4">
+                    {column.steps.map((step, idx) => (
+                      <li key={`${column.id}-${step.label}`} className="space-y-1">
+                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Step {idx + 1}</div>
+                        <div className="text-base font-semibold text-gray-900">{step.label}</div>
+                        <p className="text-sm text-gray-600">{step.description}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )
+            })}
+          </div>
+
+          {GLOBAL_PAYMENT_NOTES.length > 0 && (
+            <div className="rounded-2xl border bg-gray-50 p-5 shadow-sm">
+              <div className="text-xs uppercase tracking-widest text-gray-500">Regole generali sui pagamenti</div>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-gray-700">
+                {GLOBAL_PAYMENT_NOTES.map((note, idx) => (
+                  <li key={`global-note-${idx}`}>{note}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-dashed bg-gray-50 p-5">
+            <div className="text-xs uppercase tracking-widest text-gray-500">Note del cliente</div>
+            <p className="mt-2 text-sm text-gray-600">{defaultTermsProfile.notesIntro}</p>
+            <div className="mt-4 space-y-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div key={`note-line-${idx}`} className="h-10 border-b border-dashed border-gray-300" />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {defaultTermsProfile.sections.map((section) => (
+              <div key={section.title} className="rounded-2xl border bg-white p-5 shadow-sm">
+                <div className="text-xs uppercase tracking-widest text-gray-500">{section.title}</div>
+                {section.body.map((paragraph, idx) => (
+                  <p key={`${section.title}-${idx}`} className="mt-3 text-sm leading-relaxed text-gray-700">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-sm">
+            <div className="text-xs uppercase tracking-widest text-gray-700">{defaultTermsProfile.privacy.title}</div>
+            {defaultTermsProfile.privacy.body.map((paragraph, idx) => (
+              <p key={`privacy-${idx}`} className="mt-3 text-sm leading-relaxed text-gray-800">
+                {paragraph}
+              </p>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm text-gray-600">
+            <span>Il testo sopra viene salvato nel preventivo e mostrato nella pagina delle condizioni.</span>
+            <Button variant="outline" onClick={copyTermsToClipboard} className="flex items-center gap-2 text-sm">
+              <Copy size={14} /> Copia testo completo
+            </Button>
+          </div>
+        </div>
       </Card>
 
 

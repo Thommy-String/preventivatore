@@ -1,6 +1,6 @@
 // src/pdf/QuotePDF.tsx
 import {
-    Document, Page, View, Text, Image, StyleSheet
+    Document, Page, View, Text, Image, StyleSheet, Svg, Path
 } from "@react-pdf/renderer";
 
 import finestraImg from "../assets/images/finestra.png";
@@ -11,6 +11,8 @@ import tapparellaImg from "../assets/images/tapparella.png";
 import xInfissiLogo from "../assets/images/x-infissi-logo.png";
 import type { ManualTotalSurfaceEntry } from "../features/quotes/types";
 import { buildSurfaceSummary, formatMq, normalizeSurfaceEntries } from "../features/quotes/utils/surfaceSelections";
+import type { TermsDocument, TermsProfile } from "../content/terms";
+import { TERMS_PROFILES, GLOBAL_PAYMENT_NOTES, SUPPLY_ONLY_PLAN } from "../content/terms";
 
 // Accept both shapes: `{category, amount}` or `{label, amount}`
 export type CategoryTotalInput = {
@@ -39,6 +41,7 @@ export type QuotePDFProps = {
     validityLabel?: string | null;        // "VALIDITA’ OFFERTA: 15 GG…"
     validityDays?: number | null;
     terms?: string | null;                // testo condizioni (pagina 2)
+    termsStructured?: TermsDocument | null;
     items?: any[] | null;               // elenco voci del preventivo
     discount?: {
         mode: 'pct' | 'final';
@@ -237,6 +240,49 @@ const s = StyleSheet.create({
     poImageInline: { width: 50, height: 50, objectFit: 'contain', borderRadius: 4, marginLeft: 6, marginBottom: 1 },
     poHeroAbsWrap: { position: 'absolute', top: 0, bottom: 0, right: 8, width: 96, justifyContent: 'center', alignItems: 'flex-end' },
     poHeroAbs: { width: 96, height: 96, objectFit: 'contain', borderRadius: 4 },
+
+    // --- TERMS LAYOUT ---
+    termsHeaderCard: { backgroundColor: '#f7f8fb', borderRadius: 16, padding: 18, marginTop: 8, marginBottom: 14 },
+    termsProfileBadge: { fontSize: 8, color: '#6b7280', letterSpacing: 1.6, marginBottom: 6, textTransform: 'uppercase' as const },
+    termsTagline: { fontSize: 19, fontWeight: 700, color: '#111827', marginBottom: 6 },
+    termsSummary: { fontSize: 11, color: '#4b5563', lineHeight: 1.55 },
+    termsValidityChip: { alignSelf: 'flex-start', backgroundColor: '#eef1f6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginTop: 12 },
+    termsValidityText: { color: '#374151', fontSize: 9.5, fontWeight: 600 },
+    termsPaymentSection: { marginTop: 6, marginBottom: 16 },
+    termsPaymentHeader: { fontSize: 9, color: '#6b7280', letterSpacing: 1.4, textTransform: 'uppercase' as const, marginBottom: 8 },
+    termsPaymentGroupLabel: { fontSize: 9, color: '#9aa4b2', letterSpacing: 1.2, textTransform: 'uppercase' as const, marginBottom: 6, marginTop: 10 },
+    termsPaymentRow: { flexDirection: 'row', gap: 14 },
+    termsPlanCard: { flex: 1, borderRadius: 16, padding: 16, borderWidth: 1, borderStyle: 'solid', borderColor: '#e8ecf2', backgroundColor: '#fff' },
+    termsPlanHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+    termsPlanTitleInline: { fontSize: 12, fontWeight: 700, color: '#111827' },
+    termsPlanStep: { marginBottom: 12 },
+    termsPlanStepRow: { flexDirection: 'row', alignItems: 'flex-start' },
+    termsPlanStepCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#d1d5db', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+    termsPlanStepCircleText: { fontSize: 9, fontWeight: 700, color: '#374151' },
+    termsPlanStepLabel: { fontSize: 11.5, fontWeight: 600, color: '#1f2937' },
+    termsPlanStepDesc: { fontSize: 10, color: '#6b7280', marginTop: 2, lineHeight: 1.45 },
+    termsNotesIntro: { fontSize: 11, color: '#111827', lineHeight: 1.4, marginBottom: 6 },
+    termsNotesList: { marginTop: 4 },
+    termsNoteRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 6 },
+    termsNoteBullet: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#9aa4b2', marginTop: 5, marginRight: 8 },
+    termsNoteText: { fontSize: 10, color: '#4b5563', lineHeight: 1.45, flex: 1 },
+    termsSharedCard: { borderWidth: 1, borderStyle: 'solid', borderColor: '#edf0f5', borderRadius: 16, padding: 16, backgroundColor: '#f9fafc', marginBottom: 12 },
+    termsSharedTitle: { fontSize: 9, fontWeight: 700, color: '#4b5563', textTransform: 'uppercase' as const, letterSpacing: 1.2, marginBottom: 8 },
+    termsSharedGrid: { flexDirection: 'row', gap: 12 },
+    termsSharedCol: { flex: 1 },
+    termsSectionBlock: { borderWidth: 1, borderStyle: 'solid', borderColor: '#e5e7eb', borderRadius: 12, padding: 14, marginBottom: 10 },
+    termsSectionTitle: { fontSize: 12, fontWeight: 700, color: '#0f172a', marginBottom: 6 },
+    termsParagraph: { fontSize: 10, lineHeight: 1.5, color: '#6b7280', marginBottom: 6 },
+    termsPrivacyCard: { backgroundColor: '#f5f6f8', borderRadius: 14, padding: 16, marginTop: 8, borderWidth: 1, borderStyle: 'solid', borderColor: '#e5e7eb' },
+    termsPrivacyTitle: { color: '#111827', fontSize: 12, fontWeight: 700, marginBottom: 6 },
+    termsPrivacyParagraph: { color: '#374151', fontSize: 10, lineHeight: 1.5, marginBottom: 4 },
+    termsSupplyCard: { borderRadius: 16, padding: 18, backgroundColor: '#fff', borderWidth: 1, borderStyle: 'solid', borderColor: '#e8ecf2', marginBottom: 12 },
+    termsSupplyEyebrow: { fontSize: 8.5, color: '#9aa4b2', letterSpacing: 1.6, textTransform: 'uppercase' as const },
+    termsSupplyTitle: { fontSize: 16, fontWeight: 700, color: '#111827', marginTop: 4 },
+    termsSupplySummary: { fontSize: 10, color: '#6b7280', marginTop: 4, marginBottom: 10, lineHeight: 1.45 },
+    termsSupplySteps: { flexDirection: 'row', gap: 10 },
+    termsSupplyStepCol: { flex: 1, borderRadius: 12, padding: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderStyle: 'solid', borderColor: '#eef1f6' },
+    termsIconWrap: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#e5e7eb', alignItems: 'center', justifyContent: 'center', marginRight: 6 },
 });
 
 function euro(n?: number | null) {
@@ -314,6 +360,24 @@ function pickFirst(obj: any, keys: string[]): any {
     }
     return undefined
 }
+
+const UserIcon = () => (
+    <Svg width={14} height={14} viewBox="0 0 24 24">
+        <Path
+            d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z"
+            fill="#475467"
+        />
+    </Svg>
+);
+
+const BuildingIcon = () => (
+    <Svg width={14} height={14} viewBox="0 0 24 24">
+        <Path
+            d="M4 20V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6h4v10h-6v-3h-4v3H4zm4-12h2v2H8V8zm0 4h2v2H8v-2zm4-4h2v2h-2V8zm0 4h2v2h-2v-2z"
+            fill="#475467"
+        />
+    </Svg>
+);
 
 function asBoolLabel(v: any, yes = "Sì", no = "No"): string | undefined {
     if (typeof v === "boolean") return v ? yes : no
@@ -522,6 +586,7 @@ export default function QuotePDF(props: QuotePDFProps) {
         validityLabel,
         validityDays,
         terms,
+        termsStructured,
         items,
         profileOverview,
     } = props || {};
@@ -561,6 +626,39 @@ export default function QuotePDF(props: QuotePDFProps) {
     const cleanValidityLabel = (computedValidity && computedValidity !== '—')
         ? computedValidity.replace(/VALIDIT[ÀA][’']?\s*OFFERTA\s*:\s*/i, '').trim()
         : '—';
+
+    const structuredTerms = termsStructured && typeof termsStructured === 'object'
+        ? termsStructured
+        : null;
+
+    const validityText = structuredTerms?.validityLabel ?? computedValidity ?? "VALIDITÀ OFFERTA";
+
+    const basePaymentProfiles: TermsProfile[] = ['privato', 'azienda']
+        .map((id) => TERMS_PROFILES.find((profile) => profile.id === id))
+        .filter((profile): profile is TermsProfile => Boolean(profile));
+
+    const paymentPlanColumns = basePaymentProfiles.map((profile) => ({
+        id: profile.id,
+        label: profile.label,
+        tagline: profile.tagline,
+        summary: profile.summary,
+        steps: profile.paymentPlan,
+    }));
+
+    const supplyOnlyPlan = {
+        label: SUPPLY_ONLY_PLAN.label,
+        tagline: SUPPLY_ONLY_PLAN.tagline ?? SUPPLY_ONLY_PLAN.summary,
+        summary: SUPPLY_ONLY_PLAN.summary,
+        steps: SUPPLY_ONLY_PLAN.steps,
+    };
+
+    const sharedPaymentNotes = (GLOBAL_PAYMENT_NOTES && GLOBAL_PAYMENT_NOTES.length > 0)
+        ? GLOBAL_PAYMENT_NOTES
+        : [];
+
+    const sharedNotesMid = Math.ceil(sharedPaymentNotes.length / 2);
+    const sharedNotesLeft = sharedPaymentNotes.slice(0, sharedNotesMid);
+    const sharedNotesRight = sharedPaymentNotes.slice(sharedNotesMid);
 
     // --- PROFILE OVERVIEW feature grouping ---
     const po = (profileOverview && (profileOverview as any)) || null;
@@ -1005,7 +1103,106 @@ export default function QuotePDF(props: QuotePDFProps) {
 
                 <Text style={[s.h2, { marginTop: 6 }]}>Condizioni di Fornitura</Text>
                 <View style={{ height: 1, backgroundColor: "#eee", marginVertical: 10 }} />
-                <Text>{safeText(terms)}</Text>
+                {structuredTerms ? (
+                    <>
+                        <View style={s.termsPaymentSection}>
+                            <Text style={s.termsPaymentHeader}>Metodi di pagamento</Text>
+                            <View style={s.termsSupplyCard} wrap={false}>
+                                <Text style={s.termsSupplyTitle}>Solo fornitura (senza posa)</Text>
+                                <Text style={s.termsSupplySummary}>{supplyOnlyPlan.summary}</Text>
+                                <View style={s.termsSupplySteps}>
+                                    {(supplyOnlyPlan.steps || []).map((step, idx) => (
+                                        <View key={`supply-step-${idx}`} style={s.termsSupplyStepCol}>
+                                            <View style={s.termsPlanStepRow}>
+                                                <View style={s.termsPlanStepCircle}>
+                                                    <Text style={s.termsPlanStepCircleText}>{String(idx + 1)}</Text>
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={s.termsPlanStepLabel}>{step.label}</Text>
+                                                    <Text style={s.termsPlanStepDesc}>{step.description}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+
+                            <Text style={s.termsPaymentGroupLabel}>Fornitura e posa</Text>
+                            <View style={s.termsPaymentRow}>
+                                {paymentPlanColumns.map((column) => (
+                                    <View key={`terms-plan-${column.id}`} style={s.termsPlanCard} wrap={false}>
+                                        <View style={s.termsPlanHeaderRow}>
+                                            <View style={s.termsIconWrap}>
+                                                {column.id === 'azienda' ? <BuildingIcon /> : <UserIcon />}
+                                            </View>
+                                            <Text style={s.termsPlanTitleInline}>
+                                                {column.id === 'azienda' ? 'Aziende' : 'Privati'}
+                                            </Text>
+                                        </View>
+                                        {column.summary ? (
+                                            <Text style={s.termsParagraph}>{column.summary}</Text>
+                                        ) : null}
+                                        {(column.steps || []).map((step, stepIdx) => (
+                                            <View key={`terms-plan-${column.id}-${stepIdx}`} style={s.termsPlanStep}>
+                                                <View style={s.termsPlanStepRow}>
+                                                    <View style={s.termsPlanStepCircle}>
+                                                        <Text style={s.termsPlanStepCircleText}>{String(stepIdx + 1)}</Text>
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={s.termsPlanStepLabel}>{step.label}</Text>
+                                                        <Text style={s.termsPlanStepDesc}>{step.description}</Text>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        ))}
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+
+                        {sharedPaymentNotes.length > 0 && (
+                            <View style={s.termsSharedCard} wrap={false}>
+                                <Text style={s.termsSharedTitle}>Regole generali sui pagamenti</Text>
+                                <View style={s.termsSharedGrid}>
+                                    <View style={s.termsSharedCol}>
+                                        {sharedNotesLeft.map((note, idx) => (
+                                            <View key={`shared-note-left-${idx}`} style={s.termsNoteRow}>
+                                                <View style={s.termsNoteBullet} />
+                                                <Text style={s.termsNoteText}>{note}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                    <View style={s.termsSharedCol}>
+                                        {sharedNotesRight.map((note, idx) => (
+                                            <View key={`shared-note-right-${idx}`} style={s.termsNoteRow}>
+                                                <View style={s.termsNoteBullet} />
+                                                <Text style={s.termsNoteText}>{note}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+
+                        {(structuredTerms.sections || []).map((section, idx) => (
+                            <View key={`section-${idx}`} style={s.termsSectionBlock} wrap={false}>
+                                <Text style={s.termsSectionTitle}>{section.title}</Text>
+                                {(section.body || []).map((paragraph, pIdx) => (
+                                    <Text key={`section-${idx}-p-${pIdx}`} style={s.termsParagraph}>{paragraph}</Text>
+                                ))}
+                            </View>
+                        ))}
+
+                        <View style={s.termsPrivacyCard} wrap={false}>
+                            <Text style={s.termsPrivacyTitle}>{structuredTerms.privacy.title}</Text>
+                            {(structuredTerms.privacy.body || []).map((paragraph, idx) => (
+                                <Text key={`privacy-${idx}`} style={s.termsPrivacyParagraph}>{paragraph}</Text>
+                            ))}
+                        </View>
+                    </>
+                ) : (
+                    <Text>{safeText(terms)}</Text>
+                )}
 
                 <View style={{ marginTop: 22 }}>
                     <Text>Letto e confermato in ______________________ in data _____________________</Text>
