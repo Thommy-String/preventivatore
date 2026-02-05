@@ -13,13 +13,15 @@ export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
   const [widthStr, setWidthStr] = useState(d.width_mm == null ? "" : String(d.width_mm))
   const [heightStr, setHeightStr] = useState(d.height_mm == null ? "" : String(d.height_mm))
   const [qtyStr, setQtyStr] = useState(d.qty == null ? "1" : String(d.qty))
+  const [anteStr, setAnteStr] = useState(d.ante == null ? "2" : String(d.ante))
 
   // Keep local strings in sync when draft changes externally
   useEffect(() => {
     setWidthStr(d.width_mm == null ? "" : String(d.width_mm))
     setHeightStr(d.height_mm == null ? "" : String(d.height_mm))
     setQtyStr(d.qty == null ? "1" : String(d.qty))
-  }, [d.width_mm, d.height_mm, d.qty])
+    setAnteStr(d.ante == null ? "2" : String(d.ante))
+  }, [d.width_mm, d.height_mm, d.qty, d.ante])
 
   return (
     <div className="space-y-4">
@@ -78,7 +80,7 @@ export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
             />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 items-start">
+        <div className="grid grid-cols-3 gap-2 items-start">
           <div>
             <div className="text-xs text-gray-500">Tipo di misura</div>
             <select
@@ -88,6 +90,27 @@ export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
             >
               <option value="luce">Luce</option>
             </select>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500">Numero ante</div>
+            <input
+              className="input"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={anteStr}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === "" || /^\d+$/.test(v)) setAnteStr(v)
+              }}
+              onBlur={() => {
+                const n = anteStr === "" ? 2 : Math.max(1, Number(anteStr) || 1)
+                onChange({ ...d, ante: n })
+                setAnteStr(String(n))
+              }}
+              onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+              onKeyDown={(e) => { if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault() }}
+            />
           </div>
           <div>
             <div className="text-xs text-gray-500">Quantità</div>
@@ -142,14 +165,7 @@ export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
             </select>
           </div>
         </div>
-        <label className="flex items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={Boolean(d.con_telaio)}
-            onChange={(e) => onChange({ ...d, con_telaio: e.target.checked })}
-          />
-          Con telaio
-        </label>
+        <div className="text-xs text-gray-400">Telaio fisso non selezionabile</div>
       </section>
 
       {/* Colore */}

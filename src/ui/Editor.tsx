@@ -1,34 +1,24 @@
 //src/ui/Editor.tsx
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadQuoteItemImage } from '../lib/uploadImages'
-import { ArrowLeft, FileText, User, Building, Package, Copy, Plus, Trash2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
+import { Building, Package, User } from 'lucide-react'
 import { toast } from 'sonner'
-import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
-import { BadgePercent, X } from "lucide-react";
 
 
 // Store & Quote items
 import { useQuoteStore } from '../stores/useQuoteStore'
-import type { ManualTotalRow, ManualTotalSurfaceEntry, QuoteItem, SurfaceGroupId } from '../features/quotes/types'
+import type { ManualTotalRow, ManualTotalSurfaceEntry, QuoteItem } from '../features/quotes/types'
 import { registry } from '../features/quotes/registry'
-import { euro } from '../features/quotes/utils/pricing'
 import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal'
 import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
+import { persianaToPngBlob } from '../features/quotes/persiana/persianaToPng'
 import { TERMS_PROFILES, GLOBAL_PAYMENT_NOTES, SUPPLY_ONLY_PLAN, buildTermsDocument } from '../content/terms'
 import type { TermsProfile } from '../content/terms'
-import {
-  SURFACE_GROUPS,
-  buildSurfaceSummary,
-  computeItemSurfaceMq,
-  describeDimensions,
-  formatMq,
-  getGroupForItem,
-  normalizeSurfaceEntries,
-} from '../features/quotes/utils/surfaceSelections'
+import { normalizeSurfaceEntries } from '../features/quotes/utils/surfaceSelections'
 
 // Types for the Quote header (DB)
 type Quote = {
@@ -60,9 +50,13 @@ type Quote = {
 
 type BrandingSettings = { logo_url?: string | null }
 // Modular components
-import { ItemCard } from '../features/quotes/components/ItemCard'
 import { ItemModal } from '../features/quotes/modals/ItemModal'
-import { ProfileOverview } from '../components/editor/ProfileOverview'
+import { TermsSection } from '../components/editor/TermsSection'
+import { SurfaceModal } from '../components/editor/SurfaceModal'
+import { CostSummarySection } from '../components/editor/CostSummarySection.tsx'
+import { QuoteItemsSection } from '../components/editor/QuoteItemsSection'
+import { QuoteToolbar } from '../components/editor/QuoteToolbar'
+import { QuoteHeaderSection } from '../components/editor/QuoteHeaderSection'
 
 const DEFAULT_INSTALL_TIME = '6-8 settimane'
 
@@ -132,23 +126,6 @@ function dataUrlToFile(dataUrl: string, fileName: string): File {
   return blob as File;
 }
 
-const capitalizeKind = (value: string) =>
-  value
-    .split(/[\s_\-]+/)
-    .filter(Boolean)
-    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-    .join(' ')
-
-const titleForItem = (it: QuoteItem | null | undefined) => {
-  if (!it) return 'Voce'
-  const freeTitle = typeof (it as any)?.title === 'string' ? (it as any).title.trim() : ''
-  if (freeTitle) return freeTitle
-  const kind = String((it as any)?.kind ?? '').toLowerCase()
-  if (kind && kind in registry) {
-    return registry[kind as keyof typeof registry]?.label ?? capitalizeKind(kind)
-  }
-  return kind ? capitalizeKind(kind) : 'Voce'
-}
 
 export default function Editor() {
   const { id } = useParams()
@@ -451,8 +428,6 @@ export default function Editor() {
     steps: SUPPLY_ONLY_PLAN.steps,
   } as const
 
-  const SupplyIcon = supplyOnlyColumn.icon
-
   const installColumns = [
     {
       id: 'privato',
@@ -470,7 +445,7 @@ export default function Editor() {
       summary: aziendaProfile.summary,
       steps: aziendaProfile.paymentPlan,
     },
-  ] as const
+  ]
 
 
   function startAdd(kind: keyof typeof registry) {
@@ -658,6 +633,23 @@ export default function Editor() {
               const isData = /^data:image\//i.test(raw);
               clean.image_url = (isHttp || isData) ? raw : undefined;
             }
+          } else if (String(clean?.kind || '').toLowerCase() === 'persiana') {
+            try {
+              const cfg = {
+                width_mm: Number(clean.width_mm) || 1000,
+                height_mm: Number(clean.height_mm) || 1400,
+                ante: Number(clean.ante) || 2,
+              } as const;
+              const blob = await persianaToPngBlob(cfg as any, 640, 640);
+              const dataUrl = await blobToDataURL(blob);
+              clean.image_url = dataUrl;
+            } catch (e) {
+              console.warn('Rasterizzazione persiana → PNG fallita', e);
+              const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+              const isHttp = /^https?:\/\//i.test(raw);
+              const isData = /^data:image\//i.test(raw);
+              clean.image_url = (isHttp || isData) ? raw : undefined;
+            }
           } else {
             const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
             const isHttp = /^https?:\/\//i.test(raw);
@@ -744,7 +736,7 @@ export default function Editor() {
         // passa gli items già normalizzati (no blob:)
         items: itemsForPdf,
 
-        // Sezione "Panoramica profilo" dal nostro store → PDF
+        // Sezione "Panoramica profilo" dal nostro store → PDF 
         profileOverview: profileOverview
           ? {
               imageUrl: profileOverview.imageUrl ?? null,
@@ -1025,707 +1017,98 @@ export default function Editor() {
   return (
     <div className="space-y-6">
       {/* Toolbar titolo */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Link
-            to="/"
-            onClick={handleBackClick}
-            className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900"
-          >
-            <ArrowLeft size={16} /> Indietro
-          </Link>
-          <h1>
-            {quote.number} <span className="text-gray-500 font-normal">· {quote.customer_name ?? '—'}</span>
-          </h1>
-          <div className="flex items-center gap-2">
-            <select
-              className="input !py-1 !h-7 w-25 text-sm"
-              value={quote.status}
-              onChange={(e) => updateField('status', e.target.value as any)}
-            >
-              <option value="bozza">Bozza</option>
-              <option value="inviato">Inviato</option>
-              <option value="accettato">Accettato</option>
-              <option value="rifiutato">Rifiutato</option>
-              <option value="scaduto">Scaduto</option>
-            </select>
-            {quote.created_at && (
-              <span className="text-sm text-gray-500">Creato {new Date(quote.created_at).toLocaleString()}</span>
-            )}
-            {saving && <span className="text-xs text-gray-500">Salvataggio…</span>}
-          </div>
-        </div>
-        <div className="text-right space-y-2">
-          <div className="text-xs text-gray-500">Totale documento (IVA esclusa)</div>
-
-          {!hasDiscount ? (
-            <div className="text-2xl font-bold tracking-tight">{euro(totalExcluded)}</div>
-          ) : (
-            <div className="space-y-1">
-              <div className="text-sm text-gray-500 line-through">{euro(totalExcluded)}</div>
-              <div className="text-2xl font-bold tracking-tight">{euro(discountedTotal)}</div>
-              {discountMode === 'pct' && (
-                <div className="text-xs text-gray-600">Sconto {discountPct}%</div>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
-
-            <Button className="bg-gray-800 text-white hover:bg-gray-900" onClick={openPdfPreview}>
-              <FileText size={16} /> PDF
-            </Button>
-            <Button variant="outline" onClick={onDuplicateQuote}>
-              <Copy size={16} /> Duplica
-            </Button>
-          </div>
-        </div>
-      </div>
+      <QuoteToolbar
+        quote={quote}
+        saving={saving}
+        hasDiscount={hasDiscount}
+        totalExcluded={totalExcluded}
+        discountedTotal={discountedTotal}
+        discountMode={discountMode}
+        discountPct={discountPct}
+        onBackClick={handleBackClick}
+        onStatusChange={(status) => updateField('status', status)}
+        onOpenPdf={openPdfPreview}
+        onDuplicate={onDuplicateQuote}
+      />
 
       {/* Info testata / Header editable */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <Card>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-medium text-gray-500">Cliente</div>
-            <div className="inline-flex rounded-md border bg-white overflow-hidden">
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm ${(quote.customer_type ?? 'privato') === 'privato' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
-                onClick={() => updateField('customer_type', 'privato')}
-              ><User size={14} /> Privato</button>
-              <button
-                type="button"
-                className={`px-3 py-1.5 text-sm border-l ${(quote.customer_type ?? 'privato') === 'azienda' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
-                onClick={() => updateField('customer_type', 'azienda')}
-              ><Building size={14} /> Azienda</button>
-            </div>
-          </div>
-
-          {(quote.customer_type ?? 'privato') === 'privato' ? (
-            <div className="space-y-2">
-              <div>
-                <div className="text-xs text-gray-500">Nome e cognome</div>
-                <input
-                  className="input"
-                  placeholder="Nome cliente"
-                  value={quote.customer_name ?? ''}
-                  onChange={(e) => updateField('customer_name', e.target.value || null)}
-                />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Email</div>
-                <input
-                  className="input"
-                  placeholder="email@esempio.it"
-                  value={quote.customer_email ?? ''}
-                  onChange={(e) => updateField('customer_email', e.target.value || null)}
-                />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Telefono</div>
-                <input
-                  className="input"
-                  placeholder="es. 333 1234567"
-                  value={quote.customer_phone ?? ''}
-                  onChange={(e) => updateField('customer_phone', e.target.value || null)}
-                />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Indirizzo lavori</div>
-                <input
-                  className="input"
-                  placeholder="Via, n°, città"
-                  value={quote.job_address ?? ''}
-                  onChange={(e) => updateField('job_address', e.target.value || null)}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div>
-                <div className="text-xs text-gray-500">Ragione sociale</div>
-                <input
-                  className="input"
-                  placeholder="Nome azienda"
-                  value={quote.customer_name ?? ''}
-                  onChange={(e) => updateField('customer_name', e.target.value || null)}
-                />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">P.IVA</div>
-                <input
-                  className="input"
-                  placeholder="es. IT01234567890"
-                  value={piva}
-                  onChange={(e) => { const v = e.target.value; setPiva(v); upsertNotes(v); }}
-                />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Email</div>
-                <input
-                  className="input"
-                  placeholder="email@azienda.it"
-                  value={quote.customer_email ?? ''}
-                  onChange={(e) => updateField('customer_email', e.target.value || null)}
-                />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Telefono</div>
-                <input
-                  className="input"
-                  placeholder="es. 02 1234567"
-                  value={quote.customer_phone ?? ''}
-                  onChange={(e) => updateField('customer_phone', e.target.value || null)}
-                />
-              </div>
-              <div>
-                <div className="text-xs text-gray-500">Indirizzo lavori</div>
-                <input
-                  className="input"
-                  placeholder="Via, n°, città"
-                  value={quote.job_address ?? ''}
-                  onChange={(e) => updateField('job_address', e.target.value || null)}
-                />
-              </div>
-            </div>
-          )}
-        </Card>
-        <Card>
-          <div className="text-xs font-medium text-gray-500 mb-2">Dati documento</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div>
-              <div className="text-xs text-gray-500">Data emissione</div>
-              <input
-                type="date"
-                className="input"
-                value={quote.issue_date ?? ''}
-                onChange={(e) => updateField('issue_date', e.target.value)}
-              />
-            </div>
-            <div>
-              <div className="text-xs text-gray-500">Termine di completamento</div>
-              <input
-                className="input"
-                placeholder="es. 6-8 settimane"
-                value={quote.install_time ?? DEFAULT_INSTALL_TIME}
-                onChange={(e) => updateField('install_time', (e.target.value || DEFAULT_INSTALL_TIME) as any)}
-              />
-            </div>
-            <div>
-              <div>
-                <div className="text-xs text-gray-500">Validità offerta (giorni)</div>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  value={quote.validity_days ?? 15}
-                  onChange={(e) => {
-                    const v = e.target.value === '' ? 15 : Math.max(1, parseInt(e.target.value || '15', 10));
-                    updateField('validity_days', v as any);
-                  }}
-                />
-              </div>
-
-              {/* IVA select removed — use VAT percent in notes / VAT_PERCENT field */}
-              <div>
-                <div className="text-xs text-gray-500">Mostra totale IVA inclusa</div>
-                <div className="flex items-center gap-2">
-                  {(() => {
-                    const notesMap = parseNotesMap(quote?.notes);
-                    const checked = notesMap['SHOW_TOTAL_INCL'] === 'true';
-                    const vatVal = notesMap['VAT_PERCENT'] ?? String(quote.vat ?? '22');
-                    return (
-                      <>
-                        <input
-                          id="show_total_incl"
-                          type="checkbox"
-                          className="h-4 w-4 rounded border-gray-300 text-emerald-600"
-                          checked={checked}
-                          onChange={(e) => setNoteKey('SHOW_TOTAL_INCL', e.target.checked ? 'true' : 'false')}
-                        />
-                        <input
-                          type="number"
-                          className="input w-24"
-                          min={0}
-                          max={100}
-                          value={vatVal}
-                          onChange={(e) => {
-                            const v = e.target.value === '' ? null : Math.max(0, Math.min(100, Number(e.target.value)));
-                            setNoteKey('VAT_PERCENT', v == null ? null : String(v));
-                          }}
-                        />
-                      </>
-                    )
-                  })()}
-                </div>
-              </div>
-            </div>
-
-            <div className="sm:col-span-2 flex items-center gap-2 pt-1">
-              <input
-                id="shipping_included"
-                type="checkbox"
-                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                checked={quote.shipping_included !== false}
-                onChange={(e) => updateField('shipping_included', e.target.checked as any)}
-              />
-              <label htmlFor="shipping_included" className="text-sm text-gray-600">
-                Mostra “Trasporto incluso” nel PDF
-              </label>
-            </div>
-
-          </div>
-        </Card>
-
-        <ProfileOverview />
-      </div>
+      <QuoteHeaderSection
+        quote={quote}
+        piva={piva}
+        defaultInstallTime={DEFAULT_INSTALL_TIME}
+        updateField={updateField}
+        onPivaChange={(value) => { setPiva(value); upsertNotes(value) }}
+        parseNotesMap={parseNotesMap}
+        setNoteKey={setNoteKey}
+      />
 
       {/* Riepilogo costi (manuale) */}
       <Card>
-        <div className="flex items-center justify-between gap-2">
-          <h2>Riepilogo costi</h2>
-          <Button variant="ghost" onClick={addTotalRow}><Plus size={16} /> Aggiungi costo</Button>
-        </div>
-
-        {manualTotals.length === 0 ? (
-          <div className="mt-4 rounded border border-dashed p-6 text-center text-sm text-gray-600">
-            Aggiungi le voci di costo per categoria (es. “Finestre”, “Zanzariere”, “Montaggio”…).
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {manualTotals.map((row) => {
-              const summary = buildSurfaceSummary(row.surfaces, itemsArray as any[])
-              return (
-                <div
-                  key={row.id}
-                  className={`rounded-lg border p-3 bg-white/60 ${dragTotalId===row.id ? 'ring-2 ring-gray-300' : ''}`}
-                  draggable
-                  onDragStart={(e) => onTotalDragStart(e, row.id)}
-                  onDragOver={onTotalDragOver}
-                  onDrop={(e) => onTotalDrop(e, row.id)}
-                >
-                  <div className="space-y-2">
-                    {/* Top row: Title + Delete (inline on mobile) */}
-                    <div className="flex items-center gap-2">
-                      <span className="cursor-grab text-gray-400 hover:text-gray-700" title="Trascina per riordinare">
-                        <GripVertical size={16} />
-                      </span>
-                      <input
-                        className="input flex-1 min-w-0"
-                        placeholder="Es. Finestre / Portoncino cantina / Montaggio…"
-                        value={row.label}
-                        onChange={(e) => updateRow(row.id, { label: e.target.value })}
-                      />
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                          aria-label="Sposta su"
-                          title="Sposta su"
-                          onClick={() => moveTotalRow(row.id, -1)}
-                        >
-                          <ArrowUp size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                          aria-label="Sposta giù"
-                          title="Sposta giù"
-                          onClick={() => moveTotalRow(row.id, +1)}
-                        >
-                          <ArrowDown size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          className="h-9 w-9 shrink-0 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                          aria-label="Rimuovi riga"
-                          onClick={() => removeRow(row.id)}
-                          title="Rimuovi"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Amount (second row) */}
-                    <div className="flex items-center gap-2">
-                      {/* Pezzi opzionale */}
-                      <div className="w-20">
-                        <input
-                          className="input w-full text-right"
-                          type="text"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          placeholder="pz."
-                          value={piecesStr[row.id] ?? (typeof row.pieces === 'number' ? String(row.pieces) : '')}
-                          onChange={(e) => onPiecesChange(row.id, e.target.value)}
-                          onBlur={() => onPiecesBlur(row.id)}
-                          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                          onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
-                        />
-                      </div>
-
-                      {/* Importo */}
-                      <div className="flex-1 sm:flex-none sm:w-40">
-                        <input
-                          className="input w-full text-right"
-                          type="text"
-                          inputMode="decimal"
-                          // allow comma or dot while typing; we'll sanitize on blur
-                          value={amountStr[row.id] ?? (row.amount === 0 ? '' : String(row.amount))}
-                          onChange={(e) => onAmountChange(row.id, e.target.value)}
-                          onBlur={() => onAmountBlur(row.id)}
-                          onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                          onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
-                          placeholder="0,00"
-                        />
-                      </div>
-                      <span className="hidden sm:inline text-sm text-gray-500">€</span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-gray-200 bg-white/70 px-3 py-2 text-xs">
-                      <div className="flex flex-1 flex-wrap items-center gap-1.5">
-                        {summary.length === 0 ? (
-                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">
-                            Nessuna metratura collegata
-                          </span>
-                        ) : (
-                          summary.map((s) => (
-                            <span
-                              key={`${row.id}-${s.id}`}
-                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 font-medium text-gray-700"
-                            >
-                              <span className="text-gray-900">{formatMq(s.mq)}</span>
-                              {s.missingDimensions > 0 && (
-                                <span className="text-[10px] text-amber-700">
-                                  · {s.missingDimensions} senza dimensioni
-                                </span>
-                              )}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        className="text-xs font-medium text-emerald-700 hover:text-emerald-900"
-                        onClick={() => setSurfaceRowId(row.id)}
-                      >
-                        Configura metratura
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        <div className="mt-4 border-t pt-3 space-y-2 relative">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">Totale (IVA esclusa)</div>
-
-            <div className="flex items-center gap-2">
-              {!hasDiscount ? (
-                <div className="text-xl font-semibold">{euro(totalExcluded)}</div>
-              ) : (
-                <div className="text-right">
-                  <div className="text-sm text-gray-500 line-through">{euro(totalExcluded)}</div>
-                  <div className="text-[11px] text-gray-500">
-                    {discountMode === 'pct' ? `Sconto ${discountPct}%` : 'Totale impostato manualmente'}
-                  </div>
-                </div>
-              )}
-
-              {/* ← nuovo bottone qui */}
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm hover:bg-gray-50"
-                onClick={() => {
-                  setShowDiscountEditor((v) => !v);
-                  if (!discountMode) setDiscountMode('pct');
-                }}
-                title="Applica sconto"
-              >
-                <BadgePercent size={14} /> Sconto
-              </button>
-            </div>
-          </div>
-
-          {/* Popover Sconto spostato qui */}
-          {showDiscountEditor && (
-            <div className="absolute right-0 mt-2 w-80 rounded-lg border bg-white p-3 shadow-lg z-10">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Imposta sconto</div>
-                <button className="text-gray-500 hover:text-gray-800" onClick={() => setShowDiscountEditor(false)}>
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                <button
-                  className={`rounded-md border px-2 py-1.5 ${discountMode === 'pct' ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
-                  onClick={() => setDiscountMode('pct')}
-                >
-                  In percentuale
-                </button>
-                <button
-                  className={`rounded-md border px-2 py-1.5 ${discountMode === 'final' ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'}`}
-                  onClick={() => setDiscountMode('final')}
-                >
-                  Sul totale
-                </button>
-              </div>
-
-              {discountMode === 'pct' ? (
-                <div className="mt-3">
-                  <label className="text-xs text-gray-500">Sconto (%)</label>
-                  <input
-                    className="input w-full"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="0.5"
-                    value={discountPct ?? ''}
-                    onChange={(e) => setDiscountPct(e.target.value === '' ? null : Number(e.target.value))}
-                  />
-                  <div className="mt-1 text-xs text-gray-600">
-                    Nuovo totale: <b>{euro(Math.max(0, totalExcluded * (1 - (discountPct ?? 0) / 100)))}</b>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-3">
-                  <label className="text-xs text-gray-500">Nuovo totale (IVA esclusa)</label>
-                  <input
-                    className="input w-full"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={discountFinal ?? ''}
-                    onChange={(e) => setDiscountFinal(e.target.value === '' ? null : Number(e.target.value))}
-                  />
-                </div>
-              )}
-
-              <div className="mt-3 flex items-center justify-between">
-                <button
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() => { setDiscountMode(null); setDiscountPct(null); setDiscountFinal(null); }}
-                >
-                  Rimuovi sconto
-                </button>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setShowDiscountEditor(false)}>Annulla</Button>
-                  <Button onClick={() => setShowDiscountEditor(false)}>Applica</Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {hasDiscount && (
-            <div className="flex items-center justify-between rounded-md px-3 py-2" style={{ background: '#e8f7ec' }}>
-              <div className="text-sm font-medium text-gray-800">Totale scontato (IVA esclusa)</div>
-              <div className="text-xl font-bold">{euro(discountedTotal)}</div>
-            </div>
-          )}
-        </div>
+        <CostSummarySection
+          manualTotals={manualTotals}
+          itemsArray={itemsArray as QuoteItem[]}
+          dragTotalId={dragTotalId}
+          piecesStr={piecesStr}
+          amountStr={amountStr}
+          totalExcluded={totalExcluded}
+          hasDiscount={hasDiscount}
+          discountedTotal={discountedTotal}
+          discountMode={discountMode}
+          discountPct={discountPct}
+          discountFinal={discountFinal}
+          showDiscountEditor={showDiscountEditor}
+          onAddRow={addTotalRow}
+          onUpdateRow={updateRow}
+          onRemoveRow={removeRow}
+          onMoveRow={moveTotalRow}
+          onTotalDragStart={onTotalDragStart}
+          onTotalDragOver={onTotalDragOver}
+          onTotalDrop={onTotalDrop}
+          onPiecesChange={onPiecesChange}
+          onPiecesBlur={onPiecesBlur}
+          onAmountChange={onAmountChange}
+          onAmountBlur={onAmountBlur}
+          onOpenSurfaceModal={setSurfaceRowId}
+          onToggleDiscountEditor={() => {
+            setShowDiscountEditor((v) => !v)
+            if (!discountMode) setDiscountMode('pct')
+          }}
+          onSetDiscountMode={setDiscountMode}
+          onSetDiscountPct={setDiscountPct}
+          onSetDiscountFinal={setDiscountFinal}
+          onClearDiscount={() => {
+            setDiscountMode(null)
+            setDiscountPct(null)
+            setDiscountFinal(null)
+          }}
+        />
       </Card>
 
       {/* Voci */}
       <Card>
-        <div className="flex items-center justify-between">
-          <h2>Voci del preventivo</h2>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setPickerOpen(true)}><Plus size={16} />  Aggiungi voce</Button>
-          </div>
-        </div>
-
-        {itemsArray.length === 0 ? (
-          <div className="mt-4 rounded border border-dashed p-6 text-center text-sm text-gray-600">
-            Nessuna voce. Premi <span className="font-medium">Aggiungi</span> e scegli la categoria.
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {itemsArray.map((it) => (
-              <div
-                key={it.id}
-                className={`relative group rounded-lg`}
-                draggable
-                onDragStart={(e) => onItemDragStart(e, it.id)}
-                onDragOver={onItemDragOver}
-                onDrop={(e) => onItemDrop(e, it.id)}
-              >
-                {/* Drag handle (left) */}
-                <div className="absolute -left-6 top-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab text-gray-400 hover:text-gray-700" title="Trascina per riordinare">
-                  <GripVertical size={16} />
-                </div>
-
-                {/* Controls (right) */}
-                <div className="absolute -right-6 top-3 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                    title="Sposta su"
-                    onClick={() => moveItemRow(it.id, -1)}
-                  >
-                    <ArrowUp size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="h-8 w-8 inline-flex items-center justify-center rounded-md border bg-white hover:bg-gray-50"
-                    title="Sposta giù"
-                    onClick={() => moveItemRow(it.id, +1)}
-                  >
-                    <ArrowDown size={16} />
-                  </button>
-                </div>
-
-                <ItemCard
-                  item={it}
-                  onEdit={startEdit}
-                  onDuplicate={duplicateItem}
-                  onRemove={removeItem}
-                />
-              </div>
-            ))}
-          </div>
-        )}
+        <QuoteItemsSection
+          itemsArray={itemsArray as QuoteItem[]}
+          onOpenPicker={() => setPickerOpen(true)}
+          onItemDragStart={onItemDragStart}
+          onItemDragOver={onItemDragOver}
+          onItemDrop={onItemDrop}
+          onMoveItemRow={moveItemRow}
+          onEditItem={startEdit}
+          onDuplicateItem={duplicateItem}
+          onRemoveItem={removeItem}
+        />
       </Card>
 
 
       {/* Termini */}
-      <Card>
-        <div className="space-y-1">
-          <h2>Termini &amp; Condizioni</h2>
-          <p className="text-sm text-gray-600">
-            Due colonne parallele mettono subito a confronto formule per privati e aziende; tutte le versioni vengono
-            incluse nel PDF insieme alle note generali e alla privacy aggiornata.
-          </p>
-        </div>
-
-        <div className="mt-6 space-y-6">
-          <div className="rounded-2xl border bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">Validità offerta</p>
-            <div className="mt-2 text-2xl font-semibold tracking-tight text-gray-900">{termsDoc.validityLabel}</div>
-            <p className="mt-3 text-sm text-gray-600">
-              Questo quadro riassume formule economiche, note operative e privacy che si applicano a ogni preventivo,
-              indipendentemente dalla tipologia di cliente o dalla presenza di posa.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-start gap-4">
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-gray-700">
-                <SupplyIcon size={20} />
-              </span>
-              <div className="flex-1 min-w-[220px] space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.4em] text-gray-500">{supplyOnlyColumn.label}</p>
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <p className="text-xl font-semibold tracking-tight text-gray-900">{supplyOnlyColumn.tagline}</p>
-                  <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[11px] uppercase tracking-wide text-gray-600">
-                    Solo fornitura
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600">{supplyOnlyColumn.summary}</p>
-              </div>
-              <div className="text-right text-xs text-gray-500">
-                <p>{termsDoc.validityLabel}</p>
-                <p>Adatta anche a ritiro materiale</p>
-              </div>
-            </div>
-            <ol className="mt-5 grid gap-3 md:grid-cols-2">
-              {supplyOnlyColumn.steps.map((step, idx) => (
-                <li key={`supply-${step.label}`} className="rounded-xl border border-gray-100 bg-gray-50/50 p-4">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Step {idx + 1}</div>
-                  <div className="mt-2 text-base font-semibold text-gray-900">{step.label}</div>
-                  <p className="mt-1 text-sm text-gray-600">{step.description}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            {installColumns.map((column) => {
-              const Icon = column.icon
-              return (
-                <div key={column.id} className="rounded-2xl border bg-white p-5 shadow-sm flex flex-col">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-900/5 text-gray-900">
-                        <Icon size={18} />
-                      </span>
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.3em] text-gray-500">{column.label}</p>
-                        <p className="text-lg font-semibold text-gray-900">{column.tagline}</p>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-medium text-gray-400">{column.steps.length} step</span>
-                  </div>
-                  <p className="mt-3 text-sm text-gray-600">{column.summary}</p>
-                  <ol className="mt-4 space-y-4 border-l border-gray-200 pl-4">
-                    {column.steps.map((step, idx) => (
-                      <li key={`${column.id}-${step.label}`} className="space-y-1">
-                        <div className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Step {idx + 1}</div>
-                        <div className="text-base font-semibold text-gray-900">{step.label}</div>
-                        <p className="text-sm text-gray-600">{step.description}</p>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )
-            })}
-          </div>
-
-          {GLOBAL_PAYMENT_NOTES.length > 0 && (
-            <div className="rounded-2xl border bg-gray-50 p-5 shadow-sm">
-              <div className="text-xs uppercase tracking-widest text-gray-500">Regole generali sui pagamenti</div>
-              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-gray-700">
-                {GLOBAL_PAYMENT_NOTES.map((note, idx) => (
-                  <li key={`global-note-${idx}`}>{note}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="rounded-2xl border border-dashed bg-gray-50 p-5">
-            <div className="text-xs uppercase tracking-widest text-gray-500">Note del cliente</div>
-            <p className="mt-2 text-sm text-gray-600">{defaultTermsProfile.notesIntro}</p>
-            <div className="mt-4 space-y-4">
-              {Array.from({ length: 3 }).map((_, idx) => (
-                <div key={`note-line-${idx}`} className="h-10 border-b border-dashed border-gray-300" />
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {defaultTermsProfile.sections.map((section) => (
-              <div key={section.title} className="rounded-2xl border bg-white p-5 shadow-sm">
-                <div className="text-xs uppercase tracking-widest text-gray-500">{section.title}</div>
-                {section.body.map((paragraph, idx) => (
-                  <p key={`${section.title}-${idx}`} className="mt-3 text-sm leading-relaxed text-gray-700">
-                    {paragraph}
-                  </p>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 shadow-sm">
-            <div className="text-xs uppercase tracking-widest text-gray-700">{defaultTermsProfile.privacy.title}</div>
-            {defaultTermsProfile.privacy.body.map((paragraph, idx) => (
-              <p key={`privacy-${idx}`} className="mt-3 text-sm leading-relaxed text-gray-800">
-                {paragraph}
-              </p>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3 text-sm text-gray-600">
-            <span>Il testo sopra viene salvato nel preventivo e mostrato nella pagina delle condizioni.</span>
-            <Button variant="outline" onClick={copyTermsToClipboard} className="flex items-center gap-2 text-sm">
-              <Copy size={14} /> Copia testo completo
-            </Button>
-          </div>
-        </div>
-      </Card>
+      <TermsSection
+        termsDoc={termsDoc}
+        supplyOnlyColumn={supplyOnlyColumn}
+        installColumns={installColumns}
+        paymentNotes={GLOBAL_PAYMENT_NOTES}
+        defaultTermsProfile={defaultTermsProfile}
+        onCopyTerms={copyTermsToClipboard}
+      />
 
 
       {/* Picker Modal */}
@@ -1762,6 +1145,7 @@ export default function Editor() {
   )
 }
 
+
 // --- tiny debounce helper ---
 function useDebouncedCallback<T extends (...args: any[]) => any>(fn: T, delay = 400) {
   const t = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1769,287 +1153,4 @@ function useDebouncedCallback<T extends (...args: any[]) => any>(fn: T, delay = 
     if (t.current) clearTimeout(t.current)
     t.current = setTimeout(() => fn(...args), delay)
   }
-}
-
-type SurfaceModalProps = {
-  open: boolean
-  row: ManualTotalRow | null
-  items: QuoteItem[]
-  onClose: () => void
-  onSave: (entries: ManualTotalSurfaceEntry[]) => void
-}
-
-type DraftEntry = { mode: 'all' | 'subset'; itemIds: string[] }
-type DraftState = Partial<Record<SurfaceGroupId, DraftEntry>>
-
-function SurfaceModal({ open, row, items, onClose, onSave }: SurfaceModalProps) {
-  const [draft, setDraft] = useState<DraftState>({})
-
-  const groupedItems = useMemo(() => {
-    const base: Record<SurfaceGroupId, QuoteItem[]> = {
-      windows: [],
-      persiane: [],
-      tapparelle: [],
-      zanzariere: [],
-      cassonetti: [],
-      custom: [],
-    }
-    items.forEach((item) => {
-      const group = getGroupForItem(item as QuoteItem)
-      if (!group) return
-      base[group] = [...base[group], item]
-    })
-    return base
-  }, [items])
-
-  useEffect(() => {
-    if (!open || !row) return
-    const normalized = normalizeSurfaceEntries(row?.surfaces)
-    const next: DraftState = {}
-    normalized.forEach((entry) => {
-      const allowed = new Set((groupedItems[entry.group] ?? []).map((it) => String(it.id)))
-      const filtered = entry.itemIds?.filter((id) => allowed.has(String(id))) ?? []
-      next[entry.group] = { mode: entry.mode, itemIds: entry.mode === 'subset' ? filtered : [] }
-    })
-    setDraft(next)
-  }, [open, row, groupedItems])
-
-  useEffect(() => {
-    setDraft((prev) => {
-      const next: DraftState = {}
-      Object.entries(prev).forEach(([group, entry]) => {
-        const metaId = group as SurfaceGroupId
-        const available = groupedItems[metaId] ?? []
-        if (available.length === 0) return
-        if (entry.mode === 'subset') {
-          const allowed = new Set(available.map((it) => String(it.id)))
-          const filtered = entry.itemIds.filter((id) => allowed.has(id))
-          next[metaId] = { mode: 'subset', itemIds: filtered }
-        } else {
-          next[metaId] = entry
-        }
-      })
-      return next
-    })
-  }, [groupedItems])
-
-  const availableGroups = useMemo(
-    () => SURFACE_GROUPS.filter((meta) => (groupedItems[meta.id]?.length ?? 0) > 0),
-    [groupedItems]
-  )
-
-  const rawEntries = useMemo<ManualTotalSurfaceEntry[]>(() => {
-    return Object.entries(draft).map(([group, entry]) => ({
-      group: group as SurfaceGroupId,
-      mode: entry.mode,
-      itemIds: entry.itemIds,
-    }))
-  }, [draft])
-
-  const normalizedEntries = useMemo(
-    () => normalizeSurfaceEntries(rawEntries),
-    [rawEntries]
-  )
-
-  const summaryRows = useMemo(
-    () => buildSurfaceSummary(normalizedEntries, items),
-    [normalizedEntries, items]
-  )
-
-  const summaryByGroup = useMemo(() => {
-    const map = new Map<SurfaceGroupId, (typeof summaryRows)[number]>()
-    summaryRows.forEach((row) => map.set(row.id, row))
-    return map
-  }, [summaryRows])
-
-  const invalidSubsetGroups = rawEntries
-    .filter((entry) => entry.mode === 'subset' && (!entry.itemIds || entry.itemIds.length === 0))
-    .map((entry) => entry.group)
-  const hasInvalidSubset = invalidSubsetGroups.length > 0
-
-  const currentMode = (groupId: SurfaceGroupId): 'none' | 'all' | 'subset' => {
-    const entry = draft[groupId]
-    return entry ? entry.mode : 'none'
-  }
-
-  const currentSelection = (groupId: SurfaceGroupId) => draft[groupId]?.itemIds ?? []
-
-  const setMode = (groupId: SurfaceGroupId, mode: 'none' | 'all' | 'subset') => {
-    setDraft((prev) => {
-      const next = { ...prev }
-      if (mode === 'none') {
-        delete next[groupId]
-        return next
-      }
-      const existing = next[groupId]
-      next[groupId] = {
-        mode: mode === 'all' ? 'all' : 'subset',
-        itemIds: mode === 'subset' ? (existing?.itemIds ?? []) : [],
-      }
-      return next
-    })
-  }
-
-  const toggleItem = (groupId: SurfaceGroupId, itemId: string) => {
-    setDraft((prev) => {
-      const entry = prev[groupId] ?? { mode: 'subset', itemIds: [] }
-      if (entry.mode !== 'subset') return prev
-      const exists = entry.itemIds.includes(itemId)
-      const ids = exists ? entry.itemIds.filter((id) => id !== itemId) : [...entry.itemIds, itemId]
-      return { ...prev, [groupId]: { mode: 'subset', itemIds: ids } }
-    })
-  }
-
-  const handleSave = () => {
-    onSave(normalizedEntries)
-    onClose()
-  }
-
-  if (!open || !row) return null
-
-  const rowTitle = row.label?.trim() ? row.label : 'Voce senza titolo'
-
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute inset-x-0 top-10 mx-auto flex w-full max-w-4xl flex-col rounded-2xl bg-white p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-xs uppercase tracking-wide text-gray-500">Metratura collegata</div>
-            <div className="text-xl font-semibold text-gray-900">{rowTitle}</div>
-          </div>
-          <button className="text-sm text-gray-500 hover:text-gray-800" onClick={onClose}>
-            Chiudi
-          </button>
-        </div>
-
-        {summaryRows.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            {summaryRows.map((s) => (
-              <span
-                key={s.id}
-                className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 font-medium text-emerald-800"
-              >
-                <span className="text-emerald-900">{formatMq(s.mq)}</span>
-                {s.missingDimensions > 0 && (
-                  <span className="text-[10px] text-amber-700">
-                    · {s.missingDimensions} senza dimensioni
-                  </span>
-                )}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-4 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-            Seleziona quali voci del preventivo contribuire devono contribuire alla metratura mostrata accanto a questa categoria.
-          </div>
-        )}
-
-        <div className="mt-4 space-y-4 overflow-y-auto pr-1" style={{ maxHeight: '60vh' }}>
-          {availableGroups.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-300 bg-white/80 px-4 py-6 text-center text-sm text-gray-500">
-              Nessuna voce del preventivo dispone di dimensioni per calcolare la metratura.
-            </div>
-          ) : (
-            availableGroups.map((meta) => {
-              const mode = currentMode(meta.id)
-              const selections = currentSelection(meta.id)
-              const groupItems = groupedItems[meta.id] ?? []
-              const summary = summaryByGroup.get(meta.id)
-              const showSubset = mode === 'subset'
-              const subsetInvalid = showSubset && selections.length === 0
-
-              return (
-                <div key={meta.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="font-medium text-gray-900">{meta.label}</div>
-                      <div className="text-xs text-gray-500">
-                        {groupItems.length} voce{groupItems.length === 1 ? '' : 'i'} disponibili
-                      </div>
-                    </div>
-                    {summary && (
-                      <div className="text-xs font-semibold text-emerald-700">
-                        {formatMq(summary.mq)}
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium">
-                    {(['none', 'all', 'subset'] as const).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        className={`rounded-full border px-3 py-1 transition ${
-                          mode === option
-                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                        }`}
-                        onClick={() => setMode(meta.id, option)}
-                      >
-                        {option === 'none' && 'Nessuna'}
-                        {option === 'all' && 'Tutte'}
-                        {option === 'subset' && 'Seleziona voci'}
-                      </button>
-                    ))}
-                  </div>
-
-                  {showSubset && (
-                    <div className="mt-3 space-y-2">
-                      {groupItems.map((item) => {
-                        const itemId = String(item.id)
-                        const checked = selections.includes(itemId)
-                        const dims = describeDimensions(item)
-                        const mq = computeItemSurfaceMq(item)
-                        const qty = Number(item?.qty ?? 1)
-                        return (
-                          <label
-                            key={itemId}
-                            className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm ${
-                              checked ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                              checked={checked}
-                              onChange={() => toggleItem(meta.id, itemId)}
-                            />
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-900">{titleForItem(item)}</div>
-                              <div className="text-[11px] text-gray-500">
-                                {dims ?? 'Dimensioni mancanti'}
-                                {mq > 0 && ` · ${formatMq(mq)}`}
-                              </div>
-                            </div>
-                            {qty > 1 && (
-                              <span className="text-[11px] text-gray-500">x{qty}</span>
-                            )}
-                          </label>
-                        )
-                      })}
-                      {subsetInvalid && (
-                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                          Seleziona almeno una voce da includere.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        <div className="mt-5 flex items-center justify-between border-t pt-3">
-          <div className="text-xs text-gray-500">
-            {summaryRows.length === 0 ? 'Nessuna metratura verrà stampata per questa categoria.' : 'I valori includono quantità e dimensioni (in m²).'}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Annulla</Button>
-            <Button onClick={handleSave} disabled={hasInvalidSubset}>Salva</Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
 }

@@ -140,7 +140,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
       custom_fields: [],
       material: "Alluminio",
       lamelle: "fisse",
-      con_telaio: true,
+      ante: 2,
       misura_tipo: "luce",
       color: "",
     }),

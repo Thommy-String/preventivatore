@@ -1,11 +1,14 @@
 // src/pdf/usePDFData.ts
-import { useMemo } from "react";
+import { createElement, useEffect, useMemo, useState } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { useShallow } from "zustand/react/shallow";
 import { useQuoteStore } from "../stores/useQuoteStore";
 import type { QuotePDFProps } from "./QuotePDF";
 import { normalizeSurfaceEntries } from "../features/quotes/utils/surfaceSelections";
 import { TERMS_PROFILES, buildTermsDocument, detectTermsProfile } from "../content/terms";
 import type { TermsDocument } from "../content/terms";
+import { persianaToPngBlob } from "../features/quotes/persiana/persianaToPng";
+import PersianaSvg from "../features/quotes/persiana/PersianaSvg";
 
 // Debug helper: taglia le stringhe nei log
 const __short = (s?: string) =>
@@ -13,6 +16,20 @@ const __short = (s?: string) =>
 
 const isNum = (v: any) => typeof v === "number" && Number.isFinite(v);
 const isStr = (v: any) => typeof v === "string" && v.trim().length > 0;
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result || ""));
+    fr.onerror = () => reject(fr.error || new Error("FileReader error"));
+    fr.readAsDataURL(blob);
+  });
+}
+
+function svgToDataUrl(svg: string) {
+  const withNs = svg.includes("xmlns=") ? svg : svg.replace("<svg ", "<svg xmlns=\"http://www.w3.org/2000/svg\" ");
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(withNs)}`;
+}
 
 /** Normalizza array/oggetto items -> array semplice */
 function normalizeItems(items: any): any[] {
@@ -99,6 +116,7 @@ function toPlainItem(it: any) {
     // persiana
     lamelle_type: isStr(it.lamelle_type) ? it.lamelle_type : undefined,
     con_telaio: typeof it.con_telaio === "boolean" ? it.con_telaio : undefined,
+    ante: isNum(it.ante) ? it.ante : undefined,
 
     // tapparella: (material/color/width/height già sopra)
   };
@@ -140,6 +158,41 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
   ])
 ) as unknown as [any, any[], any[], any];
 
+  const [persianaImages, setPersianaImages] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      const list = normalizeItems(items).filter((it) => it?.kind === "persiana");
+      for (const it of list) {
+        const id = it?.id;
+        if (!id || persianaImages[id]) continue;
+        const existing = typeof it?.image_url === "string" ? it.image_url : "";
+        if (existing && !existing.startsWith("blob:")) {
+          continue;
+        }
+        try {
+          const cfg = {
+            width_mm: Number(it?.width_mm) || 1000,
+            height_mm: Number(it?.height_mm) || 1400,
+            ante: Number(it?.ante) || 2,
+          };
+          const blob = await persianaToPngBlob(cfg, 900, 900);
+          const dataUrl = await blobToDataUrl(blob);
+          if (!cancelled) {
+            setPersianaImages((prev) => ({ ...prev, [id]: dataUrl }));
+          }
+        } catch {
+          // ignore generation failures
+        }
+      }
+    }
+
+    run();
+    return () => { cancelled = true; };
+  }, [items, persianaImages]);
+
 
 
   return useMemo<QuotePDFProps>(() => {
@@ -156,7 +209,24 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       : [];
 
     // Items “puri”
-    const plainItems = normalizeItems(items).map(toPlainItem).filter(Boolean);
+    const plainItems = normalizeItems(items)
+      .map(toPlainItem)
+      .filter(Boolean)
+      .map((it: any) => {
+        if (it?.kind === "persiana" && !it.image_url) {
+          const cfg = {
+            width_mm: Number(it?.width_mm) || 1000,
+            height_mm: Number(it?.height_mm) || 1400,
+            ante: Number(it?.ante) || 2,
+          };
+          const svg = renderToStaticMarkup(createElement(PersianaSvg, { cfg }));
+          return { ...it, image_url: svgToDataUrl(svg) };
+        }
+        if (it?.kind === "persiana" && it?.id && persianaImages[it.id] && !it.image_url) {
+          return { ...it, image_url: persianaImages[it.id] };
+        }
+        return it;
+      });
     const pdfSafeItems = JSON.parse(JSON.stringify(plainItems));
 
     // ---- DEBUG: items finali passati al PDF ----

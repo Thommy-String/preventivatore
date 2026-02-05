@@ -6,8 +6,10 @@ import CustomForm from "../forms/CustomForm";
 import type { CustomField } from "../types";
 import { gridWindowToPngBlob } from "../svg/windowToPng";
 import { cassonettoToPngBlob } from "../cassonetto/cassonettoToPng";
+import { persianaToPngBlob } from "../persiana/persianaToPng";
 import WindowSvg from "../window/WindowSvg";
 import CassonettoSvg from "../cassonetto/CassonettoSvg";
+import PersianaSvg from "../persiana/PersianaSvg";
 
 // Helper per convertire Blob in data URL, utile per le immagini nel PDF
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -137,6 +139,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
     [draft.kind, (draft as any)?.options?.gridWindow]
   );
   const isCassonetto = useMemo(() => draft.kind === "cassonetto", [draft.kind]);
+  const isPersiana = useMemo(() => draft.kind === "persiana", [draft.kind]);
 
   // Sorgente legacy per gli altri prodotti
   const legacyPreviewSrc =
@@ -191,6 +194,19 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           __previewUrl: dataUrlCass,
           image_url: dataUrlCass,
         } as QuoteItem;
+      } else if (isPersiana) {
+        const cfg = {
+          width_mm: Number((finalDraft as any)?.width_mm) || 1000,
+          height_mm: Number((finalDraft as any)?.height_mm) || 1400,
+          ante: Number((finalDraft as any)?.ante) || 2,
+        };
+        const blobPers = await persianaToPngBlob(cfg, 900, 900);
+        const dataUrlPers = await blobToDataUrl(blobPers);
+        finalDraft = {
+          ...(finalDraft as any),
+          __previewUrl: dataUrlPers,
+          image_url: dataUrlPers,
+        } as QuoteItem;
       }
 
       if (blob) {
@@ -219,8 +235,11 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
         (draft as any)?.options?.cassonetto ?? buildCassonettoCfgFromDraft(draft);
       return `${cfg.width_mm || 2} / ${cfg.height_mm || 1}`;
     }
+    if (isPersiana) {
+      return `${(draft as any).width_mm || 2} / ${(draft as any).height_mm || 1}`;
+    }
     return "1 / 1";
-  }, [isWindow, isCassonetto, draft]);
+  }, [isWindow, isCassonetto, isPersiana, draft]);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -252,13 +271,21 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                   ) : (
                     <CassonettoSvg cfg={(draft as any)?.options?.cassonetto ?? buildCassonettoCfgFromDraft(draft)} />
                   )
+                ) : isPersiana ? (
+                  <PersianaSvg
+                    cfg={{
+                      width_mm: Number((draft as any).width_mm) || 1000,
+                      height_mm: Number((draft as any).height_mm) || 1400,
+                      ante: Number((draft as any).ante) || 2,
+                    }}
+                  />
                 ) : legacyPreviewSrc ? (
                   <img key={legacyPreviewSrc} src={legacyPreviewSrc} alt={entry?.label || 'Anteprima'} className="max-w-full max-h-full object-contain" />
                 ) : (
                   <div className="text-sm text-gray-400">Nessuna immagine</div>
                 )}
 
-                {!isWindow && !isCassonetto && (
+                {!isWindow && !isCassonetto && !isPersiana && (
                   <div className="absolute bottom-2 right-2">
                     <label className="inline-flex items-center justify-center h-8 px-2 rounded border bg-white text-xs cursor-pointer hover:bg-gray-50">
                       Carica
