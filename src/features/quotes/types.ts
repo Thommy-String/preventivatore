@@ -46,6 +46,8 @@ export type GridWindowConfig = {
   glazing: 'singolo' | 'doppio' | 'triplo' | 'satinato'
   /** mostrare quote L/H sopra il disegno */
   showDims?: boolean
+  /** altezza maniglia da terra in mm (default: metà altezza finestra) */
+  handle_height_mm?: number
   /** righe della griglia: ciascuna ha un'altezza relativa e una lista di colonne con larghezze relative */
   rows: Array<{
     height_ratio: number

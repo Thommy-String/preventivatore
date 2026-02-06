@@ -755,19 +755,44 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                         const canHaveHandle = state !== 'fissa';
                                         const handleChecked = Boolean(col.handle);
                                         const inputId = `handle-${rowIndex}-${colIndex}`;
+                                        const currentHandleH = (grid as any).handle_height_mm;
                                         return (
-                                            <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
-                                                <input
-                                                    id={inputId}
-                                                    type="checkbox"
-                                                    className="h-4 w-4"
-                                                    checked={handleChecked}
-                                                    disabled={!canHaveHandle}
-                                                    onChange={(e) => updateSashHandle(rowIndex, colIndex, e.target.checked)}
-                                                />
-                                                <label htmlFor={inputId} className={!canHaveHandle ? 'text-gray-400 line-through' : ''}>
-                                                    Maniglia
-                                                </label>
+                                            <div className="mt-3 space-y-2">
+                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                    <input
+                                                        id={inputId}
+                                                        type="checkbox"
+                                                        className="h-4 w-4"
+                                                        checked={handleChecked}
+                                                        disabled={!canHaveHandle}
+                                                        onChange={(e) => updateSashHandle(rowIndex, colIndex, e.target.checked)}
+                                                    />
+                                                    <label htmlFor={inputId} className={!canHaveHandle ? 'text-gray-400 line-through' : ''}>
+                                                        Maniglia
+                                                    </label>
+                                                </div>
+                                                {handleChecked && (state === 'apre_sx' || state === 'apre_dx' || state === 'anta_dx' || state === 'anta_sx') && (
+                                                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                        <span>Altezza da terra (mm)</span>
+                                                        <input
+                                                            className="input w-20"
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            pattern="[0-9]*"
+                                                            placeholder={String(Math.round((grid.height_mm || 1500) / 2))}
+                                                            value={currentHandleH != null ? String(currentHandleH) : ''}
+                                                            onChange={(e) => {
+                                                                const v = e.target.value;
+                                                                if (v === '' || /^\d+$/.test(v)) {
+                                                                    const num = v === '' ? undefined : Number(v);
+                                                                    handleGridChange({ handle_height_mm: num } as any);
+                                                                }
+                                                            }}
+                                                            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
+                                                            onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
+                                                        />
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })()}

@@ -56,16 +56,6 @@ const formatMeasure = (value: number, decimals: number) => {
     return fixed.replace(/\.?0+$/, "");
 };
 
-function glassFill(glazing: GridWindowConfig["glazing"]) {
-    switch (glazing) {
-        case "singolo": return "#e6f9ff";
-        case "doppio": return "#cfefff";
-        case "triplo": return "#b7e0ff";
-        case "satinato": return "#f2f2f2";
-        default: return "#e6f9ff";
-    }
-}
-
 function isSatin(glazing: GridWindowConfig["glazing"]) {
     return glazing === "satinato";
 }
@@ -86,22 +76,35 @@ function makeFallbackCfg(): GridWindowConfig {
 
 // --- Componenti di Disegno ---
 
-// Colori tecnici per indicatori apertura (come nell'immagine di riferimento)
-const OPENING_COLOR_SIDE = '#888888';  // grigio chiaro per apertura laterale
-const OPENING_COLOR_TILT = '#c9a227';  // dorato per vasistas/ribalta
+// Colori tecnici (fedeli al riferimento)
+const OPENING_COLOR_SIDE = '#888888';  // grigio standard
+const OPENING_COLOR_TILT = '#E6B000';  // giallo dorato
 
-function OpeningGlyph({ x, y, w, h, state, strokeWidth }: { x: number; y: number; w: number; h: number; state: LeafState; stroke: string; strokeWidth: number }) {
-    const sideStroke = Math.max(0.8, strokeWidth * 0.9);
-    const tiltStroke = Math.max(0.8, strokeWidth * 0.9);
-    const dash = `${strokeWidth * 4} ${strokeWidth * 3}`;  // linee tratteggiate
+// Definizione stile tecnico
+const TECH_STYLE = {
+    FRAME_FILL: '#FFFFFF',
+    FRAME_STROKE: '#222222',
+    GLASS_FILL: '#D6EFFF',
+    GLASS_STROKE: '#222222',
+    BEAD_STROKE: '#222222',
+    STROKE_WIDTH_FRAME: 1.2,
+    STROKE_WIDTH_SASH: 2.0, // Linea anta più spessa
+    STROKE_WIDTH_BEAD: 1.5,
+    STROKE_WIDTH_GLASS: 0.9,
+};
+
+function OpeningGlyph({ x, y, w, h, state }: { x: number; y: number; w: number; h: number; state: LeafState; stroke: string; strokeWidth: number }) {
+    const sideStroke = 1; // Fixed width for technical look
+    const tiltStroke = 1.2;
+    // Tratteggio per linee apertura (tecnico)
+    const dash = "5, 5";
     
-    // Vasistas: triangolo dal basso verso l'alto (linee dorate tratteggiate)
+    // Vasistas: triangolo dal basso verso l'alto (linee dorate)
     const drawVasistas = () => (
         <polygon 
             points={`${x},${y + h} ${x + w / 2},${y} ${x + w},${y + h}`} 
             stroke={OPENING_COLOR_TILT} 
             strokeWidth={tiltStroke} 
-            strokeDasharray={dash}
             fill="none" 
             strokeLinejoin="round"
         />
@@ -188,11 +191,17 @@ function handlePlacementForState(state?: LeafState): HandlePlacement {
 }
 
 // --- Renderer SVG Principale ---
-function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
+function WindowSvg({ cfg }: WindowSvgProps) {
     const safe = cfg ?? makeFallbackCfg();
 
-    const { width_mm, height_mm, rows, frame_mm, mullion_mm, glazing } = safe;
+    // Estrai frame_mm originale, ma per il disegno tecnico usiamo un valore forzato "Sottile"
+    // per il telaio esterno (L frame), pur mantenendo l'anta (Z sash) molto spessa.
+    const { width_mm, height_mm, rows, mullion_mm, glazing } = safe;
     const showDims = safe.showDims !== false;
+
+    // OVERRIDE VISIVO: Telaio esterno sottile (34mm) vs Anta spessa (55mm+)
+    // Aumentato leggermente da 28 a 34 su richiesta
+    const frame_mm = 34;
 
     const innerW = width_mm - frame_mm * 2;
     const innerH = height_mm - frame_mm * 2;
@@ -249,8 +258,8 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
         const rowHeightMm = rowH;
         acc.rowDimensions.push({ rowIdx, top: y0, bottom: y0 + rowH, heightMm: rowHeightMm });
 
-        const totalColsGapX = (row.cols.length - 1) * mullion_mm;
-        const usableW = innerW - totalColsGapX;
+        // Ante si toccano direttamente (nessun gap montante, come nel riferimento)
+        const usableW = innerW;
         const ratioValues = row.cols.map(c => Number.isFinite(c.width_ratio) && c.width_ratio > 0 ? c.width_ratio : 1);
         const ratioSum = sum(ratioValues);
         const safeRatioSum = ratioSum > 0 ? ratioSum : row.cols.length;
@@ -279,70 +288,63 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
             const startX = xCursor;
             const colW = (usableW * ratioValues[colIdx]) / safeRatioSum;
             
-            // Dimensioni cornice anta (sash frame) - più spessa per effetto tecnico
-            const sashFrameWidth = frame_mm * 0.35;
-            const sashInset = sashFrameWidth;
-            
-            // Area vetro (interna alla cornice anta)
-            const gx = startX + sashInset;
-            const gy = y0 + sashInset;
-            const gw = colW - sashInset * 2;
-            const gh = rowH - sashInset * 2;
+            // Calcolo dimensioni profili (style tecnico)
+            // Sash Frame: ~55mm visuali (Molto più spessa)
+            // Nota: frame_mm aumentato a 34, aggiustato moltiplicatore per mantenere anta sui 55-60
+            const sashProfileW = Math.max(55, frame_mm * 1.7); 
+            // Fermavetro: ~12mm visuali
+            const beadProfileW = 12;
+
+            // 1. Sash Frame Extents
+            const sx = startX;
+            const sy = y0;
+            const sw = colW;
+            const sh = rowH;
+
+            // 2. Bead Extents
+            const bx = sx + sashProfileW;
+            const by = sy + sashProfileW;
+            const bw = Math.max(0, sw - (sashProfileW * 2));
+            const bh = Math.max(0, sh - (sashProfileW * 2));
+
+            // 3. Glass Extents
+            const gx = bx + beadProfileW;
+            const gy = by + beadProfileW;
+            const gw = Math.max(0, bw - (beadProfileW * 2));
+            const gh = Math.max(0, bh - (beadProfileW * 2));
 
             const sashGlazing = col.glazing ?? glazing;
 
-            // Colori per effetto 3D sottile (come nell'immagine di riferimento)
-            const shadowColor = '#c0c0c0';
-            const sashStroke = Math.max(0.8, strokeWidth * 0.6);
-
-            // draw vertical divider BEFORE the glass of this column when it's not the first column
-            if (colIdx > 0) {
-                const vx = startX - (mullion_mm / 2); // center of the mullion gap
-                const rectX = vx - mullion_mm / 2; // left edge of mullion fill
-                const rectW = mullion_mm;
-
-                // filled area of the mullion (solid color)
-                acc.nodes.push(
-                    <rect
-                        key={`vm-fill-${rowIdx}-${colIdx}`}
-                        x={rectX}
-                        y={y0}
-                        width={rectW}
-                        height={rowH}
-                        fill={frameColor}
-                    />
-                );
-                
-                // Bordi del montante centrale
-                acc.nodes.push(
-                    <g key={`vm-border-${rowIdx}-${colIdx}`}>
-                        <line x1={rectX} y1={y0} x2={rectX} y2={y0 + rowH} stroke={outlineColor} strokeWidth={sashStroke * 0.5} />
-                        <line x1={rectX + rectW} y1={y0} x2={rectX + rectW} y2={y0 + rowH} stroke={outlineColor} strokeWidth={sashStroke * 0.5} />
-                    </g>
-                );
-            }
-
-            // Disegna cornice anta - struttura semplice come nell'immagine di riferimento
+            // Anta: 3 livelli di rettangoli (Telaio Anta -> Fermavetro -> Vetro)
             acc.nodes.push(
-                <g key={`sash-frame-${rowIdx}-${colIdx}`}>
-                    {/* Background della cornice anta */}
-                    <rect x={startX} y={y0} width={colW} height={rowH} fill={frameColor} />
+                <g key={`sash-group-${rowIdx}-${colIdx}`}>
+                    {/* 1. Telaio Anta (Bianco, bordo più spesso) */}
+                    <rect 
+                        x={sx} y={sy} width={sw} height={sh} 
+                        fill={TECH_STYLE.FRAME_FILL} 
+                        stroke={TECH_STYLE.FRAME_STROKE} 
+                        strokeWidth={TECH_STYLE.STROKE_WIDTH_SASH} 
+                    />
                     
-                    {/* Vetro */}
-                    <rect x={gx} y={gy} width={gw} height={gh} fill={glassFill(sashGlazing)} />
+                    {/* 2. Fermavetro (Bianco, bordo medio) */}
+                    <rect 
+                        x={bx} y={by} width={bw} height={bh} 
+                        fill={TECH_STYLE.FRAME_FILL} 
+                        stroke={TECH_STYLE.BEAD_STROKE || TECH_STYLE.FRAME_STROKE} 
+                        strokeWidth={TECH_STYLE.STROKE_WIDTH_BEAD} 
+                    />
+
+                    {/* 3. Vetro (Azzurro, bordo sottile) */}
+                    <rect 
+                        x={gx} y={gy} width={gw} height={gh} 
+                        fill={TECH_STYLE.GLASS_FILL} 
+                        stroke={TECH_STYLE.GLASS_STROKE || TECH_STYLE.FRAME_STROKE} 
+                        strokeWidth={TECH_STYLE.STROKE_WIDTH_GLASS} 
+                    />
+
                     {isSatin(sashGlazing) && (
                         <rect x={gx} y={gy} width={gw} height={gh} fill={`url(#${satinPatternId})`} opacity={0.6} />
                     )}
-                    
-                    {/* Linea esterna cornice anta (bordo visibile) */}
-                    <rect x={startX} y={y0} width={colW} height={rowH} fill="none" stroke={outlineColor} strokeWidth={sashStroke} />
-                    
-                    {/* Linea interna cornice anta (bordo vetro) - doppia cornice come nell'immagine */}
-                    <rect x={gx} y={gy} width={gw} height={gh} fill="none" stroke={outlineColor} strokeWidth={sashStroke} />
-                    
-                    {/* Effetto 3D sottile - solo ombre leggere interne */}
-                    <line x1={startX + 2} y1={y0 + 2} x2={startX + colW - 2} y2={y0 + 2} stroke={shadowColor} strokeWidth={0.5} />
-                    <line x1={startX + 2} y1={y0 + 2} x2={startX + 2} y2={y0 + rowH - 2} stroke={shadowColor} strokeWidth={0.5} />
                 </g>
             );
 
@@ -414,77 +416,123 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
 
             colLabels.push({ x: (outerStart + outerEnd) / 2, text: labelText, start: outerStart, end: outerEnd });
 
-            // ## BLOCCO MANIGLIA: Stile tecnico con rosetta
+            // ## BLOCCO MANIGLIA: Stile tecnico, colore telaio, dimensione visibile
             if (col.handle) {
                 const placement = handlePlacementForState(col.leaf?.state);
                 let handleSvg = null;
 
-                // Maniglia come nell'immagine di riferimento: rettangolo verticale con piccola sporgenza
-                // Dimensioni proporzionali
-                const handleBodyWidth = Math.max(4, frame_mm * 0.12);
-                const handleBodyHeight = Math.max(30, frame_mm * 0.8);
-                const handleLeverWidth = Math.max(8, frame_mm * 0.25);
-                const handleLeverHeight = Math.max(3, frame_mm * 0.08);
+                // Dimensioni più grandi e proporzionali alla finestra
+                const minDim = Math.min(width_mm, height_mm);
+                const handleBodyWidth = Math.max(6, minDim * 0.012);
+                const handleBodyHeight = Math.max(60, minDim * 0.08);
+                const handleLeverWidth = Math.max(12, minDim * 0.018);
+                const handleLeverHeight = Math.max(5, minDim * 0.012);
+                const handleRx = 0; // Square handle for technical drawing
+                // Maniglia bianca con contorno nero (stile tecnico)
+                const handleColor = '#ffffff'; 
+                const handleStroke = outlineColor;
+                const handleStrokeW = Math.max(0.5, strokeWidth * 0.6);
+
+                // Altezza maniglia configurabile (da terra)
+                const configHandleH = (safe as any).handle_height_mm;
 
                 if (placement === 'left' || placement === 'right') {
-                    // Centro verticale dell'anta
-                    const cy = y0 + rowH / 2;
-                    // Posizione sulla cornice anta (bordo interno)
+                    // Posizione verticale: configHandleH da terra (dal basso della finestra)
+                    // oppure centro dell'anta
+                    let cy: number;
+                    if (typeof configHandleH === 'number' && configHandleH > 0) {
+                        // handle_height_mm è da terra → dal basso della finestra
+                        cy = height_mm - configHandleH;
+                        // Clamp dentro l'anta corrente
+                        cy = Math.max(y0 + sashProfileW + handleBodyHeight / 2, Math.min(y0 + rowH - sashProfileW - handleBodyHeight / 2, cy));
+                    } else {
+                        cy = y0 + rowH / 2;
+                    }
                     const cx = placement === 'left'
-                        ? startX + sashFrameWidth * 0.6
-                        : startX + colW - sashFrameWidth * 0.6;
+                        ? startX + sashProfileW * 0.5
+                        : startX + colW - sashProfileW * 0.5;
 
                     handleSvg = (
                         <g transform={`translate(${cx}, ${cy})`}>
-                            {/* Corpo principale della maniglia (rettangolo verticale) */}
-                            <rect 
-                                x={-handleBodyWidth / 2} 
-                                y={-handleBodyHeight / 2} 
-                                width={handleBodyWidth} 
-                                height={handleBodyHeight} 
-                                fill="#666666"
-                                stroke="#333333"
-                                strokeWidth={0.5}
+                            {/* Rosetta (base) */}
+                            <rect
+                                x={-handleLeverWidth / 2}
+                                y={-handleBodyHeight * 0.15}
+                                width={handleLeverWidth}
+                                height={handleBodyHeight * 0.3}
+                                rx={handleRx}
+                                ry={handleRx}
+                                fill={handleColor}
+                                stroke={handleStroke}
+                                strokeWidth={handleStrokeW}
                             />
-                            {/* Leva/sporgenza orizzontale verso l'alto */}
-                            <rect 
-                                x={-handleLeverWidth / 2} 
-                                y={-handleBodyHeight / 2 - handleLeverHeight} 
-                                width={handleLeverWidth} 
-                                height={handleLeverHeight} 
-                                fill="#666666"
-                                stroke="#333333"
-                                strokeWidth={0.5}
+                            {/* Corpo principale della maniglia (rettangolo verticale) */}
+                            <rect
+                                x={-handleBodyWidth / 2}
+                                y={-handleBodyHeight / 2}
+                                width={handleBodyWidth}
+                                height={handleBodyHeight}
+                                rx={handleRx}
+                                ry={handleRx}
+                                fill={handleColor}
+                                stroke={handleStroke}
+                                strokeWidth={handleStrokeW}
+                            />
+                            {/* Leva orizzontale verso l'alto */}
+                            <rect
+                                x={-handleLeverWidth / 2}
+                                y={-handleBodyHeight / 2 - handleLeverHeight}
+                                width={handleLeverWidth}
+                                height={handleLeverHeight + handleRx}
+                                rx={handleRx}
+                                ry={handleRx}
+                                fill={handleColor}
+                                stroke={handleStroke}
+                                strokeWidth={handleStrokeW}
                             />
                         </g>
                     );
                 } else if (placement === 'top') {
-                    // Centro orizzontale dell'anta
                     const cx = startX + colW / 2;
-                    // Posizione sulla cornice anta (bordo interno)
-                    const cy = y0 + sashFrameWidth * 0.6;
+                    const cy = y0 + sashProfileW * 0.5;
 
                     handleSvg = (
                         <g transform={`translate(${cx}, ${cy})`}>
+                            {/* Rosetta */}
+                            <rect
+                                x={-handleBodyHeight * 0.15}
+                                y={-handleLeverWidth / 2}
+                                width={handleBodyHeight * 0.3}
+                                height={handleLeverWidth}
+                                rx={handleRx}
+                                ry={handleRx}
+                                fill={handleColor}
+                                stroke={handleStroke}
+                                strokeWidth={handleStrokeW}
+                            />
                             {/* Corpo principale (orizzontale) */}
-                            <rect 
-                                x={-handleBodyHeight / 2} 
-                                y={-handleBodyWidth / 2} 
-                                width={handleBodyHeight} 
-                                height={handleBodyWidth} 
-                                fill="#666666"
-                                stroke="#333333"
-                                strokeWidth={0.5}
+                            <rect
+                                x={-handleBodyHeight / 2}
+                                y={-handleBodyWidth / 2}
+                                width={handleBodyHeight}
+                                height={handleBodyWidth}
+                                rx={handleRx}
+                                ry={handleRx}
+                                fill={handleColor}
+                                stroke={handleStroke}
+                                strokeWidth={handleStrokeW}
                             />
                             {/* Leva verso destra */}
-                            <rect 
-                                x={handleBodyHeight / 2} 
-                                y={-handleLeverWidth / 2} 
-                                width={handleLeverHeight} 
-                                height={handleLeverWidth} 
-                                fill="#666666"
-                                stroke="#333333"
-                                strokeWidth={0.5}
+                            <rect
+                                x={handleBodyHeight / 2 - handleRx}
+                                y={-handleLeverWidth / 2}
+                                width={handleLeverHeight + handleRx}
+                                height={handleLeverWidth}
+                                rx={handleRx}
+                                ry={handleRx}
+                                fill={handleColor}
+                                stroke={handleStroke}
+                                strokeWidth={handleStrokeW}
                             />
                         </g>
                     );
@@ -495,7 +543,7 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
                 }
             }
 
-            xCursor += colW + mullion_mm;
+            xCursor += colW;
         });
 
         if (rowIdx < rows.length - 1) {
@@ -505,7 +553,7 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
             const rectW = innerW;
             const rectH = mullion_mm;
 
-            // filled traversa (mullion) area
+            // Riempimento traversa (il contorno viene dai bordi delle ante adiacenti)
             acc.nodes.push(
                 <rect
                     key={`hz-fill-${rowIdx}`}
@@ -514,22 +562,6 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
                     width={rectW}
                     height={rectH}
                     fill={frameColor}
-                />
-            );
-
-            // crisp center stroke for sharper separation
-            const centerY = ty;
-            const hStroke = Math.max(1, strokeWidth * 1.2);
-            acc.nodes.push(
-                <line
-                    key={`hz-line-${rowIdx}`}
-                    x1={rectX}
-                    y1={centerY}
-                    x2={rectX + rectW}
-                    y2={centerY}
-                    stroke={outlineColor}
-                    strokeWidth={hStroke}
-                    strokeLinecap="square"
                 />
             );
         }
@@ -723,18 +755,21 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
                     <circle cx={7.5} cy={7.5} r={3} fill="#d1d5db" />
                 </pattern>
             </defs>
-            {/* Telaio esterno - struttura pulita come nell'immagine di riferimento */}
-            <rect x={0} y={0} width={width_mm} height={height_mm} rx={radius} ry={radius} fill={frameColor} />
-            {/* Contorno esterno principale */}
-            <rect x={strokeWidth / 2} y={strokeWidth / 2} width={width_mm - strokeWidth} height={height_mm - strokeWidth} rx={radius} ry={radius} fill="none" stroke={outlineColor} strokeWidth={strokeWidth} />
-            {/* Ombra interna sottile per effetto profondità */}
-            <line x1={3} y1={3} x2={width_mm - 3} y2={3} stroke="#c0c0c0" strokeWidth={0.5} />
-            <line x1={3} y1={3} x2={3} y2={height_mm - 3} stroke="#c0c0c0" strokeWidth={0.5} />
-            {/* Linea interna telaio (separazione telaio/ante) */}
-            <rect x={frame_mm} y={frame_mm} width={innerW} height={innerH} fill="none" stroke={outlineColor} strokeWidth={strokeWidth * 0.5} />
+            {/* Telaio esterno: fill + stroke (Technical Style) */}
+            <rect 
+                x={0} y={0} width={width_mm} height={height_mm} 
+                fill={TECH_STYLE.FRAME_FILL} 
+                stroke={TECH_STYLE.FRAME_STROKE} 
+                strokeWidth={TECH_STYLE.STROKE_WIDTH_FRAME} 
+            />
+            {/* Bordo interno telaio (separazione telaio/ante) */}
+            <rect 
+                x={frame_mm} y={frame_mm} width={innerW} height={innerH} 
+                fill="none" 
+                stroke={TECH_STYLE.FRAME_STROKE} 
+                strokeWidth={TECH_STYLE.STROKE_WIDTH_BEAD} 
+            />
             {drawing.nodes}
-            {/* overlay strokes for mullions and traverses to ensure visible contours (stroke-only to avoid covering glass glyphs) */}
-            {/* mullion and horizontal dividers drawn as lines inside nodes; overlays removed to preserve exact line structure */}
             {showDims && drawing.rowLabels.length > 0 && (
                 <>
                     <g stroke={outlineColor} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">

@@ -69,7 +69,7 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
   const frameYInset = innerH * 0.0625
   const frameH = innerH * 0.875
 
-  const slatGap = innerH * 0.05
+  const slatGap = 50  // altezza fissa lamella in unità disegno (~50mm reali)
   const slatStroke = Math.max(0.6, strokeWidth * 0.7)
   const innerBorderStroke = Math.max(0.5, strokeWidth * 0.6)
   const innerInsetBorderStroke = Math.max(0.6, strokeWidth * 0.6)
