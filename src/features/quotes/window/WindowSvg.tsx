@@ -94,10 +94,10 @@ const TECH_STYLE = {
 };
 
 function OpeningGlyph({ x, y, w, h, state }: { x: number; y: number; w: number; h: number; state: LeafState; stroke: string; strokeWidth: number }) {
-    const sideStroke = 1; // Fixed width for technical look
-    const tiltStroke = 1.2;
-    // Tratteggio per linee apertura (tecnico)
-    const dash = "5, 5";
+    const sideStroke = 2; // Linee apertura più spesse
+    const tiltStroke = 2.2;
+    // Tratteggio per linee apertura (più grande)
+    const dash = "12, 8";
     
     // Vasistas: triangolo dal basso verso l'alto (linee dorate)
     const drawVasistas = () => (
@@ -401,12 +401,13 @@ function WindowSvg({ cfg }: WindowSvgProps) {
             }
             acc.nodes.push(<OpeningGlyph key={`o-${rowIdx}-${colIdx}`} x={gx} y={gy} w={gw} h={gh} state={col.leaf?.state ?? "fissa"} stroke={outlineColor} strokeWidth={strokeWidth} />);
 
-            const outerStartRaw = colIdx === 0 ? 0 : startX - (mullion_mm / 2);
-            const outerEndRaw = colIdx === row.cols.length - 1 ? width_mm : startX + colW + (mullion_mm / 2);
-            const outerStart = Math.max(0, Math.min(width_mm, outerStartRaw));
-            const outerEnd = Math.max(0, Math.min(width_mm, outerEndRaw));
-            const outerWidth = Math.max(0, outerEnd - outerStart);
-            const labelValue = colIdx < labelNumbers.length ? labelNumbers[colIdx] : outerWidth;
+            // Punti di estensione: 
+            // - Prima anta: parte da 0 (bordo telaio), finisce al confine con la prossima
+            // - Ante intermedie: da confine a confine
+            // - Ultima anta: finisce a width_mm (bordo telaio)
+            const outerStart = colIdx === 0 ? 0 : startX;
+            const outerEnd = colIdx === row.cols.length - 1 ? width_mm : startX + colW;
+            const labelValue = colIdx < labelNumbers.length ? labelNumbers[colIdx] : colW;
             const labelText = formatMeasure(labelValue, sashMeasureDecimals);
             const segmentKey = `${Math.round(outerStart)}-${Math.round(outerEnd)}`;
             if (!acc.seenSegments.has(segmentKey)) {
@@ -776,10 +777,15 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                         {drawing.rowLabels.map(row => {
                             const fromY = row.position === "top" ? 0 : height_mm;
                             const targetY = row.position === "top" ? row.y + labelLineGap : row.y - labelLineGap;
-                            return row.labels.flatMap((label, idx) => ([
-                                <line key={`row-ext-start-${row.rowIdx}-${idx}`} x1={label.start} y1={fromY} x2={label.start} y2={targetY} />,
-                                <line key={`row-ext-end-${row.rowIdx}-${idx}`} x1={label.end} y1={fromY} x2={label.end} y2={targetY} />,
-                            ]));
+                            // Raccogli tutti i punti unici (evita duplicati ai confini tra ante)
+                            const uniquePoints = new Set<number>();
+                            row.labels.forEach(label => {
+                                uniquePoints.add(Math.round(label.start * 100) / 100);
+                                uniquePoints.add(Math.round(label.end * 100) / 100);
+                            });
+                            return Array.from(uniquePoints).map((xPos, idx) => (
+                                <line key={`row-ext-${row.rowIdx}-${idx}`} x1={xPos} y1={fromY} x2={xPos} y2={targetY} />
+                            ));
                         })}
                     </g>
                     <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#1f2937', fontSize: sashFontSize }}>
