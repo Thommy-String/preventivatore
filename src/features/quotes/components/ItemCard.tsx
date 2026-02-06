@@ -53,6 +53,7 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                                                         height_mm: (it as any).height_mm ?? 250,
                                                         depth_mm: (it as any).depth_mm ?? null,
                                                         celino_mm: (it as any).celino_mm ?? (it as any).extension_mm ?? null,
+                                                        color: (it as any).options?.previewColor,
                                                     }}
                                                 />
                                             ) : (

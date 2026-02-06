@@ -1,6 +1,7 @@
 import  { useEffect, useState } from 'react';
 import type { CassonettoItem } from '../types';
 import type { ItemFormProps } from '../types';
+import { RalColorPicker } from '../components/RalColorPicker';
 
 const MATERIALS = ['PVC', 'Alluminio coibentato', 'Legno coibentato'] as const;
 
@@ -39,6 +40,12 @@ export function CassonettoForm({ draft, onChange }: ItemFormProps<CassonettoItem
 
   const updateField = (key: keyof CassonettoItem, value: any) => {
     onChange({ ...d, [key]: value });
+  };
+
+  // Patch profonda per options (come Tapparella/Persiana)
+  const updateOption = (key: string, val: any) => {
+    const prevOptions = (d as any).options || {};
+    onChange({ ...d, options: { ...prevOptions, [key]: val } } as any);
   };
 
   return (
@@ -171,7 +178,20 @@ export function CassonettoForm({ draft, onChange }: ItemFormProps<CassonettoItem
           </div>
           <div>
             <label className="text-xs text-gray-500">Colore</label>
-            <input className="input" type="text" placeholder="Es. RAL 9016" value={d.color ?? ''} onChange={(e) => updateField('color', e.target.value)} />
+            <RalColorPicker
+              previewColor={(d as any).options?.previewColor ?? "#e8e8e8"}
+              labelValue={d.color ?? ""}
+              onPreviewColorChange={(hex) => updateOption("previewColor", hex)}
+              onLabelChange={(text) => updateField('color', text || null)}
+              onRalSelect={(ral) => {
+                const prevOptions = (d as any).options || {};
+                onChange({
+                  ...d,
+                  color: `${ral.code} ${ral.name}`,
+                  options: { ...prevOptions, previewColor: ral.hex },
+                } as any);
+              }}
+            />
           </div>
         </div>
       </section>

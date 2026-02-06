@@ -118,7 +118,7 @@ function buildCassonettoCfgFromDraft(d: any) {
     height_mm: Number(opt.height_mm ?? d?.height_mm) || 600,
     depth_mm: Number(opt.depth_mm ?? d?.depth_mm) || 200,
     celino_mm: celino,
-    color: opt.color ?? d?.color ?? null,
+    color: d?.options?.previewColor || opt.color || d?.color || null,
     showDims: true,
   };
 }

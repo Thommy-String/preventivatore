@@ -485,6 +485,7 @@ export default function Editor() {
           height_mm: Number(toSave.height_mm) || 0,
           depth_mm: (toSave.depth_mm ?? null),
           celino_mm: (toSave.celino_mm ?? toSave.extension_mm ?? null),
+          color: (toSave as any).options?.previewColor || null,
         } as const
         if (cfg.width_mm > 0 && cfg.height_mm > 0) {
           const blob = await cassonettoToPngBlob(cfg as any, 640, 640)
@@ -590,6 +591,7 @@ export default function Editor() {
                 height_mm: Number(clean.height_mm) || 0,
                 depth_mm: (clean.depth_mm ?? null),
                 celino_mm: (clean.celino_mm ?? clean.extension_mm ?? null),
+                color: (clean as any).options?.previewColor || null,
               } as const;
               if (cfg.width_mm > 0 && cfg.height_mm > 0) {
                 const blob = await cassonettoToPngBlob(cfg as any, 640, 640);

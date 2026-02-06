@@ -6,11 +6,28 @@ export interface CassonettoConfig {
   height_mm: number;
   depth_mm?: number | null;
   celino_mm?: number | null;
+  color?: string | null;
 }
 
 export interface CassonettoSvgProps {
   cfg: CassonettoConfig;
   stroke?: string;
+}
+
+// Helper per scurire/schiarire hex
+function adjustColor(hex: string, amount: number): string {
+  const safeHex = hex.replace(/[^0-9A-F]/gi, '')
+  let color = safeHex
+  if (color.length === 3) color = color.split('').map(c => c + c).join('')
+  if (color.length !== 6) return hex
+  const num = parseInt(color, 16)
+  let r = (num >> 16) + amount
+  let g = ((num >> 8) & 0x00ff) + amount
+  let b = (num & 0x0000ff) + amount
+  r = Math.max(0, Math.min(255, r))
+  g = Math.max(0, Math.min(255, g))
+  b = Math.max(0, Math.min(255, b))
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)
 }
 
 // --- Renderer SVG Principale ---
@@ -21,6 +38,14 @@ export default function CassonettoSvg({ cfg, stroke = "#222" }: CassonettoSvgPro
     depth_mm = 250,
     celino_mm = 0,
   } = cfg;
+
+  const baseColor = cfg.color && cfg.color.length >= 3 ? cfg.color : null;
+
+  // Tinta unita – facce differenziate solo per la prospettiva
+  const cFront = baseColor || '#fafafa';
+  const cFrontInner = baseColor ? adjustColor(baseColor, -5) : '#f4f4f5';
+  const cTop = baseColor ? adjustColor(baseColor, 8) : '#f0f0f0';
+  const cSide = baseColor ? adjustColor(baseColor, -10) : '#e4e4e4';
 
   // --- Logica per la Proiezione Assonometrica ---
   const angle = Math.PI / 6; 
@@ -54,13 +79,18 @@ export default function CassonettoSvg({ cfg, stroke = "#222" }: CassonettoSvgPro
     <svg viewBox={viewBox} width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Disegno tecnico del cassonetto">
       <g stroke={stroke} fill="none" strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round">
         
-        {/* Disegno del Cassonetto Principale */}
-        <path d={`M ${dx},${-dy} L ${width_mm + dx},${-dy} L ${width_mm},0 L 0,0 Z`} fill="#f0f0f0" />
-        <path d={`M ${width_mm},0 L ${width_mm + dx},${-dy} L ${width_mm + dx},${height_mm - dy} L ${width_mm},${height_mm} Z`} fill="#e0e0e0" />
+        {/* Faccia Superiore */}
+        <path d={`M ${dx},${-dy} L ${width_mm + dx},${-dy} L ${width_mm},0 L 0,0 Z`} fill={cTop} />
+
+        {/* Faccia Laterale */}
+        <path d={`M ${width_mm},0 L ${width_mm + dx},${-dy} L ${width_mm + dx},${height_mm - dy} L ${width_mm},${height_mm} Z`} fill={cSide} />
         
-        {/* Faccia Frontale con Cornice */}
-        <rect x="0" y="0" width={width_mm} height={height_mm} fill="#fafafa" />
-        <rect x={inset} y={inset} width={width_mm - inset * 2} height={height_mm - inset * 2} fill="#f4f4f5" />
+        {/* Faccia Frontale */}
+        <rect x="0" y="0" width={width_mm} height={height_mm} fill={cFront} />
+        {/* Cornice interna */}
+        <rect x={inset} y={inset} width={width_mm - inset * 2} height={height_mm - inset * 2} fill={cFrontInner} />
+
+        {/* Bordi strutturali */}
         <rect x="0" y="0" width={width_mm} height={height_mm} />
         <rect x={inset} y={inset} width={width_mm - inset * 2} height={height_mm - inset * 2} />
         
