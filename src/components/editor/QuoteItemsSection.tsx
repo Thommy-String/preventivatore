@@ -44,7 +44,7 @@ export function QuoteItemsSection({
         </div>
       ) : (
         <div className="mt-4 space-y-3">
-          {itemsArray.map((it) => (
+          {itemsArray.map((it, index) => (
             <div
               key={it.id}
               className="relative group rounded-lg"
@@ -78,6 +78,7 @@ export function QuoteItemsSection({
 
               <ItemCard
                 item={it}
+                position={index + 1}
                 onEdit={onEditItem}
                 onDuplicate={onDuplicateItem}
                 onRemove={onRemoveItem}

@@ -11,12 +11,13 @@ import TapparellaSvg from "../tapparella/TapparellaSvg"
 
 type Props = {
     item: QuoteItem
+    position: number
     onEdit: (it: QuoteItem) => void
     onDuplicate: (id: string) => void
     onRemove: (id: string) => void
 }
 
-export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
+export function ItemCard({ item: it, position, onEdit, onDuplicate, onRemove }: Props) {
     const entry = registry[it.kind]
     const isCustom = it.kind === 'custom'
     const isWindowLike = /^(finestra|portafinestra|scorrevole|tapparella|persiana|cassonetto)$/i.test(String(it.kind))
@@ -36,6 +37,10 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
             <div className="flex flex-col sm:flex-row gap-3">
                 {/* Thumbnail con quote L/H */}
                 <div className="relative w-[88px] h-[88px] sm:w-[110px] sm:h-[110px] shrink-0 rounded border bg-white flex items-center justify-center">
+                    {/* Badge Posizione - stile minimal */}
+                    <div className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded bg-gray-100 text-gray-500 text-[10px] font-medium flex items-center justify-center border border-gray-200">
+                        {position}
+                    </div>
                                         {(
                                             // 1) Disegno live per FINESTRA con griglia
                                             (it.kind === 'finestra' && (it as any)?.options?.gridWindow)

@@ -66,6 +66,17 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
                 key={`card-${it?.id || it?.kind || 'k'}-${i}`}
                 style={[s.itemCard, { minHeight: minH }]}
               >
+                {/* Colonna posizione in alto a sinistra */}
+                <View style={{ 
+                  width: 20, 
+                  alignItems: 'center', 
+                  marginRight: 6,
+                  paddingTop: 2,
+                }}>
+                  <Text style={{ fontSize: 5, color: '#bbb', letterSpacing: 0.3 }}>POS</Text>
+                  <Text style={{ fontSize: 10, color: '#999', marginTop: 1 }}>{i + 1}</Text>
+                </View>
+
                 <View style={photoWrapStyle}>
                   {(() => {
                     const raw = typeof it?.image_url === 'string' ? it.image_url : ''
