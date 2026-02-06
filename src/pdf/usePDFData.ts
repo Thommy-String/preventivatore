@@ -1,5 +1,5 @@
 // src/pdf/usePDFData.ts
-import { createElement, useEffect, useMemo, useState } from "react";
+import { createElement, useEffect, useMemo, useState, useRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useShallow } from "zustand/react/shallow";
 import { useQuoteStore } from "../stores/useQuoteStore";
@@ -9,6 +9,8 @@ import { TERMS_PROFILES, buildTermsDocument, detectTermsProfile } from "../conte
 import type { TermsDocument } from "../content/terms";
 import { persianaToPngBlob } from "../features/quotes/persiana/persianaToPng";
 import PersianaSvg from "../features/quotes/persiana/PersianaSvg";
+import { tapparellaToPngBlob } from "../features/quotes/tapparella/tapparellaToPng";
+import TapparellaSvg from "../features/quotes/tapparella/TapparellaSvg";
 
 // Debug helper: taglia le stringhe nei log
 const __short = (s?: string) =>
@@ -134,7 +136,15 @@ function toPlainItem(it: any) {
     ante: isNum(it.ante) ? it.ante : undefined,
 
     // tapparella: (material/color/width/height già sopra)
+    
+    // IMPORTANTE: Preserviamo options per l'elaborazione successiva
+    // Ma estraiamo anche esplicitamente il colore hex per sicurezza
+    preview_color_hex: (it.options as any)?.previewColor as string | undefined,
+    options: it.options 
   };
+  
+  // Assicuriamoci che options sia un oggetto valido, altrimenti lo rimuoviamo dopo
+  if (!base.options || typeof base.options !== 'object') delete base.options;
 
   // campi custom della voce (solo per kind==='custom', ma non fa male lasciarli anche se presenti altrove)
   const cf = normalizeCustomFields(it.custom_fields);
@@ -174,39 +184,94 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
 ) as unknown as [any, any[], any[], any];
 
   const [persianaImages, setPersianaImages] = useState<Record<string, string>>({});
+  const [tapparellaImages, setTapparellaImages] = useState<Record<string, string>>({});
+  
+  // Cache per evitare rigenerazioni inutili se i parametri non cambiano
+  const generatedCache = useRef<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
 
     async function run() {
-      const list = normalizeItems(items).filter((it) => it?.kind === "persiana");
-      for (const it of list) {
+      const allItems = normalizeItems(items);
+
+      // --- PERSIANA ---
+      const listP = allItems.filter((it) => it?.kind === "persiana");
+      for (const it of listP) {
         const id = it?.id;
-        if (!id || persianaImages[id]) continue;
+        if (!id) continue;
+        
+        const w = Number(it?.width_mm) || 1000;
+        const h = Number(it?.height_mm) || 1400;
+        const a = Number(it?.ante) || 2;
+        const sig = `P:${id}:${w}:${h}:${a}`;
+
+        // Se abbiamo giÃ  un'immagine e la firma (parametri) Ã¨ identica, saltiamo
+        if (persianaImages[id] && generatedCache.current[id] === sig) continue;
+
         const existing = typeof it?.image_url === "string" ? it.image_url : "";
-        if (existing && !existing.startsWith("blob:")) {
-          continue;
+        if (existing && !existing.startsWith("blob:") && existing.length > 0) {
+           // Se c'Ã¨ un URL non-blob (es. cloudinary), usiamolo e non rigeneriamo
+           continue; 
         }
+
         try {
-          const cfg = {
-            width_mm: Number(it?.width_mm) || 1000,
-            height_mm: Number(it?.height_mm) || 1400,
-            ante: Number(it?.ante) || 2,
-          };
+          const cfg = { width_mm: w, height_mm: h, ante: a };
           const blob = await persianaToPngBlob(cfg, 900, 900);
           const dataUrl = await blobToDataUrl(blob);
           if (!cancelled) {
-            setPersianaImages((prev) => ({ ...prev, [id]: dataUrl }));
+             generatedCache.current[id] = sig;
+             setPersianaImages((prev) => ({ ...prev, [id]: dataUrl }));
           }
         } catch {
           // ignore generation failures
+        }
+      }
+
+      // --- TAPPARELLA ---
+      const listT = allItems.filter((it) => it?.kind === "tapparella");
+      for (const it of listT) {
+        const id = it?.id;
+        if (!id) continue;
+        
+        // Ricaviamo parametro colore. 
+        // Nota: allItems contiene oggetti raw con 'options' preservato.
+        const hex = (it.options as any)?.previewColor || '';
+        
+        // DEBUG: log per capire se il colore viene letto
+        console.log('[PDF Tapparella useEffect]', { id, hex, options: it.options });
+        const w = Number(it?.width_mm) || 1000;
+        const h = Number(it?.height_mm) || 1400;
+        const sig = `T:${id}:${w}:${h}:${hex}`;
+
+        if (tapparellaImages[id] && generatedCache.current[id] === sig) continue;
+
+        const existing = typeof it?.image_url === "string" ? it.image_url : "";
+        if (existing && !existing.startsWith("blob:") && existing.length > 0) {
+          continue;
+        }
+
+        try {
+          const cfg = {
+            width_mm: w,
+            height_mm: h,
+            color: hex
+          };
+          const blob = await tapparellaToPngBlob(cfg, 900, 900);
+          const dataUrl = await blobToDataUrl(blob);
+          if (!cancelled) {
+            generatedCache.current[id] = sig;
+            setTapparellaImages((prev) => ({ ...prev, [id]: dataUrl }));
+          }
+        } catch (e) {
+          // ignore
         }
       }
     }
 
     run();
     return () => { cancelled = true; };
-  }, [items, persianaImages]);
+  }, [items, persianaImages, tapparellaImages]);
 
 
 
@@ -228,20 +293,71 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       .map(toPlainItem)
       .filter(Boolean)
       .map((it: any) => {
-        if (it?.kind === "persiana" && !it.image_url) {
-          const cfg = {
-            width_mm: Number(it?.width_mm) || 1000,
-            height_mm: Number(it?.height_mm) || 1400,
-            ante: Number(it?.ante) || 2,
-          };
-          const svg = renderToStaticMarkup(createElement(PersianaSvg, { cfg }));
-          return { ...it, image_url: svgToDataUrl(svg) };
+        // PERSIANA
+        if (it?.kind === "persiana") {
+          const hasExisting = it.image_url && !String(it.image_url).startsWith('blob:');
+          if (!hasExisting) {
+            // Se abbiamo l'immagine HQ pronta
+            if (it.id && persianaImages[it.id]) {
+               return { ...it, image_url: persianaImages[it.id] };
+            }
+            // Fallback SVG string
+            const cfg = {
+              width_mm: Number(it?.width_mm) || 1000,
+              height_mm: Number(it?.height_mm) || 1400,
+              ante: Number(it?.ante) || 2,
+            };
+            const svg = renderToStaticMarkup(createElement(PersianaSvg, { cfg }));
+            return { ...it, image_url: svgToDataUrl(svg) };
+          }
         }
+
+        // TAPPARELLA
+        if (it?.kind === "tapparella") {
+            const hasExisting = it.image_url && !String(it.image_url).startsWith('blob:');
+            if (!hasExisting) {
+                // Se abbiamo immagine HQ
+                if (it.id && tapparellaImages[it.id]) {
+                    console.log('[PDF Tapparella useMemo] using cached image for', it.id);
+                    return { ...it, image_url: tapparellaImages[it.id] };
+                }
+                
+                // Backup con generazione sincrona SVG
+                // Cerchiamo il colore da multiple fonti per sicurezza
+                // 1. preview_color_hex estratto esplicitamente in toPlainItem
+                // 2. options.previewColor se options è stato preservato  
+                // 3. Cerchiamo nell'array items originale usando l'id
+                const rawItemFromStore = normalizeItems(items).find((raw: any) => raw?.id === it.id);
+                const hexColor = (it as any).preview_color_hex 
+                    || (it.options as any)?.previewColor
+                    || (rawItemFromStore?.options as any)?.previewColor;
+                
+                console.log('[PDF Tapparella useMemo] fallback SVG', { id: it.id, hexColor, preview_color_hex: (it as any).preview_color_hex, options: it.options, rawOptions: rawItemFromStore?.options }); 
+                
+                const cfg = {
+                    width_mm: Number(it?.width_mm) || 1000,
+                    height_mm: Number(it?.height_mm) || 1400,
+                    color: hexColor
+                };
+                const svg = renderToStaticMarkup(createElement(TapparellaSvg, { cfg }));
+                return { ...it, image_url: svgToDataUrl(svg) };
+            }
+        }
+
         if (it?.kind === "persiana" && it?.id && persianaImages[it.id] && !it.image_url) {
           return { ...it, image_url: persianaImages[it.id] };
         }
         return it;
       });
+    
+    // DEBUG: log tapparelle prima di JSON.stringify
+    const tapItems = plainItems.filter((it: any) => it?.kind === 'tapparella');
+    console.log('[PDF usePDFData] tapparelle prima di stringify:', tapItems.map((it: any) => ({
+      id: it.id,
+      hasImageUrl: !!it.image_url,
+      imageUrlStart: it.image_url ? String(it.image_url).substring(0, 60) : 'NONE'
+    })));
+    
     const pdfSafeItems = JSON.parse(JSON.stringify(plainItems));
 
     // ---- DEBUG: items finali passati al PDF ----

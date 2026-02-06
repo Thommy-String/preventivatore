@@ -223,7 +223,7 @@ export function CostSummarySection({
 
           <div className="flex items-center gap-2">
             {!hasDiscount ? (
-              <div className="text-xl font-semibold">{euro(totalExcluded)}</div>
+              <div className="text-xl font-semibold">{euro(totalExcluded)}</div> 
             ) : (
               <div className="text-right">
                 <div className="text-sm text-gray-500 line-through">{euro(totalExcluded)}</div>

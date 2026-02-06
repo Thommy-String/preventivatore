@@ -4,6 +4,7 @@ import type { ItemFormProps } from "../types";
 import type { WindowItem } from "../types";
 import type { GridWindowConfig, LeafState } from "../types";
 import { Trash2, Lock, Unlock } from "lucide-react";
+import { RalColorPicker } from "../components/RalColorPicker";
 
 // --- Costanti e Tipi ---
 const openingOptions: { value: LeafState; label: string }[] = [
@@ -918,34 +919,32 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             </section>
 
             {/* Finiture & Dati tecnici */}
-            <section className="space-y-2">
+            <section className="space-y-3">
                 <div className="text-sm font-medium text-gray-600">Finiture &amp; Dati tecnici</div>
+                
+                {/* Colore profilo su riga dedicata */}
+                <div>
+                    <div className="text-xs text-gray-500 mb-1">Colore profilo</div>
+                    <RalColorPicker
+                        previewColor={(grid as any)?.frame_color ?? '#ffffff'}
+                        labelValue={(d as any).color ?? ''}
+                        onPreviewColorChange={(hex) => applyPatch({}, ({ frame_color: hex } as any))}
+                        onLabelChange={(text) => applyPatch({ color: text })}
+                        onRalSelect={(ral) => {
+                             applyPatch(
+                                { color: `${ral.code} ${ral.name}` }, 
+                                { frame_color: ral.hex } as any
+                             );
+                        }}
+                    />
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
-                    {/* Colore profilo */}
-                    <div>
-                        <label className="text-xs text-gray-500">Colore profilo</label>
-                        <div className="flex items-center gap-2">
-                            <input
-                                className="input flex-1"
-                                type="text"
-                                placeholder="Es. RAL 9016 Bianco"
-                                value={(d as any).color ?? ''}
-                                onChange={(e) => applyPatch({ color: e.target.value })}
-                            />
-                            <input
-                                title="Colore telaio (anteprima)"
-                                type="color"
-                                value={(grid as any)?.frame_color ?? '#ffffff'}
-                                            onChange={(e) => applyPatch({}, ({ frame_color: e.target.value } as any))}
-                                className="w-10 h-8 p-0 rounded"
-                            />
-                        </div>
-                    </div>
                     {/* Colore cerniere / ferramenta */}
                     <div>
                         <label className="text-xs text-gray-500">Colore cerniere</label>
                         <input
-                            className="input"
+                            className="input w-full"
                             type="text"
                             placeholder="Es. Bianco / Inox / Nero"
                             value={(d as any).hinges_color ?? ''}
@@ -956,7 +955,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                     <div>
                         <label className="text-xs text-gray-500">Sistema profilo</label>
                         <select
-                            className="input"
+                            className="input w-full"
                             value={(d as any).profile_system ?? ''}
                             onChange={(e) => applyPatch({ profile_system: e.target.value || null })}
                         >
@@ -970,7 +969,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                     <div>
                         <label className="text-xs text-gray-500">Uw (W/m²K)</label>
                         <input
-                            className="input"
+                            className="input w-full"
                             type="number"
                             min="0"
                             step="0.01"

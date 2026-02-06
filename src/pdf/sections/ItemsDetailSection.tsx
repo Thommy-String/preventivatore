@@ -81,13 +81,11 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
                       ? String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
                       : '—'
 
-                    const isProportional = kindSlug === 'finestra' || kindSlug === 'cassonetto'
+                    const isProportional = kindSlug === 'finestra' || kindSlug === 'cassonetto' || kindSlug === 'tapparella' || kindSlug === 'persiana'
 
                     if (!isProportional) {
                       const widthOffsetBottom = (() => {
                         switch (kindSlug) {
-                          case 'persiana':
-                          case 'tapparella':
                           case 'zanzariera':
                           case 'custom':
                             return -6
@@ -98,8 +96,6 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
 
                       const heightLeftOffset = (() => {
                         switch (kindSlug) {
-                          case 'persiana':
-                          case 'tapparella':
                           case 'zanzariera':
                           case 'custom':
                             return 6
@@ -113,65 +109,6 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
                           <Text style={[s.dimW, { bottom: widthOffsetBottom }]}>{widthText}</Text>
                           <View style={[s.dimHWrap, { left: heightLeftOffset }]}>
                             <Text style={s.dimH}>{heightText}</Text>
-                          </View>
-                        </>
-                      )
-                    }
-
-                    if (kindSlug === 'cassonetto') {
-                      const WRAP_W = 170
-                      const WRAP_H = 170
-                      const PAD = 6
-                      const INNER_W = WRAP_W - PAD * 2
-                      const INNER_H = WRAP_H - PAD * 2
-
-                      const w = Number(it?.width_mm ?? it?.larghezza_mm ?? it?.larghezza)
-                      const h = Number(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
-                      const hasDims = Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0
-
-                      const widthLabel = Number.isFinite(w) ? String(Math.round(w)) : '—'
-                      const heightLabel = Number.isFinite(h) ? String(Math.round(h)) : '—'
-                      let widthLabelTop: number | undefined
-
-                      if (hasDims) {
-                        const ar = w / h
-                        const arBox = INNER_W / INNER_H
-                        let imgH = INNER_H
-                        if (ar >= arBox) {
-                          imgH = INNER_W / ar
-                        }
-                        const marginY = Math.max(0, (INNER_H - imgH) / 2)
-                        const GAP = 32
-                        widthLabelTop = PAD + marginY + imgH + GAP
-                      }
-
-                      const centerY = PAD + INNER_H / 2
-                      const heightLabelY = centerY + 18
-
-                      return (
-                        <>
-                          <Text
-                            style={{
-                              position: 'absolute',
-                              ...(widthLabelTop !== undefined ? { top: widthLabelTop } : { bottom: -4 }),
-                              left: 0,
-                              right: 0,
-                              textAlign: 'center',
-                              fontSize: 12,
-                              color: '#333',
-                            }}
-                          >
-                            {widthLabel}
-                          </Text>
-                          <View
-                            style={{
-                              position: 'absolute',
-                              left: -10,
-                              top: heightLabelY,
-                              transform: 'rotate(-90deg)',
-                            }}
-                          >
-                            <Text style={{ fontSize: 12, color: '#333' }}>{heightLabel}</Text>
                           </View>
                         </>
                       )

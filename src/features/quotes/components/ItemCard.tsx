@@ -7,6 +7,7 @@ import type { QuoteItem } from "../types"
 import WindowSvg from "../window/WindowSvg"
 import CassonettoSvg from "../cassonetto/CassonettoSvg"
 import PersianaSvg from "../persiana/PersianaSvg"
+import TapparellaSvg from "../tapparella/TapparellaSvg"
 
 type Props = {
     item: QuoteItem
@@ -18,7 +19,7 @@ type Props = {
 export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
     const entry = registry[it.kind]
     const isCustom = it.kind === 'custom'
-    const isWindowLike = /^(finestra|portafinestra|scorrevole)$/i.test(String(it.kind))
+    const isWindowLike = /^(finestra|portafinestra|scorrevole|tapparella|persiana|cassonetto)$/i.test(String(it.kind))
     const localPreview = (it as any).__previewUrl as string | undefined; // data/blob URL temporaneo (solo in questa sessione)
     const publicUrl = (it as any).image_url as string | undefined;       // URL pubblico Supabase
     const thumbSrc = localPreview || publicUrl || entry?.icon;           // priorità: preview -> pubblica -> icona default
@@ -64,11 +65,21 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                                                         }}
                                                     />
                                                 ) : (
+                                                it.kind === 'tapparella' ? (
+                                                    <TapparellaSvg
+                                                        cfg={{
+                                                            width_mm: (it as any).width_mm ?? 1000,
+                                                            height_mm: (it as any).height_mm ?? 1400,
+                                                            color: (it as any).options?.previewColor
+                                                        }}
+                                                    />
+                                                ) : (
                                                     // 3) Fallback immagine (preview/data/public) o icona di default
                                                     thumbSrc
                                                         ? <img src={thumbSrc} alt={label} loading="lazy" className="max-w-[80%] max-h-[80%] object-contain" />
                                                         : null
                                                 )
+                                            )
                                             )
                                         )}
                     {!isWindowLike && (

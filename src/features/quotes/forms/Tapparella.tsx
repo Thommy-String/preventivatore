@@ -3,12 +3,20 @@ import { useEffect, useState } from "react"
 import type { ItemFormProps } from "../types"
 import type { TapparellaItem } from "../types"
 
+import { RalColorPicker } from "../components/RalColorPicker"
+
 const MATERIALI = ["PVC", "Alluminio", "Alluminio coibentato"] as const
 
 export function TapparellaForm({ draft, onChange }: ItemFormProps<TapparellaItem>) {
   // helper per aggiornare mantenendo il resto dell'oggetto
   const set = <K extends keyof TapparellaItem>(k: K, v: TapparellaItem[K]) =>
     onChange({ ...draft, [k]: v })
+
+  // Patch profonda helper
+  const updateOption = (key: string, val: any) => {
+     const prevOptions = (draft as any).options || {};
+     onChange({ ...draft, options: { ...prevOptions, [key]: val } });
+  }
 
   // Mobile-friendly numeric editing (allow empty while typing, commit on blur)
   const [widthStr, setWidthStr] = useState(draft.width_mm == null ? "" : String(draft.width_mm))
@@ -106,13 +114,14 @@ export function TapparellaForm({ draft, onChange }: ItemFormProps<TapparellaItem
       </section>
 
       {/* Specifiche */}
-      <section className="space-y-2">
+      <section className="space-y-3">
         <div className="text-xs font-medium text-gray-500">Specifiche</div>
-        <div className="grid grid-cols-2 gap-2 items-start">
-          <div>
-            <div className="text-xs text-gray-500">Materiale</div>
+        
+        {/* Materiale */}
+        <div>
+            <div className="text-xs text-gray-500 mb-1">Materiale</div>
             <select
-              className="input"
+              className="input w-full"
               value={material}
               onChange={(e) => set("material", e.target.value as any)}
             >
@@ -120,16 +129,25 @@ export function TapparellaForm({ draft, onChange }: ItemFormProps<TapparellaItem
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500">Colore</div>
-            <input
-              className="input"
-              placeholder="es. RAL 9016 Bianco"
-              value={color}
-              onChange={(e) => set("color", e.target.value || "")}
+        </div>
+
+        {/* Colore su riga dedicata */}
+        <div>
+            <div className="text-xs text-gray-500 mb-1">Colore</div>
+            <RalColorPicker
+                previewColor={(draft as any).options?.previewColor ?? "#e8e8e8"}
+                labelValue={color}
+                onPreviewColorChange={(hex) => updateOption("previewColor", hex)}
+                onLabelChange={(text) => set("color", text)}
+                onRalSelect={(ral) => {
+                    const prevOptions = (draft as any).options || {};
+                    onChange({
+                        ...draft,
+                        color: `${ral.code} ${ral.name}`,
+                        options: { ...prevOptions, previewColor: ral.hex }
+                    });
+                }}
             />
-          </div>
         </div>
       </section>
 

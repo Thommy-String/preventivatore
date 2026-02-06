@@ -18,7 +18,19 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
   const leaves = Math.max(1, Math.round(Number(cfg.ante ?? 2) || 2))
 
   const strokeWidth = Math.max(1, Math.min(2.5, Math.min(width, height) * 0.003))
-  const viewBox = `0 0 ${width} ${height}`
+
+  // --- Quote dimensionali (stile finestra) ---
+  const baseDim = Math.max(60, Math.min(width, height))
+  const baseFont = Math.max(9, Math.min(24, baseDim / 28))
+  const dimFontSize = Math.max(42, Math.min(80, baseDim / 16))
+  const labelGap = Math.max(14, Math.min(30, baseDim / 14))
+  const padLeft = labelGap + dimFontSize * 1.3
+  const padBottom = labelGap + dimFontSize * 1.6 + strokeWidth
+  const padTop = Math.max(4, baseFont * 0.3) + strokeWidth
+  const padRight = Math.max(4, baseFont * 0.3)
+  const totalLabelY = height + labelGap + dimFontSize * 0.5
+  const leftLabelX = -(labelGap + dimFontSize * 0.75)
+  const viewBox = `${-padLeft} ${-padTop} ${width + padLeft + padRight} ${height + padTop + padBottom}`
 
   // proportions from reference: outer padding 10%
   const pad = Math.min(width, height) * 0.1
@@ -115,6 +127,12 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
             y2={innerY + innerH}
           />
         )}
+      </g>
+
+      {/* --- Quote dimensionali --- */}
+      <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle' as const, fill: '#1f2937', fontSize: dimFontSize }}>
+        <text x={width / 2} y={totalLabelY + 6} dominantBaseline="hanging">{Math.round(cfg.width_mm)}</text>
+        <text x={leftLabelX} y={height / 2} transform={`rotate(-90, ${leftLabelX}, ${height / 2})`} dominantBaseline="middle">{Math.round(cfg.height_mm)}</text>
       </g>
     </svg>
   )

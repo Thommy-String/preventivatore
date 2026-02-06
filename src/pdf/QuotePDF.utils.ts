@@ -122,7 +122,10 @@ export function detailPairs(it: any): Array<[string, string]> {
   }
 
   const priceTotal = pickFirst(it, ['price_total', 'prezzo_totale', 'price', 'prezzo'])
-  if (priceTotal !== undefined) pairs.push(['Totale', String(priceTotal)])
+  const kindLower = String(it.kind).toLowerCase()
+  if (priceTotal !== undefined && kindLower !== 'tapparella' && kindLower !== 'persiana' && kindLower !== 'cassonetto') {
+      pairs.push(['Totale', String(priceTotal)])
+  }
 
   const color = pickFirst(it, ['color', 'colore', 'profile_color', 'profilo_colore'])
   if (color) pairs.push(['Colore', String(color)])
@@ -182,6 +185,11 @@ export function detailPairs(it: any): Array<[string, string]> {
     'image_url',
     'imageUrl',
   ])
+  const kindLow = String(it.kind).toLowerCase()
+  if (kindLow === 'persiana' || kindLow === 'cassonetto') {
+    skip.add('ante')
+    skip.add('ante_count')
+  }
   for (const [k, v] of Object.entries(it)) {
     if (v === undefined || v === null || String(v).trim() === '') continue
     if (typeof v === 'object' || typeof v === 'function') continue

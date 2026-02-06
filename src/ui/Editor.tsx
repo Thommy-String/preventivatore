@@ -15,6 +15,7 @@ import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal
 import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
 import { persianaToPngBlob } from '../features/quotes/persiana/persianaToPng'
+import { tapparellaToPngBlob } from '../features/quotes/tapparella/tapparellaToPng'
 import { TERMS_PROFILES, buildTermsDocument } from '../content/terms'
 import type { TermsProfile } from '../content/terms'
 import { normalizeSurfaceEntries } from '../features/quotes/utils/surfaceSelections'
@@ -620,6 +621,25 @@ export default function Editor() {
               clean.image_url = dataUrl;
             } catch (e) {
               console.warn('Rasterizzazione persiana → PNG fallita', e);
+              const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+              const isHttp = /^https?:\/\//i.test(raw);
+              const isData = /^data:image\//i.test(raw);
+              clean.image_url = (isHttp || isData) ? raw : undefined;
+            }
+          } else if (String(clean?.kind || '').toLowerCase() === 'tapparella') {
+            try {
+              // Recupera il colore dalle options
+              const previewColor = (clean as any).options?.previewColor;
+              const cfg = {
+                width_mm: Number(clean.width_mm) || 1000,
+                height_mm: Number(clean.height_mm) || 1400,
+                color: previewColor, // Passa il colore per la generazione PNG
+              } as const;
+              const blob = await tapparellaToPngBlob(cfg as any, 640, 640);
+              const dataUrl = await blobToDataURL(blob);
+              clean.image_url = dataUrl;
+            } catch (e) {
+              console.warn('Rasterizzazione tapparella → PNG fallita', e);
               const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
               const isHttp = /^https?:\/\//i.test(raw);
               const isData = /^data:image\//i.test(raw);

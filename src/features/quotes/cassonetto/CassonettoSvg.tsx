@@ -35,20 +35,20 @@ export default function CassonettoSvg({ cfg, stroke = "#222" }: CassonettoSvgPro
   const drawingHeight = height_mm + dy + cdy;
   
   const strokeWidth = 1.5;
-  // Scala del font più conservativa per grandi larghezze
-  const MIN_FONT = 32;
-  const MAX_FONT = 72;
-  const fontSize = Math.min(Math.max(Math.max(12, drawingWidth / 40), MIN_FONT), MAX_FONT);
   const inset = Math.min(width_mm, height_mm) * 0.1;
 
-  // --- NUOVO: Calcolo del ViewBox corretto per un centraggio perfetto ---
-  // Calcola il box che contiene tutto il disegno, incluse le quote
-  const quotePadding = fontSize * 2.5;
-  const minX = -quotePadding;
-  const minY = -dy - cdy - quotePadding;
-  const contentWidth = drawingWidth + quotePadding * 2;
-  const contentHeight = drawingHeight + quotePadding * 2;
-  const viewBox = `${minX} ${minY} ${contentWidth} ${contentHeight}`;
+  // --- Quote dimensionali (stile finestra) ---
+  const baseDim = Math.max(60, Math.min(width_mm, height_mm));
+  const baseFont = Math.max(9, Math.min(24, baseDim / 28));
+  const dimFontSize = Math.max(42, Math.min(80, baseDim / 8));
+  const labelGap = Math.max(14, Math.min(30, baseDim / 14));
+  const padLeft = labelGap + dimFontSize * 1.3;
+  const padBottom = labelGap + dimFontSize * 1.6 + strokeWidth;
+  const padTop = Math.max(4, baseFont * 0.3) + dy + cdy + strokeWidth;
+  const padRight = Math.max(4, baseFont * 0.3) + dx + cdx;
+  const totalLabelY = height_mm + labelGap + dimFontSize * 0.5;
+  const leftLabelX = -(labelGap + dimFontSize * 0.75);
+  const viewBox = `${-padLeft} ${-padTop} ${width_mm + padLeft + padRight} ${height_mm + padTop + padBottom}`;
 
   return (
     <svg viewBox={viewBox} width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Disegno tecnico del cassonetto">
@@ -76,6 +76,12 @@ export default function CassonettoSvg({ cfg, stroke = "#222" }: CassonettoSvgPro
         )}
 
         
+      </g>
+
+      {/* --- Quote dimensionali --- */}
+      <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle' as const, fill: '#1f2937', fontSize: dimFontSize }}>
+        <text x={width_mm / 2} y={totalLabelY + 6} dominantBaseline="hanging">{Math.round(width_mm)}</text>
+        <text x={leftLabelX} y={height_mm / 2} transform={`rotate(-90, ${leftLabelX}, ${height_mm / 2})`} dominantBaseline="middle">{Math.round(height_mm)}</text>
       </g>
     </svg>
   );

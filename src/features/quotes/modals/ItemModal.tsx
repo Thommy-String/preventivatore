@@ -7,9 +7,11 @@ import type { CustomField } from "../types";
 import { gridWindowToPngBlob } from "../svg/windowToPng";
 import { cassonettoToPngBlob } from "../cassonetto/cassonettoToPng";
 import { persianaToPngBlob } from "../persiana/persianaToPng";
+import { tapparellaToPngBlob } from "../tapparella/tapparellaToPng";
 import WindowSvg from "../window/WindowSvg";
 import CassonettoSvg from "../cassonetto/CassonettoSvg";
 import PersianaSvg from "../persiana/PersianaSvg";
+import TapparellaSvg from "../tapparella/TapparellaSvg";
 
 // Helper per convertire Blob in data URL, utile per le immagini nel PDF
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -140,6 +142,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
   );
   const isCassonetto = useMemo(() => draft.kind === "cassonetto", [draft.kind]);
   const isPersiana = useMemo(() => draft.kind === "persiana", [draft.kind]);
+  const isTapparella = useMemo(() => draft.kind === "tapparella", [draft.kind]);
 
   // Sorgente legacy per gli altri prodotti
   const legacyPreviewSrc =
@@ -207,6 +210,19 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           __previewUrl: dataUrlPers,
           image_url: dataUrlPers,
         } as QuoteItem;
+      } else if (isTapparella) {
+        const cfg = {
+          width_mm: Number((finalDraft as any)?.width_mm) || 1000,
+          height_mm: Number((finalDraft as any)?.height_mm) || 1400,
+          color: (finalDraft as any)?.options?.previewColor || (finalDraft as any)?.color || null,
+        };
+        const blobTap = await tapparellaToPngBlob(cfg, 900, 900);
+        const dataUrlTap = await blobToDataUrl(blobTap);
+        finalDraft = {
+          ...(finalDraft as any),
+          __previewUrl: dataUrlTap,
+          image_url: dataUrlTap,
+        } as QuoteItem;
       }
 
       if (blob) {
@@ -238,8 +254,11 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
     if (isPersiana) {
       return `${(draft as any).width_mm || 2} / ${(draft as any).height_mm || 1}`;
     }
+    if (isTapparella) {
+      return `${(draft as any).width_mm || 2} / ${(draft as any).height_mm || 1}`;
+    }
     return "1 / 1";
-  }, [isWindow, isCassonetto, isPersiana, draft]);
+  }, [isWindow, isCassonetto, isPersiana, isTapparella, draft]);
 
   return (
     <div className="fixed inset-0 z-50">
@@ -279,13 +298,21 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                       ante: Number((draft as any).ante) || 2,
                     }}
                   />
+                ) : isTapparella ? (
+                  <TapparellaSvg
+                    cfg={{
+                      width_mm: Number((draft as any).width_mm) || 1000,
+                      height_mm: Number((draft as any).height_mm) || 1400,
+                      color: (draft as any).options?.previewColor || (draft as any).color || null,
+                    }}
+                  />
                 ) : legacyPreviewSrc ? (
                   <img key={legacyPreviewSrc} src={legacyPreviewSrc} alt={entry?.label || 'Anteprima'} className="max-w-full max-h-full object-contain" />
                 ) : (
                   <div className="text-sm text-gray-400">Nessuna immagine</div>
                 )}
 
-                {!isWindow && !isCassonetto && !isPersiana && (
+                {!isWindow && !isCassonetto && !isPersiana && !isTapparella && (
                   <div className="absolute bottom-2 right-2">
                     <label className="inline-flex items-center justify-center h-8 px-2 rounded border bg-white text-xs cursor-pointer hover:bg-gray-50">
                       Carica
