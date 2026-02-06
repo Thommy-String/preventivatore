@@ -87,8 +87,8 @@ const TECH_STYLE = {
     GLASS_FILL: '#D6EFFF',
     GLASS_STROKE: '#222222',
     BEAD_STROKE: '#222222',
-    STROKE_WIDTH_FRAME: 1.2,
-    STROKE_WIDTH_SASH: 2.0, // Linea anta più spessa
+    STROKE_WIDTH_FRAME: 1.5,
+    STROKE_WIDTH_SASH: 2.5, // Linea anta più spessa
     STROKE_WIDTH_BEAD: 1.5,
     STROKE_WIDTH_GLASS: 0.9,
 };
@@ -292,8 +292,8 @@ function WindowSvg({ cfg }: WindowSvgProps) {
             // Sash Frame: ~55mm visuali (Molto più spessa)
             // Nota: frame_mm aumentato a 34, aggiustato moltiplicatore per mantenere anta sui 55-60
             const sashProfileW = Math.max(55, frame_mm * 1.7); 
-            // Fermavetro: ~12mm visuali
-            const beadProfileW = 12;
+            // Fermavetro:ampiezza o spessore
+            const beadProfileW = 14;
 
             // 1. Sash Frame Extents
             const sx = startX;
@@ -318,18 +318,18 @@ function WindowSvg({ cfg }: WindowSvgProps) {
             // Anta: 3 livelli di rettangoli (Telaio Anta -> Fermavetro -> Vetro)
             acc.nodes.push(
                 <g key={`sash-group-${rowIdx}-${colIdx}`}>
-                    {/* 1. Telaio Anta (Bianco, bordo più spesso) */}
+                    {/* 1. Telaio Anta (Colorato, bordo più spesso) */}
                     <rect 
                         x={sx} y={sy} width={sw} height={sh} 
-                        fill={TECH_STYLE.FRAME_FILL} 
+                        fill={frameColor} 
                         stroke={TECH_STYLE.FRAME_STROKE} 
                         strokeWidth={TECH_STYLE.STROKE_WIDTH_SASH} 
                     />
                     
-                    {/* 2. Fermavetro (Bianco, bordo medio) */}
+                    {/* 2. Fermavetro (Colorato, bordo medio) */}
                     <rect 
                         x={bx} y={by} width={bw} height={bh} 
-                        fill={TECH_STYLE.FRAME_FILL} 
+                        fill={frameColor} 
                         stroke={TECH_STYLE.BEAD_STROKE || TECH_STYLE.FRAME_STROKE} 
                         strokeWidth={TECH_STYLE.STROKE_WIDTH_BEAD} 
                     />
@@ -755,10 +755,10 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     <circle cx={7.5} cy={7.5} r={3} fill="#d1d5db" />
                 </pattern>
             </defs>
-            {/* Telaio esterno: fill + stroke (Technical Style) */}
+            {/* Telaio esterno: fill + stroke (Colorato) */}
             <rect 
                 x={0} y={0} width={width_mm} height={height_mm} 
-                fill={TECH_STYLE.FRAME_FILL} 
+                fill={frameColor} 
                 stroke={TECH_STYLE.FRAME_STROKE} 
                 strokeWidth={TECH_STYLE.STROKE_WIDTH_FRAME} 
             />
