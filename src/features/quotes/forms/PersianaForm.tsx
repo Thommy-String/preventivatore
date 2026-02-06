@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import type { ItemFormProps } from "../types"
 import type { PersianaItem } from "../types"
+import { RalColorPicker } from "../components/RalColorPicker"
 
 const MATERIALI = ["Alluminio", "PVC", "Altro"] as const
 const LAMELLE = ["Fisse", "Regolabili"] as const
@@ -14,6 +15,12 @@ export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
   const [heightStr, setHeightStr] = useState(d.height_mm == null ? "" : String(d.height_mm))
   const [qtyStr, setQtyStr] = useState(d.qty == null ? "1" : String(d.qty))
   const [anteStr, setAnteStr] = useState(d.ante == null ? "2" : String(d.ante))
+
+  // Patch profonda helper (come Tapparella)
+  const updateOption = (key: string, val: any) => {
+    const prevOptions = (d as any).options || {}
+    onChange({ ...d, options: { ...prevOptions, [key]: val } } as any)
+  }
 
   // Keep local strings in sync when draft changes externally
   useEffect(() => {
@@ -171,11 +178,19 @@ export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
       {/* Colore */}
       <section className="space-y-2">
         <div className="text-xs font-medium text-gray-500">Colore</div>
-        <input
-          className="input"
-          placeholder="es. RAL 6005 Verde"
-          value={d.color ?? ""}
-          onChange={(e) => onChange({ ...d, color: e.target.value || null })}
+        <RalColorPicker
+          previewColor={(d as any).options?.previewColor ?? "#e8e8e8"}
+          labelValue={d.color ?? ""}
+          onPreviewColorChange={(hex) => updateOption("previewColor", hex)}
+          onLabelChange={(text) => onChange({ ...d, color: text || null })}
+          onRalSelect={(ral) => {
+            const prevOptions = (d as any).options || {}
+            onChange({
+              ...d,
+              color: `${ral.code} ${ral.name}`,
+              options: { ...prevOptions, previewColor: ral.hex },
+            } as any)
+          }}
         />
       </section>
 

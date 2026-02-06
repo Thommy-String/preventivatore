@@ -202,6 +202,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           width_mm: Number((finalDraft as any)?.width_mm) || 1000,
           height_mm: Number((finalDraft as any)?.height_mm) || 1400,
           ante: Number((finalDraft as any)?.ante) || 2,
+          color: (finalDraft as any)?.options?.previewColor || null,
         };
         const blobPers = await persianaToPngBlob(cfg, 900, 900);
         const dataUrlPers = await blobToDataUrl(blobPers);
@@ -296,6 +297,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                       width_mm: Number((draft as any).width_mm) || 1000,
                       height_mm: Number((draft as any).height_mm) || 1400,
                       ante: Number((draft as any).ante) || 2,
+                      color: (draft as any).options?.previewColor || null,
                     }}
                   />
                 ) : isTapparella ? (

@@ -611,10 +611,12 @@ export default function Editor() {
             }
           } else if (String(clean?.kind || '').toLowerCase() === 'persiana') {
             try {
+              const previewColor = (clean as any).options?.previewColor;
               const cfg = {
                 width_mm: Number(clean.width_mm) || 1000,
                 height_mm: Number(clean.height_mm) || 1400,
                 ante: Number(clean.ante) || 2,
+                color: previewColor,
               } as const;
               const blob = await persianaToPngBlob(cfg as any, 640, 640);
               const dataUrl = await blobToDataURL(blob);

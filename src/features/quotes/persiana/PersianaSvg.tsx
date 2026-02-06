@@ -4,6 +4,7 @@ export type PersianaConfig = {
   width_mm: number
   height_mm: number
   ante?: number | null
+  color?: string | null
 }
 
 type PersianaSvgProps = {
@@ -12,12 +13,36 @@ type PersianaSvgProps = {
   className?: string
 }
 
+// Helper per scurire/schiarire hex (come TapparellaSvg)
+function adjustColor(hex: string, amount: number): string {
+  const safeHex = hex.replace(/[^0-9A-F]/gi, '')
+  let color = safeHex
+  if (color.length === 3) color = color.split('').map(c => c + c).join('')
+  if (color.length !== 6) return hex
+  const num = parseInt(color, 16)
+  let r = (num >> 16) + amount
+  let g = ((num >> 8) & 0x00ff) + amount
+  let b = (num & 0x0000ff) + amount
+  r = Math.max(0, Math.min(255, r))
+  g = Math.max(0, Math.min(255, g))
+  b = Math.max(0, Math.min(255, b))
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)
+}
+
 export default function PersianaSvg({ cfg, stroke = '#000000', className }: PersianaSvgProps) {
   const width = Math.max(200, Number(cfg.width_mm) || 1200)
   const height = Math.max(200, Number(cfg.height_mm) || 1400)
   const leaves = Math.max(1, Math.round(Number(cfg.ante ?? 2) || 2))
+  const baseColor = cfg.color && cfg.color.length >= 3 ? cfg.color : null
 
   const strokeWidth = Math.max(1, Math.min(2.5, Math.min(width, height) * 0.003))
+
+  // Palette colore
+  const cFrame = baseColor ? adjustColor(baseColor, 10) : '#ffffff'
+  const cFrameShadow = baseColor ? adjustColor(baseColor, -15) : '#e8e8e8'
+  const cSlat = baseColor || '#f4f4f4'
+  const cSlatHighlight = baseColor ? adjustColor(baseColor, 30) : '#ffffff'
+  const cSlatShadow = baseColor ? adjustColor(baseColor, -25) : '#d6d6d6'
 
   // --- Quote dimensionali (stile finestra) ---
   const baseDim = Math.max(60, Math.min(width, height))
@@ -32,7 +57,7 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
   const leftLabelX = -(labelGap + dimFontSize * 0.75)
   const viewBox = `${-padLeft} ${-padTop} ${width + padLeft + padRight} ${height + padTop + padBottom}`
 
-  // proportions from reference: outer padding 10%
+  // Proportions (design originale)
   const pad = Math.min(width, height) * 0.1
   const innerX = pad
   const innerY = pad
@@ -44,12 +69,15 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
   const frameYInset = innerH * 0.0625
   const frameH = innerH * 0.875
 
-  const slatStart = Math.max(18, innerH * 0.06)
-  const slatGap = Math.max(22, innerH * 0.05)
-  const slatStroke = Math.max(0.7, strokeWidth * 0.75)
+  const slatStart = innerH * 0.06
+  const slatGap = innerH * 0.05
+  const slatStroke = Math.max(0.6, strokeWidth * 0.7)
   const innerBorderStroke = Math.max(0.5, strokeWidth * 0.6)
   const innerInsetBorderStroke = Math.max(0.6, strokeWidth * 0.6)
   const innerInsetBorderInset = Math.max(2.6, innerInsetBorderStroke * 2.6)
+
+  // Gradient ID unico per colore
+  const slatGradId = `persiana-slat-${baseColor ? baseColor.replace(/[^a-z0-9]/gi, '') : 'std'}`
 
   return (
     <svg
@@ -62,6 +90,14 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
       className={className}
       style={{ display: 'block' }}
     >
+      <defs>
+        <linearGradient id={slatGradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={cSlatHighlight} />
+          <stop offset="40%" stopColor={cSlat} />
+          <stop offset="100%" stopColor={cSlatShadow} />
+        </linearGradient>
+      </defs>
+
       <g stroke={stroke} strokeWidth={strokeWidth} fill="none" strokeLinecap="round" strokeLinejoin="round">
         {Array.from({ length: leaves }).map((_, idx) => {
           const leafX = innerX + idx * leafWidth
@@ -78,8 +114,14 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
 
           return (
             <g key={`leaf-${idx}`}>
-              <rect x={outerX} y={outerY} width={outerW} height={outerH} fill="#ffffff" />
-              <rect x={innerFrameX} y={innerFrameY} width={innerFrameW} height={innerFrameH} fill="#ffffff" stroke="none" />
+              {/* Anta esterna con colore telaio */}
+              <rect x={outerX} y={outerY} width={outerW} height={outerH} fill={cFrame} />
+              {/* Ombre leggere bordo destro e inferiore */}
+              <line x1={outerX + outerW} y1={outerY + 2} x2={outerX + outerW} y2={outerY + outerH} stroke={cFrameShadow} strokeWidth={strokeWidth * 1.2} />
+              <line x1={outerX + 2} y1={outerY + outerH} x2={outerX + outerW} y2={outerY + outerH} stroke={cFrameShadow} strokeWidth={strokeWidth * 1.2} />
+
+              {/* Area interna con sfondo scuro per profondità */}
+              <rect x={innerFrameX} y={innerFrameY} width={innerFrameW} height={innerFrameH} fill={cSlatShadow} stroke="none" />
               <rect
                 x={innerFrameX}
                 y={innerFrameY}
@@ -89,6 +131,7 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
                 stroke={stroke}
                 strokeWidth={innerBorderStroke}
               />
+              {/* Cornice interna */}
               <rect
                 x={innerFrameX + innerInsetBorderInset}
                 y={innerFrameY + innerInsetBorderInset}
@@ -98,19 +141,38 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
                 stroke={stroke}
                 strokeWidth={innerInsetBorderStroke}
               />
+              {/* Lamelle chiuse (adiacenti, senza spazi) */}
               {(() => {
                 const lines: ReactElement[] = []
-                for (let y = innerFrameY + slatStart; y < innerFrameY + innerFrameH - slatStart; y += slatGap) {
+                const areaTop = innerFrameY + innerInsetBorderInset
+                const areaBot = innerFrameY + innerFrameH - innerInsetBorderInset
+                const areaH = areaBot - areaTop
+                const nSlats = Math.max(1, Math.round(areaH / slatGap))
+                const slatH = areaH / nSlats
+                for (let i = 0; i < nSlats; i++) {
+                  const y = areaTop + i * slatH
                   lines.push(
-                    <line
-                      key={`slat-${idx}-${Math.round(y)}`}
-                      x1={innerFrameX + slatInset}
-                      y1={y}
-                      x2={innerFrameX + innerFrameW - slatInset}
-                      y2={y}
-                      stroke={stroke}
-                      strokeWidth={slatStroke}
-                    />
+                    <g key={`slat-${idx}-${i}`}>
+                      <rect
+                        x={innerFrameX + slatInset}
+                        y={y}
+                        width={innerFrameW - slatInset * 2}
+                        height={slatH}
+                        fill={`url(#${slatGradId})`}
+                        stroke={stroke}
+                        strokeWidth={slatStroke}
+                      />
+                      {/* Highlight luce superiore */}
+                      <line
+                        x1={innerFrameX + slatInset + 1}
+                        y1={y + slatStroke}
+                        x2={innerFrameX + innerFrameW - slatInset - 1}
+                        y2={y + slatStroke}
+                        stroke={cSlatHighlight}
+                        strokeWidth={slatStroke * 0.4}
+                        strokeOpacity={0.5}
+                      />
+                    </g>
                   )
                 }
                 return lines

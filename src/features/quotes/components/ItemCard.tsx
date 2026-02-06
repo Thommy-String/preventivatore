@@ -62,6 +62,7 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                                                             width_mm: (it as any).width_mm ?? 1000,
                                                             height_mm: (it as any).height_mm ?? 1400,
                                                             ante: (it as any).ante ?? 2,
+                                                            color: (it as any).options?.previewColor,
                                                         }}
                                                     />
                                                 ) : (
