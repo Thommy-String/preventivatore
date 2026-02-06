@@ -75,6 +75,21 @@ function toPlainItem(it: any) {
     (typeof it?.options?.gridWindow?.glass_spec === "string" && it.options.gridWindow.glass_spec.trim()) ? it.options.gridWindow.glass_spec :
     undefined;
 
+  const colorRaw = isStr(it.color) ? it.color : undefined;
+  let colorFinal = colorRaw;
+  let glassSpecFinal = isStr(nestedGlassSpec) ? nestedGlassSpec : undefined;
+
+  if (glassSpecFinal) {
+    const gs = glassSpecFinal.trim();
+    const looksLikeColorNote = /\b(int\.?|interno|est\.?|esterno)\b/i.test(gs);
+    if (!colorFinal && looksLikeColorNote) {
+      colorFinal = gs;
+      glassSpecFinal = undefined;
+    } else if (colorFinal && gs.toLowerCase() === String(colorFinal).trim().toLowerCase()) {
+      glassSpecFinal = undefined;
+    }
+  }
+
   const base: any = {
     id: isStr(it.id) ? it.id : undefined,
     kind: isStr(it.kind) ? it.kind : "-",
@@ -96,9 +111,9 @@ function toPlainItem(it: any) {
 
     // comuni finestra/porta/scorrevole
     profile_system: isStr(it.profile_system) ? it.profile_system : undefined,
-    color: isStr(it.color) ? it.color : undefined,
+    color: colorFinal,
     glass: isStr(nestedGlass) ? nestedGlass : undefined,
-    glass_spec: isStr(nestedGlassSpec) ? nestedGlassSpec : undefined,
+    glass_spec: glassSpecFinal,
     uw: isStr(it.uw) || isNum(it.uw) ? String(it.uw) : undefined,
 
     // zanzariera

@@ -32,9 +32,9 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
   const frameYInset = innerH * 0.0625
   const frameH = innerH * 0.875
 
-  const slatStart = innerH * 0.06
-  const slatGap = innerH * 0.05
-  const slatStroke = Math.max(0.6, strokeWidth * 0.7)
+  const slatStart = Math.max(18, innerH * 0.06)
+  const slatGap = Math.max(22, innerH * 0.05)
+  const slatStroke = Math.max(0.7, strokeWidth * 0.75)
   const innerBorderStroke = Math.max(0.5, strokeWidth * 0.6)
   const innerInsetBorderStroke = Math.max(0.6, strokeWidth * 0.6)
   const innerInsetBorderInset = Math.max(2.6, innerInsetBorderStroke * 2.6)

@@ -146,6 +146,7 @@ export type PersianaItem = BaseItem & {
   material?: 'Alluminio' | 'PVC' | 'Altro' | null
   lamelle?: 'fisse' | 'regolabili' | null
   con_telaio?: boolean | null
+  ante?: number | null
   misura_tipo?: 'luce' | null
   color?: string | null
 }

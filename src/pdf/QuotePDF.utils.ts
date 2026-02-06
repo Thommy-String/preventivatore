@@ -117,16 +117,9 @@ export function detailPairs(it: any): Array<[string, string]> {
   const hNum = Number(it.height_mm ?? it.altezza_mm ?? it.altezza)
   const areaM2 = Number.isFinite(wNum) && Number.isFinite(hNum) ? (wNum * hNum) / 1_000_000 : undefined
 
-  const qty = pickFirst(it, ['qty', 'quantita', 'qta'])
-  const qtyLabel = qty ? String(qty) : undefined
-  if (qtyLabel) pairs.push(['Quantità', qtyLabel])
-
   if (areaM2 && areaM2 > 0) {
     pairs.push(['Superficie', `${areaM2.toFixed(2)} m²`])
   }
-
-  const pricePerMq = pickFirst(it, ['price_per_mq', 'prezzo_mq', 'prezzo_m2'])
-  if (pricePerMq !== undefined) pairs.push(['Prezzo al m²', String(pricePerMq)])
 
   const priceTotal = pickFirst(it, ['price_total', 'prezzo_totale', 'price', 'prezzo'])
   if (priceTotal !== undefined) pairs.push(['Totale', String(priceTotal)])
@@ -146,8 +139,13 @@ export function detailPairs(it: any): Array<[string, string]> {
   const foil = pickFirst(it, ['foil', 'pellicola'])
   if (foil) pairs.push(['Pellicola', String(foil)])
 
+  const uwRaw = pickFirst(it, ['uw'])
+  const uwLabel = uwRaw !== undefined && uwRaw !== null && String(uwRaw).trim() !== ''
+    ? `<= ${String(uwRaw)} W/m2K`
+    : undefined
+
   const featurePairs = [
-    ['Uw', pickFirst(it, ['uw'])],
+    ['Trasmittanza', uwLabel],
     ['Trasmittanza', pickFirst(it, ['trasmittanza'])],
     ['Telaio', asBoolLabel(pickFirst(it, ['con_telaio']))],
     ['Deceleratore', asBoolLabel(pickFirst(it, ['deceleratore', 'has_deceleratore', 'con_deceleratore']))],
@@ -198,7 +196,7 @@ export function detailPairs(it: any): Array<[string, string]> {
       glass: 'Vetro',
       vetro: 'Vetro',
       glazing: 'Vetro',
-      uw: 'Uw',
+      uw: 'Trasmittanza',
       modello: 'Modello',
       tipologia: 'Tipologia',
       rete_colore: 'Colore rete',
