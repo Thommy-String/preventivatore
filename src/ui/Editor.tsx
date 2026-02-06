@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadQuoteItemImage } from '../lib/uploadImages'
-import { Building, Package, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card } from '../components/ui/Card'
 
@@ -16,7 +15,7 @@ import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal
 import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
 import { persianaToPngBlob } from '../features/quotes/persiana/persianaToPng'
-import { TERMS_PROFILES, GLOBAL_PAYMENT_NOTES, SUPPLY_ONLY_PLAN, buildTermsDocument } from '../content/terms'
+import { TERMS_PROFILES, buildTermsDocument } from '../content/terms'
 import type { TermsProfile } from '../content/terms'
 import { normalizeSurfaceEntries } from '../features/quotes/utils/surfaceSelections'
 
@@ -51,7 +50,6 @@ type Quote = {
 type BrandingSettings = { logo_url?: string | null }
 // Modular components
 import { ItemModal } from '../features/quotes/modals/ItemModal'
-import { TermsSection } from '../components/editor/TermsSection'
 import { SurfaceModal } from '../components/editor/SurfaceModal'
 import { CostSummarySection } from '../components/editor/CostSummarySection.tsx'
 import { QuoteItemsSection } from '../components/editor/QuoteItemsSection'
@@ -241,13 +239,17 @@ export default function Editor() {
   function parseNotesMap(notes?: string | null) {
     const map: Record<string, string> = {};
     if (!notes) return map;
-    const parts = notes.split(';').map(p => p.trim()).filter(Boolean);
+    const parts = notes.split(';').map(p => p).filter(p => p.trim());
     for (const p of parts) {
-      const m = p.match(/^([^:]+)\s*:\s*(.+)$/);
+      const m = p.match(/^([^:]+)\s*:\s*([\s\S]+)$/);
       if (m) {
         const k = m[1].trim();
-        const v = m[2].trim();
-        map[k.toUpperCase()] = v;
+        const key = k.toUpperCase();
+        const raw = m[2] ?? '';
+        const v = key === 'NOTE_INTERNE'
+          ? String(raw).replace(/^\s+/, '')
+          : String(raw).trim();
+        map[key] = v;
       }
     }
     return map;
@@ -256,8 +258,10 @@ export default function Editor() {
   function serializeNotesMap(map: Record<string, string | null | undefined>) {
     const parts: string[] = [];
     for (const [k, v] of Object.entries(map)) {
-      if (v == null || String(v).trim() === '') continue;
-      parts.push(`${k}: ${String(v)}`);
+      const raw = v == null ? '' : String(v);
+      if (raw.trim() === '') continue;
+      const isInternal = k.toUpperCase() === 'NOTE_INTERNE';
+      parts.push(`${k}: ${isInternal ? raw : raw.trim()}`);
     }
     return parts.length ? parts.join('; ') : null;
   }
@@ -265,10 +269,12 @@ export default function Editor() {
   function setNoteKey(key: string, value: string | null) {
     const raw = quote?.notes ?? '';
     const map = parseNotesMap(String(raw));
-    if (value == null || String(value).trim() === '') {
-      delete map[key.toUpperCase()];
+    const upperKey = key.toUpperCase();
+    const nextVal = value == null ? '' : String(value);
+    if (nextVal.trim() === '') {
+      delete map[upperKey];
     } else {
-      map[key.toUpperCase()] = String(value).trim();
+      map[upperKey] = upperKey === 'NOTE_INTERNE' ? nextVal : nextVal.trim();
     }
     const next = serializeNotesMap(map as Record<string, string | null | undefined>);
     updateField('notes', next as any);
@@ -415,37 +421,6 @@ export default function Editor() {
   const termsDoc = useMemo(() => {
     return buildTermsDocument(defaultTermsProfile, { validityDays: quote?.validity_days ?? 15 })
   }, [defaultTermsProfile, quote?.validity_days])
-
-  const privatiProfile = TERMS_PROFILES.find((p) => p.id === 'privato') ?? defaultTermsProfile
-  const aziendaProfile = TERMS_PROFILES.find((p) => p.id === 'azienda') ?? defaultTermsProfile
-
-  const supplyOnlyColumn = {
-    id: 'supply',
-    icon: Package,
-    label: SUPPLY_ONLY_PLAN.label,
-    tagline: SUPPLY_ONLY_PLAN.tagline ?? SUPPLY_ONLY_PLAN.summary,
-    summary: SUPPLY_ONLY_PLAN.summary,
-    steps: SUPPLY_ONLY_PLAN.steps,
-  } as const
-
-  const installColumns = [
-    {
-      id: 'privato',
-      icon: User,
-      label: privatiProfile.label,
-      tagline: privatiProfile.tagline,
-      summary: privatiProfile.summary,
-      steps: privatiProfile.paymentPlan,
-    },
-    {
-      id: 'azienda',
-      icon: Building,
-      label: aziendaProfile.label,
-      tagline: aziendaProfile.tagline,
-      summary: aziendaProfile.summary,
-      steps: aziendaProfile.paymentPlan,
-    },
-  ]
 
 
   function startAdd(kind: keyof typeof registry) {
@@ -960,6 +935,9 @@ export default function Editor() {
 
   const totalExcluded = manualTotals.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
 
+  const notesMap = useMemo(() => parseNotesMap(quote?.notes), [quote?.notes])
+  const internalNote = notesMap['NOTE_INTERNE'] ?? ''
+
   // --- Derivati sconto (usati nella UI e nel PDF) ---
   const hasDiscount =
     (discountMode === 'pct' && typeof discountPct === 'number' && discountPct > 0) ||
@@ -983,33 +961,6 @@ export default function Editor() {
     }
   };
 
-  const copyTermsToClipboard = async () => {
-    try {
-      const text = termsDoc.text || ''
-      if (!text) {
-        toast.error('Nessun testo disponibile da copiare')
-        return
-      }
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text)
-      } else if (typeof document !== 'undefined') {
-        const textarea = document.createElement('textarea')
-        textarea.value = text
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        textarea.focus()
-        textarea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textarea)
-      }
-      toast.success('Testo delle condizioni copiato negli appunti')
-    } catch (error) {
-      console.error(error)
-      toast.error('Impossibile copiare il testo delle condizioni')
-    }
-  }
-
   if (!quote) {
     return <div className="animate-pulse h-8 w-40 rounded bg-gray-200" />
   }
@@ -1030,6 +981,22 @@ export default function Editor() {
         onOpenPdf={openPdfPreview}
         onDuplicate={onDuplicateQuote}
       />
+
+      {/* Note interne (non stampate) */}
+      <div className="rounded-xl border border-dashed border-amber-200 bg-[#FFFCF4] px-4 py-3 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+            Note interne 
+          </div>
+        </div>
+        <textarea
+          className="mt-2 w-full rounded-lg border border-dashed border-amber-200/80 bg-[#FFFEF8] px-3 py-2 text-sm text-gray-800 placeholder:text-amber-700/60 focus:outline-none focus:ring-2 focus:ring-amber-100"
+          placeholder="Appunti interni segreti… (non visibili al cliente nel pdf)"
+          rows={3}
+          value={internalNote}
+          onChange={(e) => setNoteKey('NOTE_INTERNE', e.target.value)}
+        />
+      </div>
 
       {/* Info testata / Header editable */}
       <QuoteHeaderSection
@@ -1098,18 +1065,6 @@ export default function Editor() {
           onRemoveItem={removeItem}
         />
       </Card>
-
-
-      {/* Termini */}
-      <TermsSection
-        termsDoc={termsDoc}
-        supplyOnlyColumn={supplyOnlyColumn}
-        installColumns={installColumns}
-        paymentNotes={GLOBAL_PAYMENT_NOTES}
-        defaultTermsProfile={defaultTermsProfile}
-        onCopyTerms={copyTermsToClipboard}
-      />
-
 
       {/* Picker Modal */}
       <ProductPickerModal

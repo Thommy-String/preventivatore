@@ -207,6 +207,16 @@ export function CostSummarySection({
         </div>
       )}
 
+      <div className="mt-3">
+        <button
+          type="button"
+          className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:border-gray-300 hover:bg-gray-50"
+          onClick={onAddRow}
+        >
+          <Plus size={16} /> Aggiungi costo
+        </button>
+      </div>
+
       <div className="mt-4 border-t pt-3 space-y-2 relative">
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-600">Totale (IVA esclusa)</div>

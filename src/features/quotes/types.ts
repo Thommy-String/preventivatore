@@ -144,7 +144,7 @@ export type ZanzarieraItem = BaseItem & {
 export type PersianaItem = BaseItem & {
   kind: 'persiana'
   material?: 'Alluminio' | 'PVC' | 'Altro' | null
-  lamelle?: 'fisse' | 'regolabili' | null
+  lamelle?: 'Fisse' | 'Regolabili' | null
   con_telaio?: boolean | null
   ante?: number | null
   misura_tipo?: 'luce' | null

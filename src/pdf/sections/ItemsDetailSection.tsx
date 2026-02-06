@@ -47,10 +47,10 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
             })()
             const qty = `Q.tà ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : '1'}`
 
+            const kindSlug = String(it?.kind || '').toLowerCase()
             const description = describeItem(it)
 
             const pairCount = pairs.length
-            const kindSlug = String(it?.kind || '').toLowerCase()
             const minPhotoHeight = 260
             const minH = Math.max(minPhotoHeight, 80 + Math.min(40, pairCount * 7))
             const photoWrapStyle = s.itemPhotoWrap

@@ -573,18 +573,43 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
     });
 
     const rowHeightSegments = rows.length > 1
-        ? drawing.rowDimensions
-            .map(({ top, bottom, heightMm }) => {
-                const safeHeight = Math.max(0, heightMm);
-                if (safeHeight <= 0.05) return null;
-                return {
-                    startPx: top,
-                    endPx: bottom,
-                    midPx: (top + bottom) / 2,
-                    label: formatMeasure(safeHeight, sashMeasureDecimals)
-                };
-            })
-            .filter((seg): seg is { startPx: number; endPx: number; midPx: number; label: string } => Boolean(seg))
+        ? (() => {
+            const boundaries: number[] = [0]; // always start at 0 (top perimeter)
+            for (let i = 0; i < drawing.rowDimensions.length - 1; i++) {
+                const currentBottom = drawing.rowDimensions[i].bottom;
+                const nextTop = drawing.rowDimensions[i + 1].top;
+                // split in the middle of the mullion/gap
+                boundaries.push((currentBottom + nextTop) / 2);
+            }
+            boundaries.push(height_mm); // always end at height_mm (bottom perimeter)
+            
+            const segs = [];
+            for (let i = 0; i < boundaries.length - 1; i++) {
+                const start = boundaries[i];
+                const end = boundaries[i + 1];
+                // Calculate label based on distance (mm)
+                // Note: The drawing logic uses `pxPerMmRow` which might theoretically vary if rows have different scaling, 
+                // but usually scale is uniform. We can approximate mm from px or use the known mm heights.
+                // However, since we are redefining the "section" to include frame/mullion parts, 
+                // the simplest way is to assume uniform scale for Y: height_mm / height_px?
+                // Actually `drawing` has `offsetMm` but that's cumulative.
+                // Better: just calc diff in Px and convert to Mm using global scale or Ratio?
+                // Or just use the visual height ratio.
+                const distPx = end - start;
+                // height_mm corresponds to height_mm. so scale is 1:1 in the SVG coordinate system if viewbox matches.
+                // Wait, viewBox uses width_mm/height_mm. So 1 unit = 1 mm.
+                // So start/end are already in mm units (because we draw rects at x=frame_mm etc).
+                // Yes, `y0` starts at `frame_mm`. All coordinates are 1-1 with mm.
+                const distMm = distPx; 
+                segs.push({
+                    startPx: start,
+                    endPx: end,
+                    midPx: (start + end) / 2,
+                    label: formatMeasure(distMm, sashMeasureDecimals)
+                });
+            }
+            return segs;
+        })()
         : [];
 
     const barDimensionRows = Array.from(drawing.rowBars.entries())
@@ -630,7 +655,7 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
         })
         .filter((entry): entry is { rowIdx: number; segments: Array<{ startPx: number; endPx: number; midPx: number; label: string }>; boundaries: number[] } => Boolean(entry));
 
-    const rightDimensionBaseOffset = labelGap + totalFontSize * 1.4;
+    const rightDimensionBaseOffset = labelGap + totalFontSize * 0.8;
     const rightDimensionSpacing = totalFontSize * 1.8;
 
     const totalRightGroups = (rowHeightSegments.length ? 1 : 0) + barDimensionRows.length;
@@ -661,6 +686,12 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
         dimensionGroupIndex += 1;
     };
 
+    // Bars first (closer to window)
+    barDimensionRows.forEach(entry => {
+        pushDimensionGroup(entry.segments, entry.boundaries);
+    });
+
+    // Row heights second (further out)
     if (rowHeightSegments.length) {
         const boundarySet = new Set<number>();
         rowHeightSegments.forEach(seg => {
@@ -670,14 +701,18 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
         pushDimensionGroup(rowHeightSegments, Array.from(boundarySet));
     }
 
-    barDimensionRows.forEach(entry => {
-        pushDimensionGroup(entry.segments, entry.boundaries);
-    });
-
     const totalLabelY = height_mm + bottomStackHeight + labelGap + totalFontSize * 0.9;
     const leftLabelX = -(labelGap + totalFontSize * 0.75);
     const labelLineGap = totalFontSize * 0.6;
     
+    // Logic to hide total width if duplicate of bottom row (requested by user)
+    const isMultiRow = rows.length > 1;
+    const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+    const lastRowIsSingle = lastRow 
+        ? (lastRow.cols.length === 1 || lastRow.cols.filter(c => (Number(c.width_ratio ?? 1)) > 0).length === 1)
+        : false;
+    const showTotalWidth = !isMultiRow || !lastRowIsSingle;
+
     return (
         <svg
             viewBox={`${-padLeft} ${-padTop} ${width_mm + padLeft + padRight} ${height_mm + padTop + padBottom}`}
@@ -724,14 +759,20 @@ function WindowSvg({ cfg, radius = 6 }: WindowSvgProps) {
             {showDims && (
                 <>
                     <g stroke={outlineColor} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
-                        <line x1={0} y1={height_mm} x2={0} y2={totalLabelY - labelLineGap} />
-                        <line x1={width_mm} y1={height_mm} x2={width_mm} y2={totalLabelY - labelLineGap} />
+                        {showTotalWidth && (
+                            <>
+                                <line x1={0} y1={height_mm} x2={0} y2={totalLabelY - labelLineGap} />
+                                <line x1={width_mm} y1={height_mm} x2={width_mm} y2={totalLabelY - labelLineGap} />
+                            </>
+                        )}
                         <line x1={0} y1={0} x2={leftLabelX + labelLineGap} y2={0} />
                         <line x1={0} y1={height_mm} x2={leftLabelX + labelLineGap} y2={height_mm} />
                     </g>
                     <g style={{ fontFamily: 'sans-serif', textAnchor: 'middle', fill: '#1f2937', fontSize: totalFontSize }}>
                         {/* total width label (centered under drawing) */}
-                        <text x={width_mm / 2} y={totalLabelY + 6} dominantBaseline="hanging">{Math.round(width_mm)}</text>
+                        {showTotalWidth && (
+                             <text x={width_mm / 2} y={totalLabelY + 6} dominantBaseline="hanging">{Math.round(width_mm)}</text>
+                        )}
                         {/* height label (rotated at left) */}
                         <text x={leftLabelX} y={height_mm / 2} transform={`rotate(-90, ${leftLabelX}, ${height_mm / 2})`} dominantBaseline="middle">{Math.round(height_mm)}</text>
                     </g>

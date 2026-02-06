@@ -3,7 +3,7 @@ import type { ItemFormProps } from "../types"
 import type { PersianaItem } from "../types"
 
 const MATERIALI = ["Alluminio", "PVC", "Altro"] as const
-const LAMELLE = ["fisse", "regolabili"] as const
+const LAMELLE = ["Fisse", "Regolabili"] as const
 
 export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
   if (!draft) return null
@@ -156,7 +156,7 @@ export function PersianaForm({ draft, onChange }: ItemFormProps<PersianaItem>) {
             <div className="text-xs text-gray-500">Lamelle</div>
             <select
               className="input"
-              value={d.lamelle ?? "fisse"}
+              value={d.lamelle ?? "Fisse"}
               onChange={(e) => onChange({ ...d, lamelle: e.target.value as any })}
             >
               {LAMELLE.map((l) => (

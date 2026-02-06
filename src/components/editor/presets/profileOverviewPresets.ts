@@ -5,6 +5,9 @@ import type { ProfileOverview, ProfileOverviewFeature } from "../../../stores/us
 import alumilS77Img from "../../../assets/images/profiles/alumil-s77.png";
 import wds76mdImg from "../../../assets/images/profiles/wds-76-md.jpg";
 import wds76adImg from "../../../assets/images/profiles/wds-76-ad.jpg";
+import wds70DoubleImg from "../../../assets/images/profiles/WDS 70 doppio vetro.jpg";
+import wds76adDoubleImg from "../../../assets/images/profiles/WDS 76 AD doppio vetro.jpeg";
+import wds76mdDoubleImg from "../../../assets/images/profiles/wds 76 md doppio vetro sfondo bianco.jpg";
 import xPrem76PorteImg from "../../../assets/images/profiles/x-premium-76-porte.jpg";
 import xPrem76ScorrImg from "../../../assets/images/profiles/x-premium-76-scorrevole.jpg";
 import xUltra70Img from "../../../assets/images/profiles/x-ultra-70.jpg";
@@ -15,7 +18,12 @@ const f = (eyebrow: string, title: string, description: string): ProfileOverview
   eyebrow, title, description,
 });
 
-export type PO_Preset = ProfileOverview & { key: string; label: string };
+export type PO_Preset = ProfileOverview & {
+  key: string;
+  label: string;
+  imageUrlDouble?: string | null;
+  imageUrlTriple?: string | null;
+};
 
 export const PROFILE_OVERVIEW_PRESETS: PO_Preset[] = [
   {
@@ -35,6 +43,7 @@ export const PROFILE_OVERVIEW_PRESETS: PO_Preset[] = [
     key: "wds-76-md",
     label: "WDS 76 MD",
     imageUrl: wds76mdImg,
+    imageUrlDouble: wds76mdDoubleImg,
     features: [
       f("Modello", "WDS 76 MD", "Profilo in PVC Premium"),
       f("Larghezza profilo", "76 mm", "Struttura robusta per serramenti moderni."),
@@ -48,6 +57,7 @@ export const PROFILE_OVERVIEW_PRESETS: PO_Preset[] = [
     key: "wds-76-ad",
     label: "WDS 76 AD",
     imageUrl: wds76adImg,
+    imageUrlDouble: wds76adDoubleImg,
     features: [
       f("Modello", "WDS 76 AD", "Profilo in PVC Premium"),
       f("Larghezza profilo", "76 mm", "Soluzione versatile e conveniente."),
@@ -87,6 +97,7 @@ export const PROFILE_OVERVIEW_PRESETS: PO_Preset[] = [
     key: "x-ultra-70",
     label: "X Ultra 70",
     imageUrl: xUltra70Img,
+    imageUrlDouble: wds70DoubleImg,
     features: [
       f("Modello", "X Ultra 70", "Finestra in PVC ad alte prestazioni."),
       f("Larghezza profilo", "70 mm", "Compatta e isolante."),

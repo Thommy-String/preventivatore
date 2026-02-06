@@ -18,6 +18,7 @@ type Props = {
 export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
     const entry = registry[it.kind]
     const isCustom = it.kind === 'custom'
+    const isWindowLike = /^(finestra|portafinestra|scorrevole)$/i.test(String(it.kind))
     const localPreview = (it as any).__previewUrl as string | undefined; // data/blob URL temporaneo (solo in questa sessione)
     const publicUrl = (it as any).image_url as string | undefined;       // URL pubblico Supabase
     const thumbSrc = localPreview || publicUrl || entry?.icon;           // priorità: preview -> pubblica -> icona default
@@ -70,14 +71,18 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                                                 )
                                             )
                                         )}
-                    <div className="absolute bottom-1 left-0 right-0 text-center text-[11px] text-gray-700">
-                        {typeof it.width_mm === 'number' ? `${it.width_mm} mm` : '—'}
-                    </div>
-                    <div className="absolute top-0 bottom-0 left-1 flex items-center">
-                        <div className="-rotate-90 origin-left text-[11px] text-gray-700">
-                            {typeof it.height_mm === 'number' ? `${it.height_mm} mm` : '—'}
-                        </div>
-                    </div>
+                    {!isWindowLike && (
+                        <>
+                            <div className="absolute bottom-1 left-0 right-0 text-center text-[11px] text-gray-700">
+                                {typeof it.width_mm === 'number' ? `${it.width_mm} mm` : '—'}
+                            </div>
+                            <div className="absolute top-0 bottom-0 left-1 flex items-center">
+                                <div className="-rotate-90 origin-left text-[11px] text-gray-700">
+                                    {typeof it.height_mm === 'number' ? `${it.height_mm} mm` : '—'}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Dati voce */}
