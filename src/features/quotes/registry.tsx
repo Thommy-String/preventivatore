@@ -1,3 +1,5 @@
+import { makePortaInternaDefaults, portaInternaIconPath } from "./porta-interna/portaInternaDefaults";
+import { PortaInternaForm } from "./forms/PortaInternaForm";
 // src/features/quotes/registry.tsx
 import type * as React from "react";
 import type { QuoteKind, QuoteItem } from "./types";
@@ -33,6 +35,33 @@ export type RegistryEntry<T extends QuoteItem = QuoteItem> = {
 };
 
 export const registry: Record<QuoteKind, RegistryEntry<any>> = {
+    porta_blindata: {
+      label: "Porta Blindata",
+      icon: finestraIcon, 
+      makeDefaults: (): PortaBlindataItem => ({
+        id: crypto.randomUUID(),
+        kind: "porta_blindata",
+        width_mm: 900,
+        height_mm: 2100,
+        qty: 1,
+        price_mode: "total",
+        price_total: 0,
+        price_per_mq: null,
+        notes: null,
+        reference: "",
+        custom_fields: [],
+        color: "",
+        serratura: true,
+        handle_position: 'right',
+      }),
+      Form: PortaBlindataForm,
+    },
+    porta_interna: {
+      label: "Porta Interna",
+      icon: portaInternaIconPath,
+      makeDefaults: makePortaInternaDefaults,
+      Form: PortaInternaForm,
+    },
   finestra: {
     label: "Finestra",
     icon: finestraIcon,
@@ -168,28 +197,6 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
       color: "",
     }),
     Form: TapparellaForm,
-  },
-
-  porta_blindata: {
-    label: "Porta Blindata",
-    icon: finestraIcon, 
-    makeDefaults: (): PortaBlindataItem => ({
-      id: crypto.randomUUID(),
-      kind: "porta_blindata",
-      width_mm: 900,
-      height_mm: 2100,
-      qty: 1,
-      price_mode: "total",
-      price_total: 0,
-      price_per_mq: null,
-      notes: null,
-      reference: "",
-      custom_fields: [],
-      color: "",
-      serratura: true,
-      handle_position: 'right',
-    }),
-    Form: PortaBlindataForm,
   },
 
   custom: {

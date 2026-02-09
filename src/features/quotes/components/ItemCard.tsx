@@ -11,16 +11,16 @@ import TapparellaSvg from "../tapparella/TapparellaSvg"
 
 type Props = {
     item: QuoteItem
-    position: number
     onEdit: (it: QuoteItem) => void
     onDuplicate: (id: string) => void
     onRemove: (id: string) => void
 }
 
-export function ItemCard({ item: it, position, onEdit, onDuplicate, onRemove }: Props) {
+export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
     const entry = registry[it.kind]
     const isCustom = it.kind === 'custom'
     const isWindowLike = /^(finestra|portafinestra|scorrevole|tapparella|persiana|cassonetto)$/i.test(String(it.kind))
+    const shouldShowDimensions = isWindowLike || /^(porta_interna|porta_blindata|zanzariera)$/i.test(String(it.kind))
     const localPreview = (it as any).__previewUrl as string | undefined; // data/blob URL temporaneo (solo in questa sessione)
     const publicUrl = (it as any).image_url as string | undefined;       // URL pubblico Supabase
     const thumbSrc = localPreview || publicUrl || entry?.icon;           // priorità: preview -> pubblica -> icona default
@@ -33,201 +33,190 @@ export function ItemCard({ item: it, position, onEdit, onDuplicate, onRemove }: 
         : (isCustom ? '(Senza titolo)' : (entry?.label ?? String(it.kind).toUpperCase()))
 
     return (
-        <div className="card p-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-                {/* Thumbnail con quote L/H */}
-                <div className="relative w-[88px] h-[88px] sm:w-[110px] sm:h-[110px] shrink-0 rounded border bg-white flex items-center justify-center">
-                    {/* Badge Posizione - stile minimal */}
-                    <div className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded bg-gray-100 text-gray-500 text-[10px] font-medium flex items-center justify-center border border-gray-200">
-                        {position}
-                    </div>
-                                        {(
-                                            // 1) Disegno live per FINESTRA con griglia
-                                            (it.kind === 'finestra' && (it as any)?.options?.gridWindow)
-                                        ) ? (
-                                            <WindowSvg
-                                                cfg={(it as any).options.gridWindow}
-                                                stroke={(it as any).options?.gridWindow?.frame_color ?? (it as any).color ?? '#222'}
-                                            />
-                                        ) : (
-                                            // 2) Disegno live per CASSONETTO (usa misure direttamente sull'item)
-                                            it.kind === 'cassonetto' ? (
-                                                <CassonettoSvg
-                                                    cfg={{
-                                                        width_mm: (it as any).width_mm ?? 1000,
-                                                        height_mm: (it as any).height_mm ?? 250,
-                                                        depth_mm: (it as any).depth_mm ?? null,
-                                                        celino_mm: (it as any).celino_mm ?? (it as any).extension_mm ?? null,
-                                                        color: (it as any).options?.previewColor,
-                                                    }}
-                                                />
-                                            ) : (
-                                                it.kind === 'persiana' ? (
-                                                    <PersianaSvg
-                                                        cfg={{
-                                                            width_mm: (it as any).width_mm ?? 1000,
-                                                            height_mm: (it as any).height_mm ?? 1400,
-                                                            ante: (it as any).ante ?? 2,
-                                                            color: (it as any).options?.previewColor,
-                                                        }}
-                                                    />
-                                                ) : (
-                                                it.kind === 'tapparella' ? (
-                                                    <TapparellaSvg
-                                                        cfg={{
-                                                            width_mm: (it as any).width_mm ?? 1000,
-                                                            height_mm: (it as any).height_mm ?? 1400,
-                                                            color: (it as any).options?.previewColor
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    // 3) Fallback immagine (preview/data/public) o icona di default
-                                                    thumbSrc
-                                                        ? <img src={thumbSrc} alt={label} loading="lazy" className="max-w-[80%] max-h-[80%] object-contain" />
-                                                        : null
-                                                )
-                                            )
-                                            )
-                                        )}
-                    {!isWindowLike && (
-                        <>
-                            <div className="absolute bottom-1 left-0 right-0 text-center text-[11px] text-gray-700">
-                                {typeof it.width_mm === 'number' ? `${it.width_mm} mm` : '—'}
-                            </div>
-                            <div className="absolute top-0 bottom-0 left-1 flex items-center">
-                                <div className="-rotate-90 origin-left text-[11px] text-gray-700">
-                                    {typeof it.height_mm === 'number' ? `${it.height_mm} mm` : '—'}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+            <div className="p-4">
+                <div className="flex gap-4">
+                    {/* Thumbnail più grande */}
+                    <div className="relative w-24 h-24 sm:w-32 sm:h-32 shrink-0 rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50 to-white flex items-center justify-center shadow-sm overflow-hidden">
+                        {(
+                            // 1) Disegno live per FINESTRA con griglia
+                            (it.kind === 'finestra' && (it as any)?.options?.gridWindow)
+                        ) ? (
+                            <WindowSvg
+                                cfg={(it as any).options.gridWindow}
+                                stroke={(it as any).options?.gridWindow?.frame_color ?? (it as any).color ?? '#222'}
+                            />
+                        ) : (
+                            // 2) Disegno live per CASSONETTO (usa misure direttamente sull'item)
+                            it.kind === 'cassonetto' ? (
+                                <CassonettoSvg
+                                    cfg={{
+                                        width_mm: (it as any).width_mm ?? 1000,
+                                        height_mm: (it as any).height_mm ?? 250,
+                                        depth_mm: (it as any).depth_mm ?? null,
+                                        celino_mm: (it as any).celino_mm ?? (it as any).extension_mm ?? null,
+                                        color: (it as any).options?.previewColor,
+                                    }}
+                                />
+                            ) : (
+                                it.kind === 'persiana' ? (
+                                    <PersianaSvg
+                                        cfg={{
+                                            width_mm: (it as any).width_mm ?? 1000,
+                                            height_mm: (it as any).height_mm ?? 1400,
+                                            ante: (it as any).ante ?? 2,
+                                            color: (it as any).options?.previewColor,
+                                        }}
+                                    />
+                                ) : (
+                                it.kind === 'tapparella' ? (
+                                    <TapparellaSvg
+                                        cfg={{
+                                            width_mm: (it as any).width_mm ?? 1000,
+                                            height_mm: (it as any).height_mm ?? 1400,
+                                            color: (it as any).options?.previewColor
+                                        }}
+                                    />
+                                ) : (
+                                    // 3) Fallback immagine (preview/data/public) o icona di default
+                                    thumbSrc
+                                        ? <img src={thumbSrc} alt={label} loading="lazy" className="max-w-[85%] max-h-[85%] object-contain rounded" />
+                                        : <div className="text-gray-400 text-xs font-medium">Anteprima</div>
+                                )
+                            )
+                            )
+                        )}
+                        {!shouldShowDimensions && (
+                            <>
+                                <div className="absolute bottom-1 left-1 right-1 text-center text-xs text-gray-700 font-semibold bg-white/90 backdrop-blur-sm rounded py-0.5">
+                                    {typeof it.width_mm === 'number' ? `${it.width_mm} mm` : '—'}
                                 </div>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* Dati voce */}
-                <div className="flex-1 min-w-0">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">                        <div className="min-w-0">
-                        <div className="font-medium truncate">{label}</div>
-                        {(it as any).reference && (
-                            <div className="text-xs text-gray-500 mt-0.5 truncate">{(it as any).reference}</div>
-                        )}
-                    </div>
-                        <div className="flex items-center gap-1 md:gap-3">
-                            <div className="text-sm text-gray-600 whitespace-nowrap">
-                                {it.width_mm && it.height_mm ? `${it.qty}× · ${surfaceMq(it)} m²` : `${it.qty}×`}
-                            </div>
-                            <Button variant="ghost" aria-label="Modifica" title="Modifica" onClick={() => onEdit(it)}>
-                                <Pencil size={16} />
-                            </Button>
-                            <Button variant="ghost" aria-label="Duplica" title="Duplica" onClick={() => onDuplicate(it.id)}>
-                                <Copy size={16} />
-                            </Button>
-                            <Button variant="ghost" aria-label="Rimuovi voce" title="Rimuovi voce" onClick={() => onRemove(it.id)}>
-                                <Trash2 size={16} />
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-sm text-gray-700">
-                        {(typeof it.width_mm === 'number' || typeof it.height_mm === 'number') && (
-                            <div>
-                                <span className="text-gray-500">Misure:</span>{' '}
-                                {typeof it.width_mm === 'number' && typeof it.height_mm === 'number'
-                                    ? <>L {it.width_mm} × H {it.height_mm} mm</>
-                                    : (typeof it.width_mm === 'number'
-                                        ? <>L {it.width_mm} mm</>
-                                        : <>H {it.height_mm} mm</>
-                                    )
-                                }
-                            </div>
-                        )}
-                        {(it as any).color && <div><span className="text-gray-500">Colore:</span> {(it as any).color}</div>}
-                        {(it as any).glass && <div><span className="text-gray-500">Vetro:</span> {(it as any).glass}</div>}
-                        {(it as any).hinges_color && <div><span className="text-gray-500">Cerniere:</span> {(it as any).hinges_color}</div>}
-                        {typeof (it as any).uw === 'number' && (
-                            <div><span className="text-gray-500">Uw (trasmittanza termica):</span> {(it as any).uw} W/m²K</div>
-                        )}
-
-                        {/* Zanzariera */}
-                        {it.kind === 'zanzariera' && (
-                            <>
-                                {(it as any).modello && (
-                                    <div><span className="text-gray-500">Modello:</span> {(it as any).modello}</div>
-                                )}
-                                {(it as any).tipologia && (
-                                    <div><span className="text-gray-500">Tipologia:</span> {(it as any).tipologia}</div>
-                                )}
-                                {(((it as any).rete_colore) || ((it as any).mesh)) && (
-                                    <div><span className="text-gray-500">Colore rete:</span> {(it as any).rete_colore ?? (it as any).mesh}</div>
-                                )}
-                            </>
-                        )}
-
-                        {/* Finestre/Portefinestre/Scorrevoli */}
-                        {(it.kind === 'finestra') && (it as any).profile_system && (
-                            <div><span className="text-gray-500">Sistema profilo:</span> {(it as any).profile_system}</div>
-                        )}
-
-                        {/* Cassonetto */}
-                        {it.kind === 'cassonetto' && (
-                            <>
-                                {(it as any).material && (
-                                    <div><span className="text-gray-500">Materiale:</span> {(it as any).material}</div>
-                                )}
-                                {(it as any).depth_mm && (
-                                    <div><span className="text-gray-500">Profondità:</span> {(it as any).depth_mm} mm</div>
-                                )}
-                                {(it as any).celino_mm && (
-                                    <div><span className="text-gray-500">Celino:</span> {(it as any).celino_mm} mm</div>
-                                )}
-                            </>
-                        )}
-
-                        {/* Persiana */}
-                        {it.kind === 'persiana' && (
-                            <>
-                                {(it as any).material && (
-                                    <div><span className="text-gray-500">Materiale:</span> {(it as any).material}</div>
-                                )}
-                                {(it as any).lamelle && (
-                                    <div><span className="text-gray-500">Lamelle:</span> {(it as any).lamelle}</div>
-                                )}
-                                {(typeof (it as any).con_telaio !== "undefined") && (
-                                    <div><span className="text-gray-500">Telaio:</span> {(it as any).con_telaio ? "Con telaio" : "Senza telaio"}</div>
-                                )}
-                                {(it as any).color && (
-                                    <div><span className="text-gray-500">Colore:</span> {(it as any).color}</div>
-                                )}
-                            </>
-                        )}
-
-                        {/* Tapparella */}
-                        {it.kind === 'tapparella' && (
-                            <>
-                                {(it as any).material && (
-                                    <div><span className="text-gray-500">Materiale:</span> {(it as any).material}</div>
-                                )}
-                                {(it as any).color && (
-                                    <div><span className="text-gray-500">Colore:</span> {(it as any).color}</div>
-                                )}
-                                {(it as any).width_mm && (it as any).height_mm && (
-                                    <div><span className="text-gray-500">Dimensioni:</span> {(it as any).width_mm}×{(it as any).height_mm} mm</div>
-                                )}
-                            </>
-                        )}
-
-                        {/* Campi personalizzati (voce custom) */}
-                        {Array.isArray((it as any).custom_fields) &&
-                            (it as any).custom_fields.map((f: any, idx: number) => {
-                                const lbl = (f?.label ?? f?.name ?? f?.key ?? '').toString().trim();
-                                const val = (f?.value ?? '').toString().trim();
-                                if (!lbl || !val) return null;
-                                return (
-                                    <div key={f?.key ?? `${lbl}-${val}-${idx}`}>
-                                        <span className="text-gray-500">{lbl}:</span> {val}
+                                <div className="absolute top-1 left-1 bottom-1 flex items-center">
+                                    <div className="-rotate-90 origin-left text-xs text-gray-700 font-semibold bg-white/90 backdrop-blur-sm rounded px-0.5">
+                                        {typeof it.height_mm === 'number' ? `${it.height_mm} mm` : '—'}
                                     </div>
-                                );
-                            })
-                        }
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Contenuto principale */}
+                    <div className="flex-1 min-w-0">
+                        {/* Header con pulsanti in alto a destra */}
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-3 mb-1">
+                                    <h3 className="font-semibold text-gray-900 text-base truncate">{label}</h3>
+                                    {(typeof it.width_mm === 'number' || typeof it.height_mm === 'number') && (
+                                        <span className="text-sm text-gray-500 font-normal shrink-0">
+                                            {typeof it.width_mm === 'number' && typeof it.height_mm === 'number'
+                                                ? `${it.width_mm} × ${it.height_mm} mm`
+                                                : (typeof it.width_mm === 'number'
+                                                    ? `${it.width_mm} mm`
+                                                    : `${it.height_mm} mm`
+                                                )
+                                            }
+                                        </span>
+                                    )}
+                                    <span className="text-sm text-gray-500 font-normal shrink-0">
+                                        × {it.qty} {it.qty === 1 ? 'pezzo' : 'pezzi'}
+                                    </span>
+                                </div>
+                                {(it as any).reference && (
+                                    <p className="text-sm text-gray-600 font-medium truncate">{(it as any).reference}</p>
+                                )}
+                            </div>
+
+                            {/* Pulsanti azioni in alto a destra */}
+                            <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                    variant="ghost"
+                                    aria-label="Modifica"
+                                    title="Modifica"
+                                    onClick={() => onEdit(it)}
+                                    className="h-9 w-9 p-0 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors rounded-lg justify-center"
+                                >
+                                    <Pencil size={18} />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    aria-label="Duplica"
+                                    title="Duplica"
+                                    onClick={() => onDuplicate(it.id)}
+                                    className="h-9 w-9 p-0 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 transition-colors rounded-lg justify-center"
+                                >
+                                    <Copy size={18} />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    aria-label="Rimuovi voce"
+                                    title="Rimuovi voce"
+                                    onClick={() => {
+                                        if (window.confirm(`Sei sicuro di voler eliminare "${label}"? Questa azione non può essere annullata.`)) {
+                                            onRemove(it.id)
+                                        }
+                                    }}
+                                    className="h-9 w-9 p-0 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 transition-colors rounded-lg justify-center"
+                                >
+                                    <Trash2 size={18} />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Badge informazioni chiave */}
+                        <div className="flex items-center gap-2 mb-3">
+                            {it.width_mm && it.height_mm && (
+                                <div className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                                    {surfaceMq(it)} m²
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Proprietà in griglia responsive a 2 colonne */}
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 w-full">
+                            <>
+                                {(it as any).color && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-500 font-medium">Colore:</span>
+                                        <span className="text-gray-900">{(it as any).color}</span>
+                                    </div>
+                                )}
+                                {(it as any).glass && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-500 font-medium">Vetro:</span>
+                                        <span className="text-gray-900">{(it as any).glass}</span>
+                                    </div>
+                                )}
+                                {typeof (it as any).uw === 'number' && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-500 font-medium">Uw:</span>
+                                        <span className="text-gray-900">{(it as any).uw} W/m²K</span>
+                                    </div>
+                                )}
+
+                                {/* Dettagli specifici per tipo */}
+                                {it.kind === 'zanzariera' && (it as any).modello && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-500 font-medium">Modello:</span>
+                                        <span className="text-gray-900">{(it as any).modello}</span>
+                                    </div>
+                                )}
+
+                                {it.kind === 'finestra' && (it as any).profile_system && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-500 font-medium">Sistema:</span>
+                                        <span className="text-gray-900">{(it as any).profile_system}</span>
+                                    </div>
+                                )}
+
+                                {(it.kind === 'cassonetto' || it.kind === 'persiana' || it.kind === 'tapparella') && (it as any).material && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span className="text-gray-500 font-medium">Materiale:</span>
+                                        <span className="text-gray-900">{(it as any).material}</span>
+                                    </div>
+                                )}
+                            </>
+                        </div>
                     </div>
                 </div>
             </div>

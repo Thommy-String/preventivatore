@@ -82,6 +82,7 @@
 
   /* Buttons */
   .btn { @apply inline-flex items-center gap-2 text-sm font-medium rounded-[var(--radius-sm)] px-3 py-2 transition; }
+  .btn-icon { @apply inline-flex items-center justify-center text-sm font-medium rounded-[var(--radius-sm)] px-3 py-2 transition; }
   .btn-primary { background: #000; color: white; }
   .btn-primary:hover { @apply opacity-90; }
   .btn-ghost { @apply hover:bg-gray-100; }

@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React from 'react';
 
 type PortaBlindataSvgProps = {
   width_mm: number;
@@ -21,8 +21,6 @@ export const PortaBlindataSvg: React.FC<PortaBlindataSvgProps> = ({
   handle_color,
   viewBox = true,
 }) => {
-  const maskId = useId();
-
   // Color parsing
   let fillPanel = '#FFFFFF'; // Default panel color (White base)
   
@@ -51,8 +49,6 @@ export const PortaBlindataSvg: React.FC<PortaBlindataSvgProps> = ({
   const H = height_mm;
 
   // Leaf
-  const leafX = frameThick;
-  const leafY = frameThick;
   const leafW = W - (frameThick * 2);
   const leafH = H - frameThick; // Threshold at bottom
 
@@ -118,18 +114,6 @@ export const PortaBlindataSvg: React.FC<PortaBlindataSvgProps> = ({
         strokeWidth={1}
       />
 
-      {/* Decorazione Pannello (Lines) - Expanded to be closer to edges */}
-      <rect 
-        x={frameThick + leafW * 0.08} 
-        y={frameThick + leafH * 0.04} 
-        width={leafW * 0.84} 
-        height={leafH * 0.92} 
-        fill="none"
-        stroke="#444444" 
-        strokeWidth="1"
-        opacity="0.5"
-      />
-
       {/* SOGLIA (Threshold) line at bottom */}
       <line 
         x1={frameThick} 
@@ -151,8 +135,8 @@ export const PortaBlindataSvg: React.FC<PortaBlindataSvgProps> = ({
       <path 
         d={`M ${isHandleRight ? frameThick : W - frameThick} ${frameThick} L ${isHandleRight ? W - frameThick : frameThick} ${frameThick + leafH/2} L ${isHandleRight ? frameThick : W - frameThick} ${frameThick + leafH}`}
         fill="none"
-        stroke="#888888"
-        strokeWidth="1"
+        stroke="#444444"
+        strokeWidth="2"
         strokeDasharray="15,15"
       />
 

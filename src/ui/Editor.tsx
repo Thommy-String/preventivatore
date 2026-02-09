@@ -16,6 +16,7 @@ import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
 import { persianaToPngBlob } from '../features/quotes/persiana/persianaToPng'
 import { tapparellaToPngBlob } from '../features/quotes/tapparella/tapparellaToPng'
+import { portaInternaToPngBlob } from '../features/quotes/porta-interna/portaInternaToPng'
 import { TERMS_PROFILES, buildTermsDocument } from '../content/terms'
 import type { TermsProfile } from '../content/terms'
 import { normalizeSurfaceEntries } from '../features/quotes/utils/surfaceSelections'
@@ -434,9 +435,10 @@ export default function Editor() {
     // deep clone to avoid accidental mutations while editing
     setDraft(JSON.parse(JSON.stringify(it)))
   }
-  async function saveDraft() {
-    if (!draft) return
-    let toSave: any = { ...draft }
+  async function saveDraft(overrideDraft?: any) {
+    const rawDraft = overrideDraft ?? draft
+    if (!rawDraft) return
+    let toSave: any = { ...rawDraft }
     const quoteIdStr = quote?.id ? String(quote.id) : null
 
     const pickedFile: File | undefined = (toSave as any).__pickedFile
@@ -644,6 +646,18 @@ export default function Editor() {
               clean.image_url = dataUrl;
             } catch (e) {
               console.warn('Rasterizzazione tapparella → PNG fallita', e);
+              const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+              const isHttp = /^https?:\/\//i.test(raw);
+              const isData = /^data:image\//i.test(raw);
+              clean.image_url = (isHttp || isData) ? raw : undefined;
+            }
+          } else if (String(clean?.kind || '').toLowerCase() === 'porta_interna') {
+            try {
+              const blob = await portaInternaToPngBlob(clean as any);
+              const dataUrl = await blobToDataURL(blob);
+              clean.image_url = dataUrl;
+            } catch (e) {
+              console.warn('Rasterizzazione porta interna → PNG fallita', e);
               const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
               const isHttp = /^https?:\/\//i.test(raw);
               const isData = /^data:image\//i.test(raw);

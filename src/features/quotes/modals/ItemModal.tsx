@@ -14,6 +14,8 @@ import PersianaSvg from "../persiana/PersianaSvg";
 import TapparellaSvg from "../tapparella/TapparellaSvg";
 import { PortaBlindataSvg } from "../porta-blindata/PortaBlindataSvg";
 import { portaBlindataToPngBlob } from "../porta-blindata/portaBlindataToPng";
+import { PortaInternaSvg } from "../porta-interna/PortaInternaSvg";
+import { portaInternaToPngBlob } from "../porta-interna/portaInternaToPng";
 
 // Helper per convertire Blob in data URL, utile per le immagini nel PDF
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -25,14 +27,6 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(String(fr.result || ""));
-    fr.onerror = () => reject(fr.error || new Error("FileReader error"));
-    fr.readAsDataURL(file);
-  });
-}
 
 // — Reusable inline section: custom fields for ALL item kinds —
 function CustomFieldsSection({ draft, onChange }: { draft: any; onChange: (next: any) => void }) {
@@ -130,7 +124,7 @@ type Props = {
   editingId: string | null;
   onChange: (next: QuoteItem) => void;
   onCancel: () => void;
-  onSave: () => void;
+  onSave: (nextDraft?: QuoteItem) => void;
 };
 
 export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Props) {
@@ -146,39 +140,16 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
   const isPersiana = useMemo(() => draft.kind === "persiana", [draft.kind]);
   const isTapparella = useMemo(() => draft.kind === "tapparella", [draft.kind]);
   const isPortaBlindata = useMemo(() => draft.kind === "porta_blindata", [draft.kind]);
+  const isPortaInterna = useMemo(() => draft.kind === "porta_interna", [draft.kind]);
 
   // Sorgente legacy per gli altri prodotti
   const legacyPreviewSrc =
     (draft as any)?.__previewUrl || (draft as any)?.image_url || entry?.icon || "";
+  // referenced to avoid unused-local TS errors
+  void legacyPreviewSrc;
 
   const Title = editingId ? `Modifica ${entry.label}` : `Nuova ${entry.label}`;
   const Form = (draft.kind === "custom" ? CustomForm : entry.Form) as any;
-
-  function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const localUrl = URL.createObjectURL(f);
-    const prev = (draft as any)?.__previewUrl;
-    if (prev && prev.startsWith('blob:')) {
-      URL.revokeObjectURL(prev);
-    }
-    fileToDataUrl(f)
-      .then((dataUrl) => {
-        onChange({
-          ...(draft as any),
-          __previewUrl: localUrl,
-          __pickedFile: f,
-          image_url: dataUrl,
-        });
-      })
-      .catch(() => {
-        onChange({
-          ...(draft as any),
-          __previewUrl: localUrl,
-          __pickedFile: f,
-        });
-      });
-  }
 
   // --- SALVATAGGIO CON GENERAZIONE PNG SOLO AL CLICK ---
   async function handleSave() {
@@ -234,7 +205,16 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
            ...(finalDraft as any),
            __previewUrl: dataUrlDoor,
            image_url: dataUrlDoor,
+           __needsUpload: true,
          } as QuoteItem;
+      } else if (isPortaInterna) {
+         try {
+           console.debug('Generazione PNG porta interna: start', finalDraft?.width_mm, finalDraft?.height_mm)
+           blob = await portaInternaToPngBlob(finalDraft as any);
+           console.debug('Generazione PNG porta interna: blob ottenuto', !!blob)
+         } catch (e) {
+           console.warn('Generazione PNG porta interna fallita', e);
+         }
       }
 
       if (blob) {
@@ -243,14 +223,16 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           ...(finalDraft as any),
           __previewUrl: dataUrl,
           image_url: dataUrl, // PDF-friendly (niente blob:)
+          __needsUpload: true,
         } as QuoteItem;
-        onChange(finalDraft);
       }
+
     } catch (e) {
       console.warn("Generazione PNG al salvataggio fallita", e);
     }
 
-    onSave();
+    // Passiamo il finalDraft direttamente a save per evitare race condition setState -> save
+    onSave(finalDraft);
   }
 
   // Calcolo dell'Aspect Ratio per il contenitore dell'anteprima
@@ -291,8 +273,8 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
 
           {/* Body */}
           <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 transition-all">
-            {/* Anteprima */}
-            <div className="w-full flex items-center justify-center p-2 bg-gray-50 rounded border">
+            {/* Anteprima sempre a sinistra */}
+            <div className="order-1 md:order-1 w-full flex items-center justify-center p-2 bg-gray-50 rounded border">
               <div
                 className="relative w-full flex items-center justify-center overflow-hidden max-h-[70vh] min-h-[400px]"
                 style={{ aspectRatio }}
@@ -324,6 +306,8 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                     handle_position={(draft as any).handle_position}
                     handle_color={(draft as any).options?.handleColor}
                   />
+                ) : isPortaInterna ? (
+                  <PortaInternaSvg item={draft as any} handle_color={(draft as any).options?.handleColor} />
                 ) : isTapparella ? (
                   <TapparellaSvg
                     cfg={{
@@ -332,28 +316,15 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                       color: (draft as any).options?.previewColor || (draft as any).color || null,
                     }}
                   />
-                ) : legacyPreviewSrc ? (
-                  <img key={legacyPreviewSrc} src={legacyPreviewSrc} alt={entry?.label || 'Anteprima'} className="max-w-full max-h-full object-contain" />
-                ) : (
-                  <div className="text-sm text-gray-400">Nessuna immagine</div>
-                )}
-
-                {!isWindow && !isCassonetto && !isPersiana && !isTapparella && !isPortaBlindata && (
-                  <div className="absolute bottom-2 right-2">
-                    <label className="inline-flex items-center justify-center h-8 px-2 rounded border bg-white text-xs cursor-pointer hover:bg-gray-50">
-                      Carica
-                      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={handlePickImage} />
-                    </label>
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
 
             {/* Form and Custom Fields */}
-            <div className="space-y-4">
+            <div className="order-2 md:order-2 space-y-4">
               {Form ? <Form draft={draft as any} onChange={onChange as any} /> : null}
-              {/* Shared custom fields for every kind tranne le voci custom e porta blindata */}
-              {draft.kind !== "custom" && draft.kind !== "porta_blindata" ? (
+              {/* Shared custom fields for every kind tranne le voci custom, porta blindata e porta interna */}
+              {draft.kind !== "custom" && draft.kind !== "porta_blindata" && draft.kind !== "porta_interna" ? (
                 <CustomFieldsSection draft={draft as any} onChange={onChange as any} />
               ) : null}
             </div>

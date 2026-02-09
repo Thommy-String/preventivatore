@@ -75,7 +75,7 @@ export function describeItem(it: any): string {
   return ''
 }
 
-export function imageFor(kind?: string | null) {
+export function imageFor(kind?: string | null, item?: any) {
   switch (kind) {
     case 'finestra':
       return finestraImg
@@ -89,6 +89,37 @@ export function imageFor(kind?: string | null) {
       return tapparellaImg
     case 'porta_blindata':
       return finestraImg
+    case 'porta_interna': {
+      // Fallback: produzione SVG semplice senza React (browser-safe)
+      const simplePortaInternaSvg = (it: any) => {
+        const w = Number(it?.width_mm || 800)
+        const h = Number(it?.height_mm || 2100)
+        const color = it?.color || '#ffffff'
+        const handleRight = (it?.handle_position || 'left') !== 'left'
+        const handleX = handleRight ? w - Math.round(w * 0.1) : Math.round(w * 0.1)
+        const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${w} ${h}' width='${w}' height='${h}'>\n  <rect x='0' y='0' width='${w}' height='${h}' fill='${color}' stroke='#222' stroke-width='2'/>\n  <rect x='${Math.round(w*0.05)}' y='${Math.round(h*0.03)}' width='${Math.round(w*0.9)}' height='${Math.round(h*0.94)}' fill='${color}' stroke='#222' stroke-width='1'/>\n  <circle cx='${handleX}' cy='${Math.round(h/2)}' r='${Math.round(Math.min(w,h)*0.02)}' fill='#bbb' stroke='#444'/>\n</svg>`
+        return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+      }
+
+      // Prefer server-side render when available (better detail)
+      if (typeof window === 'undefined') {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { renderToStaticMarkup } = require('react-dom/server');
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const React = require('react');
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { PortaInternaSvg } = require('../features/quotes/porta-interna/PortaInternaSvg');
+          const svgString = renderToStaticMarkup(React.createElement(PortaInternaSvg, { item }));
+          return `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
+        } catch (e) {
+          return simplePortaInternaSvg(item);
+        }
+      }
+
+      // Browser: return simple SVG data URL
+      return simplePortaInternaSvg(item);
+    }
     default:
       return finestraImg
   }
@@ -115,12 +146,18 @@ export function detailPairs(it: any): Array<[string, string]> {
   if (!it || typeof it !== 'object') return []
   const pairs: Array<[string, string]> = []
 
-  const wNum = Number(it.width_mm ?? it.larghezza_mm ?? it.larghezza)
-  const hNum = Number(it.height_mm ?? it.altezza_mm ?? it.altezza)
-  const areaM2 = Number.isFinite(wNum) && Number.isFinite(hNum) ? (wNum * hNum) / 1_000_000 : undefined
-
+  let wNum = Number(it.width_mm ?? it.larghezza_mm ?? it.larghezza);
+  let hNum = Number(it.height_mm ?? it.altezza_mm ?? it.altezza);
+  // Per porta_interna, width_mm/height_mm sono solo anta (telaio fuori misura SVG)
+  let areaM2: number | undefined = undefined;
+  if (String(it.kind).toLowerCase() === 'porta_interna') {
+    // width_mm e height_mm sono già solo anta
+    areaM2 = Number.isFinite(wNum) && Number.isFinite(hNum) ? (wNum * hNum) / 1_000_000 : undefined;
+  } else {
+    areaM2 = Number.isFinite(wNum) && Number.isFinite(hNum) ? (wNum * hNum) / 1_000_000 : undefined;
+  }
   if (areaM2 && areaM2 > 0) {
-    pairs.push(['Superficie', `${areaM2.toFixed(2)} m²`])
+    pairs.push(['Superficie', `${areaM2.toFixed(2)} m²`]);
   }
 
   const priceTotal = pickFirst(it, ['price_total', 'prezzo_totale', 'price', 'prezzo'])
@@ -132,6 +169,21 @@ export function detailPairs(it: any): Array<[string, string]> {
 
   const color = pickFirst(it, ['color', 'colore', 'profile_color', 'profilo_colore'])
   if (color) pairs.push(['Colore', String(color)])
+
+  // Specifiche per porta interna
+  if (kindLower === 'porta_interna') {
+    const apertura = pickFirst(it, ['apertura'])
+    if (apertura) {
+      const aperturaLabel = apertura === 'battente' ? 'Apertura a battente' : 'Apertura scorrevole'
+      pairs.push(['Tipo apertura', aperturaLabel])
+    }
+    
+    const slidingDirection = pickFirst(it, ['sliding_direction'])
+    if (slidingDirection && apertura === 'scorrevole') {
+      const directionLabel = slidingDirection === 'sx' ? 'Scorrimento a sinistra' : 'Scorrimento a destra'
+      pairs.push(['Direzione scorrimento', directionLabel])
+    }
+  }
 
   const wood = pickFirst(it, ['wood', 'legno'])
   if (wood) pairs.push(['Legno', String(wood)])
@@ -204,6 +256,10 @@ export function detailPairs(it: any): Array<[string, string]> {
   if (kindLow === 'persiana' || kindLow === 'cassonetto') {
     skip.add('ante')
     skip.add('ante_count')
+  }
+  if (kindLow === 'porta_interna') {
+    skip.add('apertura')
+    skip.add('sliding_direction')
   }
   for (const [k, v] of Object.entries(it)) {
     if (v === undefined || v === null || String(v).trim() === '') continue

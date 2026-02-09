@@ -10,7 +10,21 @@ export type QuoteKind =
   | 'persiana'
   | 'tapparella'
   | 'porta_blindata'
+  | 'porta_interna'
   | 'custom'
+/** Porta Interna */
+export type PortaInternaApertura = 'battente' | 'scorrevole';
+export type PortaInternaVerso = 'sx' | 'dx';
+
+export type PortaInternaItem = BaseItem & {
+  kind: 'porta_interna';
+  title?: string;
+  color?: string | null; // di base bianca
+  apertura: PortaInternaApertura;
+  handle_position: 'left' | 'right';
+  sliding_direction?: PortaInternaVerso; // solo se scorrevole
+  options?: any;
+};
 
 export type CustomField = {
   key: string
@@ -187,6 +201,7 @@ export type QuoteItem =
   | PersianaItem
   | TapparellaItem
   | PortaBlindataItem
+  | PortaInternaItem
   | CustomItem
 
 export type ItemFormProps<T extends QuoteItem> = {

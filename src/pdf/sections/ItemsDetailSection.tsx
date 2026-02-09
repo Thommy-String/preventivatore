@@ -80,9 +80,16 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
 
                 <View style={photoWrapStyle}>
                   {(() => {
-                    const raw = typeof it?.image_url === 'string' ? it.image_url : ''
-                    const imgSrc = raw && !raw.startsWith('blob:') ? raw : imageFor(it?.kind)
-                    return <Image src={imgSrc} style={s.photo} />
+                    try {
+                      const raw = typeof it?.image_url === 'string' ? it.image_url : ''
+                      const maybeSrc = raw && !raw.startsWith('blob:') ? raw : imageFor(it?.kind, it)
+                      // imageFor should return a string (data URL). If not, fallback to logo.
+                      const imgSrc = typeof maybeSrc === 'string' ? maybeSrc : xInfissiLogo
+                      return <Image src={imgSrc} style={s.photo} />
+                    } catch (e) {
+                      console.warn('Errore nel calcolo immagine voce PDF', e)
+                      return <Image src={xInfissiLogo} style={s.photo} />
+                    }
                   })()}
 
                   {(() => {
@@ -93,7 +100,7 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
                       ? String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
                       : '—'
 
-                    const isProportional = kindSlug === 'finestra' || kindSlug === 'cassonetto' || kindSlug === 'tapparella' || kindSlug === 'persiana' || kindSlug === 'porta_blindata'
+                    const isProportional = kindSlug === 'finestra' || kindSlug === 'cassonetto' || kindSlug === 'tapparella' || kindSlug === 'persiana' || kindSlug === 'porta_blindata' || kindSlug === 'porta_interna'
 
                     if (!isProportional) {
                       const widthOffsetBottom = (() => {

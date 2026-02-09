@@ -1,48 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import type { ItemFormProps, PortaBlindataItem } from "../types";
 import { RalColorPicker } from "../components/RalColorPicker";
 import CustomFieldsSection from "./CustomFieldsSection";
-import { PortaBlindataSvg } from "../porta-blindata/PortaBlindataSvg";
-import { Badge } from "../../../components/ui/Badge";
-import { portaBlindataToPngBlob } from "../porta-blindata/portaBlindataToPng";
-import { uploadQuoteItemImage } from "../../../lib/uploadImages";
 
 export const PortaBlindataForm: React.FC<ItemFormProps<PortaBlindataItem>> = ({
   draft,
   onChange,
 }) => {
-  const [activeTab, setActiveTab] = useState<'info' | 'design'>('info')
-  const [isSyncing, setIsSyncing] = useState(false)
-
-  // Sync image when relevant fields change
-  useEffect(() => {
-    const syncImage = async () => {
-      setIsSyncing(true)
-      try {
-        // Pass previewColor explicitly if needed by png generator, or let it fallback
-        const blob = await portaBlindataToPngBlob(draft, 600, 600)
-        const file = new File([blob], `door-${draft.id}.png`, { type: 'image/png' })
-        const url = await uploadQuoteItemImage(file, 'temp-doors') // Usa un ID fittizio o gestisci meglio l'ID
-        if (url) {
-          onChange({ ...draft, image_url: url })
-        }
-      } catch (err) {
-        console.error("Error generating door image", err)
-      } finally {
-        setIsSyncing(false)
-      }
-    }
-
-    const timer = setTimeout(syncImage, 1000)
-    return () => clearTimeout(timer)
-  }, [
-    draft.width_mm,
-    draft.height_mm,
-    draft.color,
-    draft.options?.previewColor 
-    // Add other visual dependencies here
-  ])
-
   const set = <K extends keyof PortaBlindataItem>(k: K, v: PortaBlindataItem[K]) =>
     onChange({ ...draft, [k]: v });
 
