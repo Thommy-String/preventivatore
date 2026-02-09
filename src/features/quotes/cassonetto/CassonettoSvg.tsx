@@ -56,9 +56,6 @@ export default function CassonettoSvg({ cfg, stroke = "#222" }: CassonettoSvgPro
   const cdx = (celino_mm || 0) * Math.cos(angle) * depthFactor;
   const cdy = (celino_mm || 0) * Math.sin(angle) * depthFactor;
 
-  const drawingWidth = width_mm + dx + cdx;
-  const drawingHeight = height_mm + dy + cdy;
-  
   const strokeWidth = 1.5;
   const inset = Math.min(width_mm, height_mm) * 0.1;
 

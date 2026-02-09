@@ -42,7 +42,8 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
 
             const title = (() => {
               if (it?.title && it.title.trim()) return it.title.trim()
-              const base = String(it?.kind || 'Voce').trim()
+              let base = String(it?.kind || 'Voce').trim()
+              if (base === 'porta_blindata') base = 'Porta blindata'
               return base.charAt(0).toUpperCase() + base.slice(1)
             })()
             const qty = `Q.tà ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : '1'}`
@@ -92,7 +93,7 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
                       ? String(it?.height_mm ?? it?.altezza_mm ?? it?.altezza)
                       : '—'
 
-                    const isProportional = kindSlug === 'finestra' || kindSlug === 'cassonetto' || kindSlug === 'tapparella' || kindSlug === 'persiana'
+                    const isProportional = kindSlug === 'finestra' || kindSlug === 'cassonetto' || kindSlug === 'tapparella' || kindSlug === 'persiana' || kindSlug === 'porta_blindata'
 
                     if (!isProportional) {
                       const widthOffsetBottom = (() => {

@@ -9,6 +9,7 @@ export type QuoteKind =
   | 'zanzariera'
   | 'persiana'
   | 'tapparella'
+  | 'porta_blindata'
   | 'custom'
 
 export type CustomField = {
@@ -158,6 +159,19 @@ export type TapparellaItem = BaseItem & {
   kind: 'tapparella'
   material?: 'PVC' | 'Alluminio' | null
   color?: string | null
+  options?: any
+}
+
+/** Porta Blindata */
+export type PortaBlindataItem = BaseItem & {
+  kind: 'porta_blindata'
+  title?: string
+  color?: string | null
+  serratura?: boolean | null
+  spioncino?: boolean | null
+  handle_position?: 'left' | 'right' | null
+  panel_type?: string | null
+  options?: any
 }
 
 /** Voce personalizzata */
@@ -172,6 +186,7 @@ export type QuoteItem =
   | ZanzarieraItem
   | PersianaItem
   | TapparellaItem
+  | PortaBlindataItem
   | CustomItem
 
 export type ItemFormProps<T extends QuoteItem> = {

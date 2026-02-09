@@ -12,6 +12,8 @@ import WindowSvg from "../window/WindowSvg";
 import CassonettoSvg from "../cassonetto/CassonettoSvg";
 import PersianaSvg from "../persiana/PersianaSvg";
 import TapparellaSvg from "../tapparella/TapparellaSvg";
+import { PortaBlindataSvg } from "../porta-blindata/PortaBlindataSvg";
+import { portaBlindataToPngBlob } from "../porta-blindata/portaBlindataToPng";
 
 // Helper per convertire Blob in data URL, utile per le immagini nel PDF
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -143,6 +145,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
   const isCassonetto = useMemo(() => draft.kind === "cassonetto", [draft.kind]);
   const isPersiana = useMemo(() => draft.kind === "persiana", [draft.kind]);
   const isTapparella = useMemo(() => draft.kind === "tapparella", [draft.kind]);
+  const isPortaBlindata = useMemo(() => draft.kind === "porta_blindata", [draft.kind]);
 
   // Sorgente legacy per gli altri prodotti
   const legacyPreviewSrc =
@@ -224,6 +227,14 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           __previewUrl: dataUrlTap,
           image_url: dataUrlTap,
         } as QuoteItem;
+      } else if (isPortaBlindata) {
+         const blobDoor = await portaBlindataToPngBlob(finalDraft as any, 900, 900);
+         const dataUrlDoor = await blobToDataUrl(blobDoor);
+         finalDraft = {
+           ...(finalDraft as any),
+           __previewUrl: dataUrlDoor,
+           image_url: dataUrlDoor,
+         } as QuoteItem;
       }
 
       if (blob) {
@@ -258,14 +269,17 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
     if (isTapparella) {
       return `${(draft as any).width_mm || 2} / ${(draft as any).height_mm || 1}`;
     }
+    if (isPortaBlindata) {
+      return `${(draft as any).width_mm || 900} / ${(draft as any).height_mm || 2100}`;
+    }
     return "1 / 1";
-  }, [isWindow, isCassonetto, isPersiana, isTapparella, draft]);
+  }, [isWindow, isCassonetto, isPersiana, isTapparella, isPortaBlindata, draft]);
 
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
       <div className="absolute inset-0 flex items-start md:items-center justify-center p-4">
-        <div className="w-full max-w-[640px] card p-4 overflow-auto max-h-[90vh]">
+        <div className="w-full max-w-5xl card p-4 overflow-auto max-h-[90vh]">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium">{Title}</div>
@@ -276,11 +290,11 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           </div>
 
           {/* Body */}
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 transition-all">
             {/* Anteprima */}
-            <div className="w-full h-full flex items-center justify-center p-2">
+            <div className="w-full flex items-center justify-center p-2 bg-gray-50 rounded border">
               <div
-                className="relative w-full rounded border bg-white flex items-center justify-center overflow-hidden"
+                className="relative w-full flex items-center justify-center overflow-hidden max-h-[70vh] min-h-[400px]"
                 style={{ aspectRatio }}
               >
                 {isWindow ? (
@@ -300,6 +314,16 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                       color: (draft as any).options?.previewColor || null,
                     }}
                   />
+                ) : isPortaBlindata ? (
+                  <PortaBlindataSvg
+                    width_mm={Number((draft as any).width_mm) || 900}
+                    height_mm={Number((draft as any).height_mm) || 2100}
+                    color={(draft as any).options?.previewColor || (draft as any).color}
+                    serratura={(draft as any).serratura}
+                    spioncino={(draft as any).spioncino}
+                    handle_position={(draft as any).handle_position}
+                    handle_color={(draft as any).options?.handleColor}
+                  />
                 ) : isTapparella ? (
                   <TapparellaSvg
                     cfg={{
@@ -314,7 +338,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
                   <div className="text-sm text-gray-400">Nessuna immagine</div>
                 )}
 
-                {!isWindow && !isCassonetto && !isPersiana && !isTapparella && (
+                {!isWindow && !isCassonetto && !isPersiana && !isTapparella && !isPortaBlindata && (
                   <div className="absolute bottom-2 right-2">
                     <label className="inline-flex items-center justify-center h-8 px-2 rounded border bg-white text-xs cursor-pointer hover:bg-gray-50">
                       Carica
@@ -328,8 +352,8 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
             {/* Form and Custom Fields */}
             <div className="space-y-4">
               {Form ? <Form draft={draft as any} onChange={onChange as any} /> : null}
-              {/* Shared custom fields for every kind tranne le voci custom, che hanno già la sezione nel form dedicato */}
-              {draft.kind !== "custom" ? (
+              {/* Shared custom fields for every kind tranne le voci custom e porta blindata */}
+              {draft.kind !== "custom" && draft.kind !== "porta_blindata" ? (
                 <CustomFieldsSection draft={draft as any} onChange={onChange as any} />
               ) : null}
             </div>

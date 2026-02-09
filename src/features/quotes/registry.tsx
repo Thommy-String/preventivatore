@@ -7,6 +7,7 @@ import type {
   ZanzarieraItem,
   PersianaItem,
   TapparellaItem,
+  PortaBlindataItem,
   CustomItem,
 } from "./types";
 import type { ItemFormProps } from "./types";
@@ -22,6 +23,7 @@ import { ZanzarieraForm } from "./forms/ZanzarieraForm";
 import { CassonettoForm } from "./forms/CassonettoForm";
 import { PersianaForm } from "./forms/PersianaForm";
 import { TapparellaForm } from "./forms/Tapparella"; 
+import { PortaBlindataForm } from "./forms/PortaBlindataForm";
 
 export type RegistryEntry<T extends QuoteItem = QuoteItem> = {
   label: string;
@@ -166,6 +168,28 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
       color: "",
     }),
     Form: TapparellaForm,
+  },
+
+  porta_blindata: {
+    label: "Porta Blindata",
+    icon: finestraIcon, 
+    makeDefaults: (): PortaBlindataItem => ({
+      id: crypto.randomUUID(),
+      kind: "porta_blindata",
+      width_mm: 900,
+      height_mm: 2100,
+      qty: 1,
+      price_mode: "total",
+      price_total: 0,
+      price_per_mq: null,
+      notes: null,
+      reference: "",
+      custom_fields: [],
+      color: "",
+      serratura: true,
+      handle_position: 'right',
+    }),
+    Form: PortaBlindataForm,
   },
 
   custom: {

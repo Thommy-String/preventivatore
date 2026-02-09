@@ -771,7 +771,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                                         Maniglia
                                                     </label>
                                                 </div>
-                                                {handleChecked && (state === 'apre_sx' || state === 'apre_dx' || state === 'anta_dx' || state === 'anta_sx') && (
+                                                {handleChecked && (state === 'apre_sx' || state === 'apre_dx') && (
                                                     <div className="flex items-center gap-2 text-xs text-gray-500">
                                                         <span>Altezza da terra (mm)</span>
                                                         <input

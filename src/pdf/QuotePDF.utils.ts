@@ -87,6 +87,8 @@ export function imageFor(kind?: string | null) {
       return persianaImg
     case 'tapparella':
       return tapparellaImg
+    case 'porta_blindata':
+      return finestraImg
     default:
       return finestraImg
   }
@@ -123,7 +125,8 @@ export function detailPairs(it: any): Array<[string, string]> {
 
   const priceTotal = pickFirst(it, ['price_total', 'prezzo_totale', 'price', 'prezzo'])
   const kindLower = String(it.kind).toLowerCase()
-  if (priceTotal !== undefined && kindLower !== 'tapparella' && kindLower !== 'persiana' && kindLower !== 'cassonetto') {
+  const val = Number(priceTotal)
+  if (priceTotal !== undefined && kindLower !== 'tapparella' && kindLower !== 'persiana' && kindLower !== 'cassonetto' && !Number.isNaN(val) && val > 0) {
       pairs.push(['Totale', String(priceTotal)])
   }
 
@@ -152,6 +155,15 @@ export function detailPairs(it: any): Array<[string, string]> {
     ['Trasmittanza', pickFirst(it, ['trasmittanza'])],
     ['Telaio', asBoolLabel(pickFirst(it, ['con_telaio']))],
     ['Deceleratore', asBoolLabel(pickFirst(it, ['deceleratore', 'has_deceleratore', 'con_deceleratore']))],
+    // Mostra solo se true (Sì)
+    ['Serratura', pickFirst(it, ['serratura']) ? 'Sì' : undefined],
+    ['Spioncino', pickFirst(it, ['spioncino']) ? 'Sì' : undefined],
+    ['Posizione maniglia', (() => {
+        const v = pickFirst(it, ['handle_position']);
+        if (v === 'left') return 'Sinistra';
+        if (v === 'right') return 'Destra';
+        return v;
+    })()],
   ] as const
 
   for (const [label, value] of featurePairs) {
@@ -184,6 +196,9 @@ export function detailPairs(it: any): Array<[string, string]> {
     'riferimento',
     'image_url',
     'imageUrl',
+    'serratura', // explicitly handled above
+    'spioncino', // explicitly handled above
+    'handle_position',
   ])
   const kindLow = String(it.kind).toLowerCase()
   if (kindLow === 'persiana' || kindLow === 'cassonetto') {
@@ -194,6 +209,7 @@ export function detailPairs(it: any): Array<[string, string]> {
     if (v === undefined || v === null || String(v).trim() === '') continue
     if (typeof v === 'object' || typeof v === 'function') continue
     if (skip.has(k)) continue
+    if (k === 'serratura' || k === 'spioncino' || k === 'handle_position') continue
 
     const pretty: Record<string, string> = {
       profile_system: 'Sistema profilo',
@@ -231,6 +247,8 @@ export function detailPairs(it: any): Array<[string, string]> {
       glass_spec: 'Stratigrafia vetro',
       vetro_stratigrafia: 'Stratigrafia vetro',
       stratigrafia_vetro: 'Stratigrafia vetro',
+      handle_position: 'Posizione maniglia',
+      panel_type: 'Tipo pannello',
     }
     const label = pretty[k] || k
     if (!shownKeys.has(label.toLowerCase())) {
@@ -240,6 +258,10 @@ export function detailPairs(it: any): Array<[string, string]> {
       }
       if (label === 'Colore rete') {
         displayVal = displayVal.replace(/^mesh\s*/i, '').trim()
+      }
+      if (label === 'Posizione maniglia') {
+         if (displayVal === 'left') displayVal = 'Sinistra'
+         if (displayVal === 'right') displayVal = 'Destra'
       }
       pairs.push([label, displayVal])
       shownKeys.add(label.toLowerCase())
