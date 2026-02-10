@@ -34,6 +34,13 @@ const createNewSash = (): GridWindowConfig['rows'][0]['cols'][0] => ({
 const FRAME_MM = 70;
 const MULLION_MM = 60;
 
+// Valori standard per vetrocamera
+const VETROCAMERA_OPTIONS = [
+    '3.3 - 20Cu7040.Ar-3.3i',
+    '4 - 22Ar - 3.3.i',
+    '3.3.i - 16 Ar - 4 - 16Ar - 3.3.i',
+] as const;
+
 // Profili disponibili (lista rapida)
 const PROFILE_SYSTEMS = [
     'WDS 76 MD',
@@ -165,7 +172,7 @@ function rebalanceRowsToTotal(
         targetScaled[last] = Math.max(MIN_SCALED, targetScaled[last] + diff);
     }
 
-    return rows.map((r, i) => ({ ...r, height_ratio: fromScaled(targetScaled[i]) }));
+    return rows.map((r, i) => ({ ...r, height_ratio: fromScaled(targetScaled[i]) / totalH }));
 }
 
 /** Ribilancia le larghezze delle ante con precisione a 0.1 mm. */
@@ -249,7 +256,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const interpretRowHeight = (r: GridWindowConfig['rows'][0]) => {
         const raw = r.height_ratio ?? 0;
         if (!raw || raw <= 0) return grid ? grid.height_mm / Math.max(1, grid.rows.length) : 0;
-        return raw <= 1.0001 && grid ? raw * grid.height_mm : raw;
+        return raw * (grid ? grid.height_mm : 1);
     };
 
     const [widthStr, setWidthStr] = useState(typeof d.width_mm === 'number' ? formatMm(d.width_mm) : '');
@@ -323,8 +330,8 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                 width_mm: d.width_mm || 1200, height_mm: d.height_mm || 1500,
                 frame_mm: FRAME_MM, mullion_mm: MULLION_MM,
                 rows: [{
-                    height_ratio: (d.height_mm || 1500),
-                    cols: [{ width_ratio: (d.width_mm || 1200), leaf: { state: 'fissa' }, handle: false }]
+                    height_ratio: 1,
+                    cols: [{ width_ratio: 1, leaf: { state: 'fissa' }, handle: false }]
                 }],
                 glazing: 'doppio',
                 showDims: true,
@@ -402,7 +409,11 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             );
             setWidthStr(formatMm(commitTotal));
         } else {
-            const nextRows = rebalanceRowsToTotal(grid.rows, commitTotal);
+            // Scale existing row heights proportionally instead of redistributing evenly
+            const currentHeights = grid.rows.map(r => interpretRowHeight(r));
+            const currentTotal = sumNum(currentHeights);
+            const scale = currentTotal > 0 ? commitTotal / currentTotal : 1;
+            const nextRows = grid.rows.map(r => ({ ...r, height_ratio: (interpretRowHeight(r) * scale) / commitTotal }));
             applyPatch(
                 { height_mm: commitTotal },
                 { height_mm: commitTotal, rows: nextRows }
@@ -419,7 +430,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             const distributed = splitEvenly(totalH, nextRows.length);
             resized = nextRows.map((r, idx) => ({
                 ...r,
-                height_ratio: distributed[idx] ?? distributed[distributed.length - 1] ?? totalH / nextRows.length,
+                height_ratio: (distributed[idx] ?? distributed[distributed.length - 1] ?? totalH / nextRows.length) / totalH,
             }));
         } else {
             resized = rebalanceRowsToTotal(nextRows, totalH);
@@ -924,17 +935,34 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             <section className="space-y-2">
                 <div className="text-sm font-medium text-gray-600">Vetro</div>
                 <div className="grid grid-cols-2 gap-3">
-                    {/* Input per Riferimento */}
-
+                    {/* Vetrocamera */}
                     <div>
-                        <label className="text-xs text-gray-500">Stratigrafia vetro</label>
-                        <input
+                        <label className="text-xs text-gray-500">Vetrocamera</label>
+                        <select
                             className="input"
-                            type="text"
-                            placeholder="es. 4-14-4-12-33.1 LowE"
-                            value={(d as any).glass_spec ?? ''}
-                            onChange={(e) => applyPatch({ glass_spec: e.target.value })}
-                        />
+                            value={VETROCAMERA_OPTIONS.includes((d as any).glass_spec) ? (d as any).glass_spec : 'custom'}
+                            onChange={(e) => {
+                                if (VETROCAMERA_OPTIONS.includes(e.target.value as any)) {
+                                    applyPatch({ glass_spec: e.target.value });
+                                } else {
+                                    applyPatch({ glass_spec: '' });
+                                }
+                            }}
+                        >
+                            {VETROCAMERA_OPTIONS.map(option => (
+                                <option key={option} value={option}>{option}</option>
+                            ))}
+                            <option value="custom">Personalizzato</option>
+                        </select>
+                        {(!VETROCAMERA_OPTIONS.includes((d as any).glass_spec)) && (
+                            <input
+                                className="input mt-1"
+                                type="text"
+                                placeholder="Inserisci vetrocamera personalizzata"
+                                value={(d as any).glass_spec ?? ''}
+                                onChange={(e) => applyPatch({ glass_spec: e.target.value || null })}
+                            />
+                        )}
                     </div>
                     <div>
                         <label className="text-xs text-gray-500">Riferimento</label>

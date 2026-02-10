@@ -300,9 +300,9 @@ export function detailPairs(it: any): Array<[string, string]> {
       ante_count: 'Ante',
       hinge_color: 'Colore cerniere',
       hinges_color: 'Colore cerniere',
-      glass_spec: 'Stratigrafia vetro',
-      vetro_stratigrafia: 'Stratigrafia vetro',
-      stratigrafia_vetro: 'Stratigrafia vetro',
+      glass_spec: 'Vetrocamera',
+      vetro_stratigrafia: 'Vetrocamera',
+      stratigrafia_vetro: 'Vetrocamera',
       handle_position: 'Posizione maniglia',
       panel_type: 'Tipo pannello',
     }

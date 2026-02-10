@@ -9,9 +9,6 @@ import { Input } from '../components/ui/Input'
 
 import { Card } from '../components/ui/Card'
 
-
-
-
 // Anteprima preventivo: totale senza IVA e riepilogo per tipo
 // Anteprima preventivo: TOTALE (senza IVA) da manual_totals + charges - sconti
 // e CONTEGGIO per tipo da quotes.items_json (kind + qty)

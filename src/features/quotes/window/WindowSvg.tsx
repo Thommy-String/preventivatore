@@ -337,7 +337,7 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     {/* 3. Vetro (Azzurro, bordo sottile) */}
                     <rect 
                         x={gx} y={gy} width={gw} height={gh} 
-                        fill={TECH_STYLE.GLASS_FILL} 
+                        fill={isSatin(sashGlazing) ? '#E0E0E0' : TECH_STYLE.GLASS_FILL} 
                         stroke={TECH_STYLE.GLASS_STROKE || TECH_STYLE.FRAME_STROKE} 
                         strokeWidth={TECH_STYLE.STROKE_WIDTH_GLASS} 
                     />

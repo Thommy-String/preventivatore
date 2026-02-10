@@ -79,6 +79,7 @@ export const registry: Record<QuoteKind, RegistryEntry<any>> = {
       hinges_color: null,
       uw: 1.3,
       profile_system: null,
+      glass_spec: '3.3 - 20Cu7040.Ar-3.3i',
       notes: null,
       reference: "",
       custom_fields: [],
