@@ -256,7 +256,10 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const interpretRowHeight = (r: GridWindowConfig['rows'][0]) => {
         const raw = r.height_ratio ?? 0;
         if (!raw || raw <= 0) return grid ? grid.height_mm / Math.max(1, grid.rows.length) : 0;
-        return raw * (grid ? grid.height_mm : 1);
+        const computed = raw * (grid ? grid.height_mm : 1);
+        // Evita valori assurdi: l'altezza di una riga non può superare l'altezza totale
+        const maxH = grid ? grid.height_mm : computed;
+        return Math.min(computed, maxH);
     };
 
     const [widthStr, setWidthStr] = useState(typeof d.width_mm === 'number' ? formatMm(d.width_mm) : '');
@@ -321,7 +324,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         setColWidthStr(nextColWidths);
         setBarOffsetStr(nextBarOffsets);
         setColLocked(nextColLocked);
-    }, [grid?.rows]);
+    }, [grid?.rows, grid?.height_mm, grid?.width_mm]);
 
     // Inizializzazione
     useEffect(() => {
