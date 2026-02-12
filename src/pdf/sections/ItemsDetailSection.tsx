@@ -2,13 +2,19 @@ import { Image, Text, View } from '@react-pdf/renderer'
 import { s } from '../QuotePDF.styles'
 import { describeItem, detailPairs, imageFor } from '../QuotePDF.utils'
 import xInfissiLogo from '../../assets/images/x-infissi-logo.png'
+import type { PDFTheme } from '../../config/brand'
 
 type ItemsDetailSectionProps = {
   companyLogoUrl?: string | null
+  brandId?: 'xinfissi' | 'ecosolution' | null
+  theme?: PDFTheme | null
   items: any[]
 }
 
-export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSectionProps) {
+export function ItemsDetailSection({ companyLogoUrl, brandId, theme, items }: ItemsDetailSectionProps) {
+  const isEco = brandId === 'ecosolution'
+  const accent = theme?.accent || '#3fb26b'
+
   return (
     <>
       {companyLogoUrl && companyLogoUrl.trim() ? (
@@ -61,11 +67,15 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
               : (typeof it?.riferimento === 'string' && it.riferimento.trim() ? it.riferimento.trim() : '')
 
             return (
+              <View key={`item-wrap-${it?.id || it?.kind || 'k'}-${i}`} wrap={false} break={shouldBreak}>
               <View
-                wrap={false}
-                break={shouldBreak}
-                key={`card-${it?.id || it?.kind || 'k'}-${i}`}
-                style={[s.itemCard, { minHeight: minH }]}
+                style={[
+                  s.itemCard,
+                  { minHeight: minH },
+                  ...(isEco
+                    ? [{ backgroundColor: '#ffffff' } as any]
+                    : []),
+                ]}
               >
                 {/* Colonna posizione in alto a sinistra */}
                 <View style={{ 
@@ -74,8 +84,8 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
                   marginRight: 6,
                   paddingTop: 2,
                 }}>
-                  <Text style={{ fontSize: 5, color: '#bbb', letterSpacing: 0.3 }}>POS</Text>
-                  <Text style={{ fontSize: 10, color: '#999', marginTop: 1 }}>{i + 1}</Text>
+                  <Text style={{ fontSize: 5, color: isEco ? accent : '#bbb', letterSpacing: 0.3 }}>{isEco ? 'VOCE' : 'POS'}</Text>
+                  <Text style={{ fontSize: 10, color: isEco ? accent : '#999', marginTop: 1 }}>{i + 1}</Text>
                 </View>
 
                 <View style={photoWrapStyle}>
@@ -140,25 +150,29 @@ export function ItemsDetailSection({ companyLogoUrl, items }: ItemsDetailSection
                 <View style={s.itemContent}>
                   <View style={s.itemHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
-                      <Text style={s.itemKind}>{title}</Text>
+                      <Text style={[s.itemKind, isEco ? { color: '#111827', fontSize: 14 } : {}]}>{title}</Text>
                       {(() => {
                         const dims = description
-                        return dims ? <Text style={s.itemDims}>· {dims}</Text> : null
+                        return dims ? <Text style={[s.itemDims, isEco ? { color: '#4b5563' } : {}]}>· {dims}</Text> : null
                       })()}
                     </View>
                     <Text style={s.itemQty}>{qty}</Text>
                   </View>
                   {reference ? <Text style={s.itemRef}>{reference}</Text> : null}
-                  {pairs.length > 0 && <View style={s.hr} />}
+                  {pairs.length > 0 && <View style={[s.hr, isEco ? { backgroundColor: '#edf2f7', marginVertical: 10 } : {}]} />}
                   <View style={s.detailGrid}>
                     {pairs.map(([k, v], idx) => (
-                      <View key={`kv-${idx}`} style={s.detailRow}>
-                        <Text style={s.detailLabel}>{k}</Text>
-                        <Text style={s.detailValue}>{v}</Text>
+                      <View key={`kv-${idx}`} style={[s.detailRow, isEco ? { marginTop: 4, marginBottom: 3 } : {}]}>
+                        <Text style={[s.detailLabel, isEco ? { width: '40%', color: '#6b7280', fontSize: 10 } : {}]}>{k}</Text>
+                        <Text style={[s.detailValue, isEco ? { fontSize: 10.5, color: '#111827', fontWeight: 600 } : {}]}>{v}</Text>
                       </View>
                     ))}
                   </View>
                 </View>
+              </View>
+              {isEco && i < items.length - 1 ? (
+                <View style={{ height: 1, backgroundColor: accent, opacity: 0.8, marginTop: -2, marginBottom: 8 }} />
+              ) : null}
               </View>
             )
           })

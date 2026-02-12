@@ -19,6 +19,7 @@ export type TermsProfile = {
 
 export type BuildTermsOptions = {
     validityDays?: number;
+    companyDetails?: string[];
 };
 
 export type TermsDocument = {
@@ -44,6 +45,15 @@ export function buildTermsDocument(profile: TermsProfile, options?: BuildTermsOp
     const validityDays = Number.isFinite(options?.validityDays) && options?.validityDays ? options.validityDays : 15;
     const validityLabel = injectDays(profile.validityTemplate, validityDays);
 
+    const companyLine = Array.isArray(options?.companyDetails)
+        ? options?.companyDetails.find(line => typeof line === 'string' && line.trim().length > 0)?.trim()
+        : undefined;
+
+    const mapPrivacyParagraph = (paragraph: string): string => {
+        if (!companyLine) return paragraph;
+        return paragraph.replace(/X\s*S\.R\.L\./gi, companyLine);
+    };
+
     const paymentPlan = profile.paymentPlan.map(step => ({ ...step }));
     const paymentNotes = GLOBAL_PAYMENT_NOTES.slice();
     const sections = profile.sections.map(section => ({
@@ -52,7 +62,7 @@ export function buildTermsDocument(profile: TermsProfile, options?: BuildTermsOp
     }));
     const privacy = {
         title: profile.privacy.title,
-        body: profile.privacy.body.slice(),
+        body: profile.privacy.body.map(paragraph => mapPrivacyParagraph(paragraph)),
     };
 
     const lines: string[] = [];
@@ -86,7 +96,7 @@ export function buildTermsDocument(profile: TermsProfile, options?: BuildTermsOp
     lines.push('');
     lines.push(privacy.title.trim());
     privacy.body.forEach(paragraph => {
-        lines.push(paragraph.trim());
+        lines.push(mapPrivacyParagraph(paragraph).trim());
     });
 
     lines.push('');

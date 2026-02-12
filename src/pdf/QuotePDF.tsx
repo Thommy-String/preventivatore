@@ -10,9 +10,13 @@ import { ProfileOverviewSection } from './sections/ProfileOverviewSection'
 import { SummarySection } from './sections/SummarySection'
 import { ItemsDetailSection } from './sections/ItemsDetailSection'
 import { TermsSection } from './sections/TermsSection'
+import type { PDFTheme } from '../config/brand'
 
 export type QuotePDFProps = {
+    brandId?: 'xinfissi' | 'ecosolution' | null
     companyLogoUrl?: string | null
+    companyDetails?: string[] | null
+    pdfTheme?: PDFTheme | null
     quoteNumber?: string | null
     issueDate?: string | null
     installTime?: string | null
@@ -47,6 +51,9 @@ export type QuotePDFProps = {
 export default function QuotePDF(props: QuotePDFProps) {
     const {
         companyLogoUrl,
+        brandId,
+        companyDetails,
+        pdfTheme,
         quoteNumber,
         issueDate,
         installTime,
@@ -133,6 +140,9 @@ export default function QuotePDF(props: QuotePDFProps) {
             <Page size="A4" style={s.page}>
                 <QuoteHeaderSection
                     companyLogoUrl={companyLogoUrl}
+                    brandId={brandId ?? null}
+                    companyDetails={companyDetails ?? null}
+                    theme={pdfTheme ?? null}
                     customer={customer}
                     quoteNumber={quoteNumber}
                     issueDate={issueDate}
@@ -145,6 +155,7 @@ export default function QuotePDF(props: QuotePDFProps) {
                 <ProfileOverviewSection profileOverview={profileOverview} />
 
                 <SummarySection
+                    brandId={brandId ?? null}
                     totals={totals}
                     items={itemsSafe}
                     mountingCost={mountingCost}
@@ -154,16 +165,18 @@ export default function QuotePDF(props: QuotePDFProps) {
                     discount={props.discount ?? null}
                     showTotalIncl={props.showTotalIncl}
                     vatPercent={props.vatPercent}
+                    theme={pdfTheme ?? null}
                 />
             </Page>
 
             <Page size="A4" style={s.page}>
-                <ItemsDetailSection companyLogoUrl={companyLogoUrl} items={itemsSafe} />
+                <ItemsDetailSection companyLogoUrl={companyLogoUrl} items={itemsSafe} brandId={brandId ?? null} theme={pdfTheme ?? null} />
             </Page>
 
             <Page size="A4" style={s.page}>
                 <TermsSection
                     companyLogoUrl={companyLogoUrl}
+                    theme={pdfTheme ?? null}
                     structuredTerms={structuredTerms}
                     terms={terms}
                     supplyOnlyPlan={supplyOnlyPlan}

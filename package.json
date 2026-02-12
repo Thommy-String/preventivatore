@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:xinfissi": "vite --mode xinfissi",
+    "dev:ecosolution": "vite --mode ecosolution",
     "build": "tsc -b && vite build",
+    "build:xinfissi": "tsc -b && vite build --mode xinfissi",
+    "build:ecosolution": "tsc -b && vite build --mode ecosolution",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",

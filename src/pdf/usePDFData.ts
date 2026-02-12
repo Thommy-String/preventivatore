@@ -11,6 +11,7 @@ import { persianaToPngBlob } from "../features/quotes/persiana/persianaToPng";
 import PersianaSvg from "../features/quotes/persiana/PersianaSvg";
 import { tapparellaToPngBlob } from "../features/quotes/tapparella/tapparellaToPng";
 import TapparellaSvg from "../features/quotes/tapparella/TapparellaSvg";
+import { getActiveBrandProfile } from "../config/brand";
 
 // Debug helper: taglia le stringhe nei log
 const __short = (s?: string) =>
@@ -174,6 +175,7 @@ function toPlainItem(it: any) {
 }
 
 export function usePDFData(): QuotePDFProps {
+const brandProfile = getActiveBrandProfile();
 const [quote, manualTotals, items, profileOverview] = useQuoteStore(
   useShallow((s: any) => [
     (s as any).quote ?? null,
@@ -414,7 +416,10 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
         (q.customer_type === 'azienda' || q.customerType === 'azienda') ? 'azienda' : 'privato'
       );
       const profile = TERMS_PROFILES.find(p => p.id === fallbackProfile) ?? TERMS_PROFILES[0];
-      const rebuilt = buildTermsDocument(profile, validityDays ? { validityDays } : undefined);
+      const rebuilt = buildTermsDocument(profile, {
+        ...(validityDays ? { validityDays } : {}),
+        companyDetails: brandProfile.companyDetails,
+      });
       if (rebuilt.text.trim() === termsText.trim()) {
         termsStructured = rebuilt;
       }
@@ -471,7 +476,10 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       true;
 
     return {
-      companyLogoUrl: isStr(q.companyLogoUrl) ? q.companyLogoUrl : null,
+      brandId: brandProfile.id,
+      companyLogoUrl: isStr(q.companyLogoUrl) ? q.companyLogoUrl : brandProfile.logoAsset,
+      companyDetails: brandProfile.companyDetails,
+      pdfTheme: brandProfile.pdfTheme,
       quoteNumber: isStr(q.number) ? q.number : null,
 
       issueDate,
@@ -496,5 +504,5 @@ const [quote, manualTotals, items, profileOverview] = useQuoteStore(
       vatPercent,
       items: pdfSafeItems,
     };
-  }, [quote, manualTotals, items, profileOverview]);
+  }, [quote, manualTotals, items, profileOverview, brandProfile]);
 }

@@ -19,6 +19,7 @@ import { portaInternaToPngBlob } from '../features/quotes/porta-interna/portaInt
 import { TERMS_PROFILES, buildTermsDocument } from '../content/terms'
 import type { TermsProfile } from '../content/terms'
 import { normalizeSurfaceEntries } from '../features/quotes/utils/surfaceSelections'
+import { getActiveBrandProfile } from '../config/brand'
 
 // Types for the Quote header (DB)
 type Quote = {
@@ -394,12 +395,18 @@ export default function Editor() {
   const [draft, setDraft] = useState<QuoteItem | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const isModalOpen = !!draft
+  const brandProfile = getActiveBrandProfile()
 
-  const defaultTermsProfile = TERMS_PROFILES[0] ?? EMPTY_TERMS_PROFILE
+  const defaultTermsProfile = TERMS_PROFILES.find((profile) => profile.id === brandProfile.defaultTermsProfileId)
+    ?? TERMS_PROFILES[0]
+    ?? EMPTY_TERMS_PROFILE
 
   const termsDoc = useMemo(() => {
-    return buildTermsDocument(defaultTermsProfile, { validityDays: quote?.validity_days ?? 15 })
-  }, [defaultTermsProfile, quote?.validity_days])
+    return buildTermsDocument(defaultTermsProfile, {
+      validityDays: quote?.validity_days ?? 15,
+      companyDetails: brandProfile.companyDetails,
+    })
+  }, [defaultTermsProfile, quote?.validity_days, brandProfile])
 
 
   function startAdd(kind: keyof typeof registry) {
@@ -654,7 +661,10 @@ export default function Editor() {
           : 22;
 
       const data = {
-        companyLogoUrl: branding?.logo_url ?? null,
+        brandId: brandProfile.id,
+        companyLogoUrl: brandProfile.logoAsset ?? branding?.logo_url ?? import.meta.env.VITE_COMPANY_LOGO_URL ?? null,
+        companyDetails: brandProfile.companyDetails,
+        pdfTheme: brandProfile.pdfTheme,
         quoteNumber: quote.number ?? null,
         issueDate: quote.issue_date || new Date().toISOString().slice(0, 10),
         installTime: quote.install_time || null,

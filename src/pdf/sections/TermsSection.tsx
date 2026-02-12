@@ -3,6 +3,7 @@ import xInfissiLogo from '../../assets/images/x-infissi-logo.png'
 import { s } from '../QuotePDF.styles'
 import { safeText } from '../QuotePDF.utils'
 import type { TermsDocument } from '../../content/terms'
+import type { PDFTheme } from '../../config/brand'
 
 type SupplyOnlyPlan = {
   label: string
@@ -21,6 +22,7 @@ type TermsColumn = {
 
 type TermsSectionProps = {
   companyLogoUrl?: string | null
+  theme?: PDFTheme | null
   structuredTerms: TermsDocument | null
   terms?: string | null
   supplyOnlyPlan: SupplyOnlyPlan
@@ -50,6 +52,7 @@ const BuildingIcon = () => (
 
 export function TermsSection({
   companyLogoUrl,
+  theme,
   structuredTerms,
   terms,
   supplyOnlyPlan,
@@ -58,6 +61,9 @@ export function TermsSection({
   sharedNotesLeft,
   sharedNotesRight,
 }: TermsSectionProps) {
+  const accent = theme?.accent || '#3fb26b'
+  const soft = theme?.soft || '#f7f8fb'
+
   return (
     <>
       {companyLogoUrl && companyLogoUrl.trim() ? (
@@ -67,11 +73,11 @@ export function TermsSection({
       )}
 
       <Text style={[s.h2, { marginTop: 6 }]}>Condizioni di Fornitura</Text>
-      <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10 }} />
+      <View style={{ height: 1, backgroundColor: soft, marginVertical: 10 }} />
       {structuredTerms ? (
         <>
           <View style={s.termsPaymentSection}>
-            <Text style={s.termsPaymentHeader}>Metodi di pagamento</Text>
+            <Text style={[s.termsPaymentHeader, { color: accent }]}>Metodi di pagamento</Text>
             <View style={s.termsSupplyCard} wrap={false}>
               <Text style={s.termsSupplyTitle}>Solo fornitura (senza posa)</Text>
               <Text style={s.termsSupplySummary}>{supplyOnlyPlan.summary}</Text>
