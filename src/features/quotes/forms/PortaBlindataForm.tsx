@@ -112,7 +112,7 @@ export const PortaBlindataForm: React.FC<ItemFormProps<PortaBlindataItem>> = ({
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500 mb-1 block">Posizione Maniglia (vista interna)</label>
+              <label className="text-xs text-gray-500 mb-1 block">Posizione Maniglia</label>
               <div className="flex rounded-md shadow-sm" role="group">
                 <button
                   type="button"

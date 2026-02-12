@@ -47,15 +47,10 @@ export function ProfileOverview() {
     : selectedGlazing === 'triplo'
       ? 'Triplo vetro'
       : null;
-  const storedLabel = po?.label ?? null;
-  const storedGlazing = po?.glazing ?? null;
-  const summaryLabel = storedLabel || selectedPreset?.label || 'Profilo personalizzato';
-  const summaryGlazing = storedGlazing || glazingLabel || null;
-  const hasSummary = Boolean(imageUrl || storedLabel || storedGlazing || selectedPreset || glazingLabel);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const ensurePO = () => po ?? { imageUrl: null, features: [] as Feature[], label: null, glazing: null };
+  const ensurePO = () => po ?? { imageUrl: null, features: [] as Feature[] };
 
   function resolvePresetImage(
     preset: { imageUrl: string | null; imageUrlDouble?: string | null; imageUrlTriple?: string | null },
@@ -77,8 +72,7 @@ export function ProfileOverview() {
     });
 
     const img = resolvePresetImage(preset, glazing);
-    const glazingName = glazing === 'doppio' ? 'Doppio vetro' : 'Triplo vetro';
-    setPO?.({ imageUrl: img, features: filtered, label: preset.label, glazing: glazingName });
+    setPO?.({ imageUrl: img, features: filtered });
     setSelectedPresetKey((preset as any)?.key ?? null);
     setSelectedGlazing(glazing);
   }
@@ -195,7 +189,7 @@ export function ProfileOverview() {
         </div>
       </button>
 
-      {!open && hasSummary && (
+      {!open && (imageUrl || selectedPreset || glazingLabel) && (
         <div className="mt-3 rounded-lg border bg-white/60 p-3 flex items-center gap-3">
           <div className="h-12 w-16 shrink-0 rounded-md border bg-white flex items-center justify-center overflow-hidden">
             {imageUrl ? (
@@ -206,10 +200,10 @@ export function ProfileOverview() {
           </div>
           <div className="min-w-0">
             <div className="text-sm font-semibold truncate">
-              {summaryLabel}
+              {selectedPreset?.label ?? 'Profilo personalizzato'}
             </div>
-            {summaryGlazing && (
-              <div className="text-xs text-gray-500">{summaryGlazing}</div>
+            {glazingLabel && (
+              <div className="text-xs text-gray-500">{glazingLabel}</div>
             )}
           </div>
         </div>
@@ -227,7 +221,7 @@ export function ProfileOverview() {
           <button
             type="button"
             onClick={() => {
-              const base = { imageUrl: null, features: [{ id: rid(), eyebrow: '', title: '', description: '' }], label: 'Profilo personalizzato', glazing: null };
+              const base = { imageUrl: null, features: [{ id: rid(), eyebrow: '', title: '', description: '' }] };
               setPO?.(base as any);
             }}
             className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:border-emerald-300 hover:bg-emerald-50 transition"

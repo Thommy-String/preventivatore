@@ -92,14 +92,6 @@ function toPlainItem(it: any) {
     }
   }
 
-  // Normalizza i colori comuni (es. #fff -> "Bianco") per il PDF
-  if (colorFinal) {
-    const normColor = String(colorFinal).trim().toLowerCase();
-    if (normColor === '#fff' || normColor === '#ffffff' || normColor === 'fff') {
-      colorFinal = 'Bianco';
-    }
-  }
-
   const base: any = {
     id: isStr(it.id) ? it.id : undefined,
     kind: isStr(it.kind) ? it.kind : "-",

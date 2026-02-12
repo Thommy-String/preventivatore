@@ -15,8 +15,6 @@ export type ProfileOverviewFeature = {
 export type ProfileOverview = {
   imageUrl: string | null
   features: ProfileOverviewFeature[]
-  label?: string | null
-  glazing?: string | null
 }
 
 // Robust ID generator (anche senza crypto.randomUUID)
@@ -86,28 +84,28 @@ export const useQuoteStore = create<QuoteStoreState>()(
 
       addPOFeature: (f) =>
         set(state => {
-          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [], label: null, glazing: null }
+          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [] }
           const feat = f.id ? f : { ...f, id: rid() }
           return { profileOverview: { ...base, features: [...base.features, feat] } }
         }),
 
       updatePOFeature: (id, patch) =>
         set(state => {
-          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [], label: null, glazing: null }
+          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [] }
           const next = base.features.map(feat => (feat.id === id ? { ...feat, ...patch } : feat))
           return { profileOverview: { ...base, features: next } }
         }),
 
       removePOFeature: (id) =>
         set(state => {
-          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [], label: null, glazing: null }
+          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [] }
           const next = base.features.filter(f => f.id !== id)
           return { profileOverview: { ...base, features: next } }
         }),
 
       movePOFeature: (id, dir) =>
         set(state => {
-          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [], label: null, glazing: null }
+          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [] }
           const arr = [...base.features]
           const i = arr.findIndex(f => f.id === id)
           if (i === -1) return { profileOverview: base }
@@ -121,7 +119,7 @@ export const useQuoteStore = create<QuoteStoreState>()(
       // --- Compat (basato su indice) ---
       updatePOFeatureByIndex: (index, patch) =>
         set(state => {
-          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [], label: null, glazing: null }
+          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [] }
           const next = [...base.features]
           if (!next[index]) return { profileOverview: base }
           next[index] = { ...next[index], ...patch }
@@ -130,14 +128,14 @@ export const useQuoteStore = create<QuoteStoreState>()(
 
       removePOFeatureByIndex: (index) =>
         set(state => {
-          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [], label: null, glazing: null }
+          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [] }
           const next = base.features.filter((_, i) => i !== index)
           return { profileOverview: { ...base, features: next } }
         }),
 
       movePOFeatureByIndex: (from, to) =>
         set(state => {
-          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [], label: null, glazing: null }
+          const base: ProfileOverview = state.profileOverview ?? { imageUrl: null, features: [] }
           const arr = [...base.features]
           if (from < 0 || from >= arr.length || to < 0 || to >= arr.length) {
             return { profileOverview: base }

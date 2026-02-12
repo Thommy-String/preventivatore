@@ -2,14 +2,12 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { supabase } from '../lib/supabase'
-import { uploadQuoteItemImage } from '../lib/uploadImages'
 import { toast } from 'sonner'
 import { Card } from '../components/ui/Card'
 
 
 // Store & Quote items
 import { useQuoteStore } from '../stores/useQuoteStore'
-import type { ProfileOverview } from '../stores/useQuoteStore'
 import type { ManualTotalRow, ManualTotalSurfaceEntry, QuoteItem } from '../features/quotes/types'
 import { registry } from '../features/quotes/registry'
 import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal'
@@ -48,7 +46,6 @@ type Quote = {
     pct?: number | null;
     final?: number | null;
   } | null
-  profile_overview?: ProfileOverview | null
 }
 
 type BrandingSettings = { logo_url?: string | null }
@@ -108,26 +105,6 @@ function blobToDataURL(blob: Blob): Promise<string> {
     fr.readAsDataURL(blob);
   });
 }
-
-// Convert data URLs to File/Blob without using fetch (works on Safari too)
-function dataUrlToFile(dataUrl: string, fileName: string): File {
-  const [metadata, base64] = dataUrl.split(',');
-  if (!metadata || !base64) throw new Error('URL dati dell\'immagine non valido');
-  const mimeMatch = metadata.match(/data:(.*?)(;base64)?$/i);
-  const mimeType = mimeMatch?.[1] ?? 'application/octet-stream';
-  const binary = atob(base64);
-  const buffer = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    buffer[i] = binary.charCodeAt(i);
-  }
-  if (typeof File === 'function') {
-    return new File([buffer], fileName, { type: mimeType });
-  }
-  const blob = new Blob([buffer], { type: mimeType });
-  (blob as any).name = fileName;
-  return blob as File;
-}
-
 
 export default function Editor() {
   const { id } = useParams()
@@ -289,8 +266,6 @@ export default function Editor() {
   const [discountMode, setDiscountMode] = useState<'pct' | 'final' | null>(null);
   const [discountPct, setDiscountPct] = useState<number | null>(null);       // es. 10 = 10%
   const [discountFinal, setDiscountFinal] = useState<number | null>(null);   // nuovo totale (IVA esclusa)
-  const [isMigratingImages, setIsMigratingImages] = useState(false);
-  const migrationFailuresRef = useRef<Set<string>>(new Set());
 
   // Persist discount to DB whenever it changes (so it survives reloads and is visible on other devices)
   useEffect(() => {
@@ -441,33 +416,16 @@ export default function Editor() {
     const rawDraft = overrideDraft ?? draft
     if (!rawDraft) return
     let toSave: any = { ...rawDraft }
-    const quoteIdStr = quote?.id ? String(quote.id) : null
 
     const pickedFile: File | undefined = (toSave as any).__pickedFile
     if (pickedFile) {
-      let uploaded: string | null = null
-      if (quoteIdStr) {
-        try {
-          uploaded = await uploadQuoteItemImage(pickedFile, quoteIdStr)
-        } catch (err) {
-          console.warn('Upload file personalizzato fallito', err)
-        }
-      }
       try {
-        if (uploaded) {
-          toSave.image_url = uploaded
-          // @ts-ignore
-          toSave.__previewUrl = uploaded
-          // @ts-ignore
-          delete toSave.__needsUpload
-        } else {
-          const dataUrl = await blobToDataURL(pickedFile)
-          toSave.image_url = dataUrl
-          // @ts-ignore
-          toSave.__previewUrl = dataUrl
-          // @ts-ignore
-          toSave.__needsUpload = 'user-file'
-        }
+        const dataUrl = await blobToDataURL(pickedFile)
+        toSave.image_url = dataUrl
+        // @ts-ignore
+        toSave.__previewUrl = dataUrl
+        // @ts-ignore
+        delete toSave.__needsUpload
       } catch (err: any) {
         console.warn('Conversione file → data URL fallita', err)
       } finally {
@@ -517,36 +475,6 @@ export default function Editor() {
         delete toSave.__needsUpload
       } catch (e) {
         console.warn('Rasterizzazione finestra → PNG fallita', e)
-      }
-    }
-
-    // --- Se rimangono data URL (es. vecchie voci), prova a caricarle su storage ---
-    if (
-      typeof toSave.image_url === 'string' &&
-      toSave.image_url.startsWith('data:') &&
-      // @ts-ignore
-      (
-        // @ts-ignore
-        toSave.__needsUpload === 'user-file' ||
-        // support legacy boolean flag
-        // @ts-ignore
-        toSave.__needsUpload === true
-      ) &&
-      quoteIdStr
-    ) {
-      try {
-        const fileName = `item-${toSave.id || Date.now()}.png`
-        const file = dataUrlToFile(String(toSave.image_url), fileName)
-        const uploaded = await uploadQuoteItemImage(file, quoteIdStr)
-        if (uploaded) {
-          toSave.image_url = uploaded
-          // @ts-ignore
-          toSave.__previewUrl = uploaded
-          // @ts-ignore
-          delete toSave.__needsUpload
-        }
-      } catch (e) {
-        console.warn('Upload immagine da data URL fallito', e)
       }
     }
 
@@ -755,8 +683,6 @@ export default function Editor() {
         profileOverview: profileOverview
           ? {
               imageUrl: profileOverview.imageUrl ?? null,
-              label: profileOverview.label ?? null,
-              glazing: profileOverview.glazing ?? null,
               features: (profileOverview.features || []).map(f => ({
                 eyebrow: f.eyebrow,
                 title: f.title,
@@ -845,63 +771,6 @@ export default function Editor() {
   }, [quote])
 
   useEffect(() => {
-    if (!quote?.id) return
-    if (isMigratingImages) return
-    const arr: any[] = Array.isArray(items) ? items : []
-    const needUpload = arr
-      .map((item, idx) => ({ item, idx }))
-      .filter(({ item, idx }) => {
-        const flag = (item as any)?.__needsUpload
-        const wantsUpload = flag === 'user-file' || flag === true
-        if (!wantsUpload) return false
-        const raw = typeof item?.image_url === 'string' ? item.image_url : null
-        if (!raw || !raw.startsWith('data:')) return false
-        const key = String(item?.id ?? `idx-${idx}`)
-        return !migrationFailuresRef.current.has(key)
-      })
-    if (needUpload.length === 0) return
-
-    let cancelled = false
-    setIsMigratingImages(true)
-
-    ;(async () => {
-      const next = arr.slice()
-      let mutated = false
-      for (const { item, idx } of needUpload) {
-        const key = String(item?.id ?? `idx-${idx}`)
-        try {
-          const fileName = `item-${key}-${Date.now()}.png`
-          const file = dataUrlToFile(String(item.image_url), fileName)
-          const url = await uploadQuoteItemImage(file, String(quote.id))
-          if (cancelled) return
-          if (url) {
-            const updated: any = { ...(item as any), image_url: url, __previewUrl: (item as any).__previewUrl ?? url }
-            delete updated.__needsUpload
-            next[idx] = updated
-            mutated = true
-          } else {
-            migrationFailuresRef.current.add(key)
-          }
-        } catch (err) {
-          migrationFailuresRef.current.add(key)
-          console.warn('Migrazione immagine base64 fallita', err)
-        }
-      }
-      if (!cancelled && mutated) {
-        setItems(next as any)
-      }
-      if (!cancelled) {
-        setIsMigratingImages(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      setIsMigratingImages(false)
-    }
-  }, [quote?.id, items, isMigratingImages, setItems])
-
-  useEffect(() => {
     if (!quote) return
     if (!termsDoc.text) return
     if (quote.terms === termsDoc.text) return
@@ -910,56 +779,31 @@ export default function Editor() {
 
   useEffect(() => {
     if (!quote) return
-    if (isMigratingImages) return
-
     const entries = Array.isArray(items)
       ? items.map((it: any, idx: number) => ({
           item: it,
           key: String(it?.id ?? `idx-${idx}`),
-          image: typeof it?.image_url === 'string' ? it.image_url : null,
-          needsUpload: (it?.__needsUpload === 'user-file' || it?.__needsUpload === true),
         }))
       : []
-
-    const pendingDataUpload = entries.some(
-      ({ image, key, needsUpload }) =>
-        needsUpload && !!image && image.startsWith('data:') && !migrationFailuresRef.current.has(key)
-    )
-    if (pendingDataUpload) return
 
     // Sanitize items before persistere: drop transient fields e URL temporanei
     const payload = entries.map(({ item }) => {
       if (!item || typeof item !== 'object') return item
       const { __pickedFile, __previewUrl, __needsUpload, ...rest } = item as any
-      if (typeof rest.image_url === 'string' && (rest.image_url.startsWith('blob:') || rest.image_url.startsWith('data:'))) {
+      if (typeof rest.image_url === 'string') {
         delete rest.image_url
       }
       return rest
     })
     debouncedSave({ items_json: payload } as any)
-  }, [items, isMigratingImages])
+  }, [items])
 
   useEffect(() => {
     if (!quote) return
-
     const po = profileOverview
-    const hasImage = typeof po?.imageUrl === 'string' && po.imageUrl.trim().length > 0
-    const hasFeatures = Array.isArray(po?.features) && po.features.length > 0
-    const payload = hasImage || hasFeatures
-      ? {
-          imageUrl: hasImage ? po!.imageUrl : null,
-          features: hasFeatures ? po!.features : [],
-          label: po?.label ?? null,
-          glazing: po?.glazing ?? null,
-        }
-      : null
-
-    const prev = quote.profile_overview ?? null
-    const same = JSON.stringify(prev) === JSON.stringify(payload)
-    if (same) return
-
-    debouncedSave({ profile_overview: payload } as any)
-  }, [profileOverview, quote?.id])
+    const hasContent = !!po?.imageUrl || (Array.isArray(po?.features) && po.features.length > 0)
+    debouncedSave({ profile_overview: hasContent ? po : null } as any)
+  }, [profileOverview])
 
   // --- Autosave helpers ---
   function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {

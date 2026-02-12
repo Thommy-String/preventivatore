@@ -316,15 +316,14 @@ function WindowSvg({ cfg }: WindowSvgProps) {
             const sashGlazing = col.glazing ?? glazing;
 
             // Anta: 3 livelli di rettangoli (Telaio Anta -> Fermavetro -> Vetro)
-            // Il telaio anta usa fill senza stroke; i bordi vengono disegnati separatamente
-            // così dove due ante si toccano c'è una sola linea
             acc.nodes.push(
                 <g key={`sash-group-${rowIdx}-${colIdx}`}>
-                    {/* 1. Telaio Anta (Colorato, senza bordo) */}
+                    {/* 1. Telaio Anta (Colorato, bordo più spesso) */}
                     <rect 
                         x={sx} y={sy} width={sw} height={sh} 
                         fill={frameColor} 
-                        stroke="none"
+                        stroke={TECH_STYLE.FRAME_STROKE} 
+                        strokeWidth={TECH_STYLE.STROKE_WIDTH_SASH} 
                     />
                     
                     {/* 2. Fermavetro (Colorato, bordo medio) */}
@@ -348,29 +347,6 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     )}
                 </g>
             );
-
-            // Bordi singoli dell'anta: solo i lati esterni e le linee centrali tra ante
-            {
-                const contourSW = TECH_STYLE.STROKE_WIDTH_SASH;
-                const lines: React.ReactNode[] = [];
-                // Bordo superiore
-                lines.push(<line key={`sash-top-${rowIdx}-${colIdx}`} x1={sx} y1={sy} x2={sx + sw} y2={sy} stroke={TECH_STYLE.FRAME_STROKE} strokeWidth={contourSW} />);
-                // Bordo inferiore
-                lines.push(<line key={`sash-bot-${rowIdx}-${colIdx}`} x1={sx} y1={sy + sh} x2={sx + sw} y2={sy + sh} stroke={TECH_STYLE.FRAME_STROKE} strokeWidth={contourSW} />);
-                // Bordo sinistro: solo sulla prima anta della riga
-                if (colIdx === 0) {
-                    lines.push(<line key={`sash-left-${rowIdx}-${colIdx}`} x1={sx} y1={sy} x2={sx} y2={sy + sh} stroke={TECH_STYLE.FRAME_STROKE} strokeWidth={contourSW} />);
-                }
-                // Bordo destro: solo sull'ultima anta della riga
-                if (colIdx === row.cols.length - 1) {
-                    lines.push(<line key={`sash-right-${rowIdx}-${colIdx}`} x1={sx + sw} y1={sy} x2={sx + sw} y2={sy + sh} stroke={TECH_STYLE.FRAME_STROKE} strokeWidth={contourSW} />);
-                }
-                // Linea di separazione tra ante: una sola linea al confine
-                if (colIdx > 0) {
-                    lines.push(<line key={`sash-sep-${rowIdx}-${colIdx}`} x1={sx} y1={sy} x2={sx} y2={sy + sh} stroke={TECH_STYLE.FRAME_STROKE} strokeWidth={contourSW} />);
-                }
-                acc.nodes.push(<g key={`sash-borders-${rowIdx}-${colIdx}`}>{lines}</g>);
-            }
 
             const bars = col.leaf?.horizontalBars ?? [];
             if (bars.length && pxPerMmRow > 0) {
@@ -572,7 +548,23 @@ function WindowSvg({ cfg }: WindowSvgProps) {
         });
 
         if (rowIdx < rows.length - 1) {
-            // Le ante delle righe adiacenti si toccano direttamente, nessuna linea o gap visibile
+            const ty = y0 + rowH;
+            const rectY = ty - (mullion_mm / 2);
+            const rectX = frame_mm;
+            const rectW = innerW;
+            const rectH = mullion_mm;
+
+            // Riempimento traversa (il contorno viene dai bordi delle ante adiacenti)
+            acc.nodes.push(
+                <rect
+                    key={`hz-fill-${rowIdx}`}
+                    x={rectX}
+                    y={rectY}
+                    width={rectW}
+                    height={rectH}
+                    fill={frameColor}
+                />
+            );
         }
 
         if (colLabels.length > 0 && rowHasNewSegment) {
@@ -615,10 +607,6 @@ function WindowSvg({ cfg }: WindowSvgProps) {
 
     const rowHeightSegments = rows.length > 1
         ? (() => {
-            // Usa i valori reali inseriti dall'utente (height_ratio = mm), non le coordinate del disegno
-            // Arrotonda a 0 decimali perché le altezze sono in mm interi
-            const rowHeightLabels = distributeWidths(height_mm, rows.map(r => r.height_ratio), 0);
-
             const boundaries: number[] = [0]; // always start at 0 (top perimeter)
             for (let i = 0; i < drawing.rowDimensions.length - 1; i++) {
                 const currentBottom = drawing.rowDimensions[i].bottom;
@@ -632,11 +620,25 @@ function WindowSvg({ cfg }: WindowSvgProps) {
             for (let i = 0; i < boundaries.length - 1; i++) {
                 const start = boundaries[i];
                 const end = boundaries[i + 1];
+                // Calculate label based on distance (mm)
+                // Note: The drawing logic uses `pxPerMmRow` which might theoretically vary if rows have different scaling, 
+                // but usually scale is uniform. We can approximate mm from px or use the known mm heights.
+                // However, since we are redefining the "section" to include frame/mullion parts, 
+                // the simplest way is to assume uniform scale for Y: height_mm / height_px?
+                // Actually `drawing` has `offsetMm` but that's cumulative.
+                // Better: just calc diff in Px and convert to Mm using global scale or Ratio?
+                // Or just use the visual height ratio.
+                const distPx = end - start;
+                // height_mm corresponds to height_mm. so scale is 1:1 in the SVG coordinate system if viewbox matches.
+                // Wait, viewBox uses width_mm/height_mm. So 1 unit = 1 mm.
+                // So start/end are already in mm units (because we draw rects at x=frame_mm etc).
+                // Yes, `y0` starts at `frame_mm`. All coordinates are 1-1 with mm.
+                const distMm = distPx; 
                 segs.push({
                     startPx: start,
                     endPx: end,
                     midPx: (start + end) / 2,
-                    label: formatMeasure(rowHeightLabels[i], sashMeasureDecimals)
+                    label: formatMeasure(distMm, sashMeasureDecimals)
                 });
             }
             return segs;

@@ -199,7 +199,17 @@ export function detailPairs(it: any): Array<[string, string]> {
 
   const uwRaw = pickFirst(it, ['uw'])
   const uwLabel = uwRaw !== undefined && uwRaw !== null && String(uwRaw).trim() !== ''
-    ? `<= ${String(uwRaw)} W/m²K`
+    ? `<= ${String(uwRaw)} W/m2K`
+    : undefined
+
+  const showHandlePosition = kindLower !== 'porta_interna' && kindLower !== 'porta_blindata'
+  const handlePositionLabel = showHandlePosition
+    ? (() => {
+        const v = pickFirst(it, ['handle_position'])
+        if (v === 'left') return 'Sinistra'
+        if (v === 'right') return 'Destra'
+        return v
+      })()
     : undefined
 
   const featurePairs = [
@@ -210,12 +220,7 @@ export function detailPairs(it: any): Array<[string, string]> {
     // Mostra solo se true (Sì)
     ['Serratura', pickFirst(it, ['serratura']) ? 'Sì' : undefined],
     ['Spioncino', pickFirst(it, ['spioncino']) ? 'Sì' : undefined],
-    ['Posizione maniglia', (() => {
-        const v = pickFirst(it, ['handle_position']);
-        if (v === 'left') return 'Sinistra';
-        if (v === 'right') return 'Destra';
-        return v;
-    })()],
+    ['Posizione maniglia', handlePositionLabel],
   ] as const
 
   for (const [label, value] of featurePairs) {

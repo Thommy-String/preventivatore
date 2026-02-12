@@ -296,7 +296,7 @@ export const PortaInternaSvg: React.FC<Props> = ({ item, handle_color }) => {
         fill={strokeColor}
         fontFamily="sans-serif"
       >
-        {Math.round(W)}
+        {Math.round(leafW)}
       </text>
       <text
         x={-80}
@@ -308,7 +308,7 @@ export const PortaInternaSvg: React.FC<Props> = ({ item, handle_color }) => {
         transform={`rotate(-90 -80 ${H / 2})`}
         fontFamily="sans-serif"
       >
-        {Math.round(H)}
+        {Math.round(leafH)}
       </text>
     </svg>
   );

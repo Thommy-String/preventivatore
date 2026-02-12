@@ -12,7 +12,7 @@ export const makePortaInternaDefaults = (): PortaInternaItem => ({
   notes: null,
   reference: "",
   custom_fields: [],
-  color: "Bianco", // bianca di base
+  color: "#fff", // bianca di base
   title: "Porta Interna",
   apertura: "battente",
   handle_position: "right",
