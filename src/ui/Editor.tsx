@@ -9,6 +9,7 @@ import { Card } from '../components/ui/Card'
 
 // Store & Quote items
 import { useQuoteStore } from '../stores/useQuoteStore'
+import type { ProfileOverview } from '../stores/useQuoteStore'
 import type { ManualTotalRow, ManualTotalSurfaceEntry, QuoteItem } from '../features/quotes/types'
 import { registry } from '../features/quotes/registry'
 import { ProductPickerModal } from '../features/quotes/modals/ProductPickerModal'
@@ -47,6 +48,7 @@ type Quote = {
     pct?: number | null;
     final?: number | null;
   } | null
+  profile_overview?: ProfileOverview | null
 }
 
 type BrandingSettings = { logo_url?: string | null }
@@ -753,6 +755,8 @@ export default function Editor() {
         profileOverview: profileOverview
           ? {
               imageUrl: profileOverview.imageUrl ?? null,
+              label: profileOverview.label ?? null,
+              glazing: profileOverview.glazing ?? null,
               features: (profileOverview.features || []).map(f => ({
                 eyebrow: f.eyebrow,
                 title: f.title,
@@ -937,10 +941,25 @@ export default function Editor() {
 
   useEffect(() => {
     if (!quote) return
+
     const po = profileOverview
-    const hasContent = !!po?.imageUrl || (Array.isArray(po?.features) && po.features.length > 0)
-    debouncedSave({ profile_overview: hasContent ? po : null } as any)
-  }, [profileOverview])
+    const hasImage = typeof po?.imageUrl === 'string' && po.imageUrl.trim().length > 0
+    const hasFeatures = Array.isArray(po?.features) && po.features.length > 0
+    const payload = hasImage || hasFeatures
+      ? {
+          imageUrl: hasImage ? po!.imageUrl : null,
+          features: hasFeatures ? po!.features : [],
+          label: po?.label ?? null,
+          glazing: po?.glazing ?? null,
+        }
+      : null
+
+    const prev = quote.profile_overview ?? null
+    const same = JSON.stringify(prev) === JSON.stringify(payload)
+    if (same) return
+
+    debouncedSave({ profile_overview: payload } as any)
+  }, [profileOverview, quote?.id])
 
   // --- Autosave helpers ---
   function updateField<K extends keyof Quote>(key: K, value: Quote[K]) {
