@@ -59,7 +59,13 @@ const BRAND_PROFILES: Record<BrandProfile['id'], BrandProfile> = {
 
 export function getActiveBrandProfile(): BrandProfile {
   const raw = String(import.meta.env.VITE_BRAND_PROFILE || 'xinfissi').trim().toLowerCase()
-  if (raw === 'ecosolution' || raw === 'eco_solutions' || raw === 'eco-solution') {
+  if (
+    raw === 'ecosolution' ||
+    raw === 'ecosolutions' ||
+    raw === 'ecosolutionsas' ||
+    raw === 'eco_solutions' ||
+    raw === 'eco-solution'
+  ) {
     return BRAND_PROFILES.ecosolution
   }
   return BRAND_PROFILES.xinfissi
