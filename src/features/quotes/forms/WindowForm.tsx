@@ -268,6 +268,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
     const [sashCountStr, setSashCountStr] = useState<Record<number, string>>({});
     const [colWidthStr, setColWidthStr] = useState<Record<string, string>>({});
     const [barOffsetStr, setBarOffsetStr] = useState<Record<string, string>>({});
+    const [handleHeightStr, setHandleHeightStr] = useState<string>('');
     const [colLocked, setColLocked] = useState<Record<string, boolean>>({});
 
     const getRowLockedMask = (rowIndex: number) => {
@@ -289,6 +290,12 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
         setWidthStr(typeof d.width_mm === 'number' ? formatMm(d.width_mm) : '');
         setHeightStr(typeof d.height_mm === 'number' ? formatMm(d.height_mm) : '');
     }, [d.width_mm, d.height_mm]);
+
+    useEffect(() => {
+        if (!grid) return;
+        const v = (grid as any).handle_height_mm;
+        setHandleHeightStr(typeof v === 'number' && Number.isFinite(v) ? formatMm(v) : '');
+    }, [grid?.handle_height_mm]);
 
     // Sync string states from grid structure/values
     useEffect(() => {
@@ -329,6 +336,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             const initialGrid: GridWindowConfig = {
                 width_mm: d.width_mm || 1200, height_mm: d.height_mm || 1500,
                 frame_mm: FRAME_MM, mullion_mm: MULLION_MM,
+                handle_color: '#ffffff',
                 rows: [{
                     height_ratio: 1,
                     cols: [{ width_ratio: 1, leaf: { state: 'fissa' }, handle: false }]
@@ -352,6 +360,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             height_mm: d.height_mm || 1500,
             frame_mm: FRAME_MM,
             mullion_mm: MULLION_MM,
+            handle_color: '#ffffff',
             rows: [{
                 height_ratio: (d.height_mm || 1500),
                 cols: [{ width_ratio: (d.width_mm || 1200), leaf: { state: 'fissa' } }]
@@ -766,7 +775,6 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                         const canHaveHandle = state !== 'fissa';
                                         const handleChecked = Boolean(col.handle);
                                         const inputId = `handle-${rowIndex}-${colIndex}`;
-                                        const currentHandleH = (grid as any).handle_height_mm;
                                         return (
                                             <div className="mt-3 space-y-2">
                                                 <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -782,22 +790,33 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                                         Maniglia
                                                     </label>
                                                 </div>
-                                                {handleChecked && (state === 'apre_sx' || state === 'apre_dx') && (
+                                                {handleChecked && (state === 'apre_sx' || state === 'apre_dx' || state === 'apre_sx+vasistas' || state === 'apre_dx+vasistas') && (
                                                     <div className="flex items-center gap-2 text-xs text-gray-500">
                                                         <span>Altezza da terra (mm)</span>
                                                         <input
                                                             className="input w-20"
                                                             type="text"
-                                                            inputMode="numeric"
-                                                            pattern="[0-9]*"
+                                                            inputMode="decimal"
+                                                            pattern="\\d+([.,]\\d{0,1})?"
                                                             placeholder={String(Math.round((grid.height_mm || 1500) / 2))}
-                                                            value={currentHandleH != null ? String(currentHandleH) : ''}
+                                                            value={handleHeightStr}
                                                             onChange={(e) => {
                                                                 const v = e.target.value;
-                                                                if (v === '' || /^\d+$/.test(v)) {
-                                                                    const num = v === '' ? undefined : Number(v);
-                                                                    handleGridChange({ handle_height_mm: num } as any);
+                                                                if (allowMmInput(v)) {
+                                                                    setHandleHeightStr(v);
                                                                 }
+                                                            }}
+                                                            onBlur={() => {
+                                                                const raw = handleHeightStr ?? '';
+                                                                if (raw === '') {
+                                                                    handleGridChange({ handle_height_mm: undefined } as any);
+                                                                    return;
+                                                                }
+                                                                const parsed = parseMmInput(raw);
+                                                                if (parsed === null) return;
+                                                                const clamped = Math.max(MIN_MM, Math.min(grid.height_mm || 1500, parsed));
+                                                                handleGridChange({ handle_height_mm: roundMm(clamped) } as any);
+                                                                setHandleHeightStr(formatMm(roundMm(clamped)));
                                                             }}
                                                             onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
                                                             onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault(); }}
@@ -988,6 +1007,22 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                                 { color: `${ral.code} ${ral.name}` }, 
                                 { frame_color: ral.hex } as any
                              );
+                        }}
+                    />
+                </div>
+
+                <div>
+                    <div className="text-xs text-gray-500 mb-1">Colore maniglia</div>
+                    <RalColorPicker
+                        previewColor={(grid as any)?.handle_color ?? '#ffffff'}
+                        labelValue={(d as any).handle_color ?? ''}
+                        onPreviewColorChange={(hex) => applyPatch({}, ({ handle_color: hex } as any))}
+                        onLabelChange={(text) => applyPatch({ handle_color: text } as any)}
+                        onRalSelect={(ral) => {
+                            applyPatch(
+                                { handle_color: `${ral.code} ${ral.name}` } as any,
+                                { handle_color: ral.hex } as any
+                            );
                         }}
                     />
                 </div>

@@ -63,6 +63,8 @@ export type GridWindowConfig = {
   showDims?: boolean
   /** altezza maniglia da terra in mm (default: metà altezza finestra) */
   handle_height_mm?: number
+  /** colore maniglia per ante finestra (hex) */
+  handle_color?: string
   /** righe della griglia: ciascuna ha un'altezza relativa e una lista di colonne con larghezze relative */
   rows: Array<{
     height_ratio: number
@@ -112,6 +114,7 @@ export type BaseItem = {
 export type WindowItem = BaseItem & {
   kind: 'finestra'
   color?: string | null
+  handle_color?: string | null
   glass?: string | null
   glass_spec?: string | null
   hinges_color?: string | null

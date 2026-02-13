@@ -60,6 +60,18 @@ function isSatin(glazing: GridWindowConfig["glazing"]) {
     return glazing === "satinato";
 }
 
+function glassFillFor(glazing: GridWindowConfig["glazing"]) {
+    switch (glazing) {
+        case 'singolo':
+            return '#EAF7FF';
+        case 'triplo':
+            return '#BFDFFF';
+        case 'doppio':
+        default:
+            return '#D6EFFF';
+    }
+}
+
 function makeFallbackCfg(): GridWindowConfig {
     return {
         width_mm: 1200,
@@ -172,19 +184,20 @@ type HandlePlacement = 'left' | 'right' | 'top' | null;
 // Questa funzione determina su quale lato dell'anta va la maniglia.
 function handlePlacementForState(state?: LeafState): HandlePlacement {
     switch (state) {
-        // Cerniere a SX (apre_sx), quindi la maniglia va sul montante DESTRO dell'anta.
+        // Coerenza visiva con linea tratteggiata di apertura: lato dove la traccia "tocca" il profilo.
         case 'apre_sx':
-        case 'scorrevole_sx':
         case 'apre_sx+vasistas':
-            return 'right'; 
-        // Cerniere a DX (apre_dx), quindi la maniglia va sul montante SINISTRO dell'anta.
+            return 'left';
         case 'apre_dx':
-        case 'scorrevole_dx':
         case 'apre_dx+vasistas':
-            return 'left'; 
-        // Apertura a vasistas, la maniglia va sul traverso SUPERIORE dell'anta.
+            return 'right';
+        case 'scorrevole_sx':
+            return 'left';
+        case 'scorrevole_dx':
+            return 'right';
+        // Vasistas puro: maniglia sul traverso superiore, orientata orizzontale verso destra.
         case 'vasistas':
-            return 'top'; 
+            return 'top';
         default:
             return null;
     }
@@ -344,7 +357,7 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     {/* 3. Vetro (Azzurro, bordo sottile) */}
                     <rect 
                         x={gx} y={gy} width={gw} height={gh} 
-                        fill={isSatin(sashGlazing) ? '#E0E0E0' : TECH_STYLE.GLASS_FILL} 
+                        fill={isSatin(sashGlazing) ? '#E0E0E0' : glassFillFor(sashGlazing)} 
                         stroke={TECH_STYLE.GLASS_STROKE || TECH_STYLE.FRAME_STROKE} 
                         strokeWidth={TECH_STYLE.STROKE_WIDTH_GLASS} 
                     />
@@ -436,13 +449,18 @@ function WindowSvg({ cfg }: WindowSvgProps) {
 
                 // Dimensioni più grandi e proporzionali alla finestra
                 const minDim = Math.min(width_mm, height_mm);
-                const handleBodyWidth = Math.max(6, minDim * 0.012);
-                const handleBodyHeight = Math.max(60, minDim * 0.08);
-                const handleLeverWidth = Math.max(12, minDim * 0.018);
-                const handleLeverHeight = Math.max(5, minDim * 0.012);
+                const handleBodyWidth = Math.max(7, minDim * 0.0125);
+                const handleBodyHeight = Math.max(74, minDim * 0.108);
+                const handleLeverWidth = Math.max(14, minDim * 0.022);
+                const handleLeverHeight = Math.max(28, minDim * 0.048);
                 const handleRx = 0; // Square handle for technical drawing
+                const topBarY = -handleBodyHeight * 0.64;
+                const topBarCenterOffset = topBarY + handleLeverHeight / 2;
+                const stemWidth = Math.max(6, handleBodyWidth * 0.86);
+                const stemY = topBarY + handleLeverHeight * 0.3;
+                const stemHeight = handleBodyHeight * 0.92;
                 // Maniglia bianca con contorno nero (stile tecnico)
-                const handleColor = '#ffffff'; 
+                const handleColor = String((safe as any).handle_color || '#ffffff');
                 const handleStroke = outlineColor;
                 const handleStrokeW = Math.max(0.5, strokeWidth * 0.6);
 
@@ -450,14 +468,15 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                 const configHandleH = (safe as any).handle_height_mm;
 
                 if (placement === 'left' || placement === 'right') {
-                    // Posizione verticale: configHandleH da terra (dal basso della finestra)
-                    // oppure centro dell'anta
+                    // Posizione verticale: la quota fa riferimento al rettangolo superiore (top bar),
+                    // non all'intera altezza della maniglia/stanghetta.
                     let cy: number;
                     if (typeof configHandleH === 'number' && configHandleH > 0) {
-                        // handle_height_mm è da terra → dal basso della finestra
-                        cy = height_mm - configHandleH;
-                        // Clamp dentro l'anta corrente
-                        cy = Math.max(y0 + sashProfileW + handleBodyHeight / 2, Math.min(y0 + rowH - sashProfileW - handleBodyHeight / 2, cy));
+                        const targetBarCenterY = height_mm - configHandleH;
+                        const minBarCenterY = y0 + sashProfileW + handleLeverHeight / 2;
+                        const maxBarCenterY = y0 + rowH - sashProfileW - handleLeverHeight / 2;
+                        const clampedBarCenterY = Math.max(minBarCenterY, Math.min(maxBarCenterY, targetBarCenterY));
+                        cy = clampedBarCenterY - topBarCenterOffset;
                     } else {
                         cy = y0 + rowH / 2;
                     }
@@ -467,36 +486,22 @@ function WindowSvg({ cfg }: WindowSvgProps) {
 
                     handleSvg = (
                         <g transform={`translate(${cx}, ${cy})`}>
-                            {/* Rosetta (base) */}
                             <rect
                                 x={-handleLeverWidth / 2}
-                                y={-handleBodyHeight * 0.15}
+                                y={topBarY}
                                 width={handleLeverWidth}
-                                height={handleBodyHeight * 0.3}
+                                height={handleLeverHeight}
                                 rx={handleRx}
                                 ry={handleRx}
                                 fill={handleColor}
                                 stroke={handleStroke}
                                 strokeWidth={handleStrokeW}
                             />
-                            {/* Corpo principale della maniglia (rettangolo verticale) */}
                             <rect
-                                x={-handleBodyWidth / 2}
-                                y={-handleBodyHeight / 2}
-                                width={handleBodyWidth}
-                                height={handleBodyHeight}
-                                rx={handleRx}
-                                ry={handleRx}
-                                fill={handleColor}
-                                stroke={handleStroke}
-                                strokeWidth={handleStrokeW}
-                            />
-                            {/* Leva orizzontale verso l'alto */}
-                            <rect
-                                x={-handleLeverWidth / 2}
-                                y={-handleBodyHeight / 2 - handleLeverHeight}
-                                width={handleLeverWidth}
-                                height={handleLeverHeight + handleRx}
+                                x={-stemWidth / 2}
+                                y={stemY}
+                                width={stemWidth}
+                                height={stemHeight}
                                 rx={handleRx}
                                 ry={handleRx}
                                 fill={handleColor}
@@ -506,47 +511,35 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                         </g>
                     );
                 } else if (placement === 'top') {
-                    const cx = startX + colW / 2;
+                    const cx = startX + colW / 2 - topBarCenterOffset;
                     const cy = y0 + sashProfileW * 0.5;
 
                     handleSvg = (
                         <g transform={`translate(${cx}, ${cy})`}>
-                            {/* Rosetta */}
-                            <rect
-                                x={-handleBodyHeight * 0.15}
-                                y={-handleLeverWidth / 2}
-                                width={handleBodyHeight * 0.3}
-                                height={handleLeverWidth}
-                                rx={handleRx}
-                                ry={handleRx}
-                                fill={handleColor}
-                                stroke={handleStroke}
-                                strokeWidth={handleStrokeW}
-                            />
-                            {/* Corpo principale (orizzontale) */}
-                            <rect
-                                x={-handleBodyHeight / 2}
-                                y={-handleBodyWidth / 2}
-                                width={handleBodyHeight}
-                                height={handleBodyWidth}
-                                rx={handleRx}
-                                ry={handleRx}
-                                fill={handleColor}
-                                stroke={handleStroke}
-                                strokeWidth={handleStrokeW}
-                            />
-                            {/* Leva verso destra */}
-                            <rect
-                                x={handleBodyHeight / 2 - handleRx}
-                                y={-handleLeverWidth / 2}
-                                width={handleLeverHeight + handleRx}
-                                height={handleLeverWidth}
-                                rx={handleRx}
-                                ry={handleRx}
-                                fill={handleColor}
-                                stroke={handleStroke}
-                                strokeWidth={handleStrokeW}
-                            />
+                            <g transform="rotate(-90)">
+                                <rect
+                                    x={-handleLeverWidth / 2}
+                                    y={topBarY}
+                                    width={handleLeverWidth}
+                                    height={handleLeverHeight}
+                                    rx={handleRx}
+                                    ry={handleRx}
+                                    fill={handleColor}
+                                    stroke={handleStroke}
+                                    strokeWidth={handleStrokeW}
+                                />
+                                <rect
+                                    x={-stemWidth / 2}
+                                    y={stemY}
+                                    width={stemWidth}
+                                    height={stemHeight}
+                                    rx={handleRx}
+                                    ry={handleRx}
+                                    fill={handleColor}
+                                    stroke={handleStroke}
+                                    strokeWidth={handleStrokeW}
+                                />
+                            </g>
                         </g>
                     );
                 }
