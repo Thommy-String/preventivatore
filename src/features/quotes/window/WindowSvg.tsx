@@ -553,23 +553,7 @@ function WindowSvg({ cfg }: WindowSvgProps) {
         });
 
         if (rowIdx < rows.length - 1) {
-            const ty = y0 + rowH;
-            const rectY = ty - (mullion_mm / 2);
-            const rectX = frame_mm;
-            const rectW = innerW;
-            const rectH = mullion_mm;
-
-            // Riempimento traversa (il contorno viene dai bordi delle ante adiacenti)
-            acc.nodes.push(
-                <rect
-                    key={`hz-fill-${rowIdx}`}
-                    x={rectX}
-                    y={rectY}
-                    width={rectW}
-                    height={rectH}
-                    fill={frameColor}
-                />
-            );
+            // Nessun riempimento della traversa orizzontale: lasciamo solo i contorni naturali delle ante.
         }
 
         if (colLabels.length > 0 && rowHasNewSegment) {
@@ -614,6 +598,10 @@ function WindowSvg({ cfg }: WindowSvgProps) {
 
     const rowHeightSegments = rows.length > 1
         ? (() => {
+            const logicalRowHeights = rows.map((row) => {
+                const ratio = Number.isFinite(row.height_ratio) && row.height_ratio > 0 ? row.height_ratio : 0;
+                return (ratio / Math.max(totalRowRatios, 1)) * height_mm;
+            });
             const boundaries: number[] = [0]; // always start at 0 (top perimeter)
             for (let i = 0; i < drawing.rowDimensions.length - 1; i++) {
                 const currentBottom = drawing.rowDimensions[i].bottom;
@@ -627,25 +615,12 @@ function WindowSvg({ cfg }: WindowSvgProps) {
             for (let i = 0; i < boundaries.length - 1; i++) {
                 const start = boundaries[i];
                 const end = boundaries[i + 1];
-                // Calculate label based on distance (mm)
-                // Note: The drawing logic uses `pxPerMmRow` which might theoretically vary if rows have different scaling, 
-                // but usually scale is uniform. We can approximate mm from px or use the known mm heights.
-                // However, since we are redefining the "section" to include frame/mullion parts, 
-                // the simplest way is to assume uniform scale for Y: height_mm / height_px?
-                // Actually `drawing` has `offsetMm` but that's cumulative.
-                // Better: just calc diff in Px and convert to Mm using global scale or Ratio?
-                // Or just use the visual height ratio.
-                const distPx = end - start;
-                // height_mm corresponds to height_mm. so scale is 1:1 in the SVG coordinate system if viewbox matches.
-                // Wait, viewBox uses width_mm/height_mm. So 1 unit = 1 mm.
-                // So start/end are already in mm units (because we draw rects at x=frame_mm etc).
-                // Yes, `y0` starts at `frame_mm`. All coordinates are 1-1 with mm.
-                const distMm = distPx; 
+                const logicalMm = logicalRowHeights[i] ?? (end - start);
                 segs.push({
                     startPx: start,
                     endPx: end,
                     midPx: (start + end) / 2,
-                    label: formatMeasure(distMm, sashMeasureDecimals)
+                    label: formatMeasure(logicalMm, sashMeasureDecimals)
                 });
             }
             return segs;
