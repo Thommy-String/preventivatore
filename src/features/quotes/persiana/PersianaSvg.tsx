@@ -69,7 +69,7 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
   const frameYInset = innerH * 0.0625
   const frameH = innerH * 0.875
 
-  const targetSlatHeight = Math.max(64, Math.min(120, height * 0.06))
+  const slatGap = 50  // altezza fissa lamella in unità disegno (~50mm reali)
   const slatStroke = Math.max(0.6, strokeWidth * 0.7)
   const innerBorderStroke = Math.max(0.5, strokeWidth * 0.6)
   const innerInsetBorderStroke = Math.max(0.6, strokeWidth * 0.6)
@@ -146,9 +146,8 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
                 const areaTop = innerFrameY + innerInsetBorderInset
                 const areaBot = innerFrameY + innerFrameH - innerInsetBorderInset
                 const areaH = areaBot - areaTop
-                const nSlats = Math.max(1, Math.round(areaH / targetSlatHeight))
+                const nSlats = Math.max(1, Math.round(areaH / slatGap))
                 const slatH = areaH / nSlats
-                const thickSlatStroke = Math.max(slatStroke, slatH * 0.09)
                 for (let i = 0; i < nSlats; i++) {
                   const y = areaTop + i * slatH
                   lines.push(
@@ -160,16 +159,16 @@ export default function PersianaSvg({ cfg, stroke = '#000000', className }: Pers
                         height={slatH}
                         fill={`url(#${slatGradId})`}
                         stroke={stroke}
-                        strokeWidth={thickSlatStroke}
+                        strokeWidth={slatStroke}
                       />
                       {/* Highlight luce superiore */}
                       <line
                         x1={innerFrameX + slatInset + 1}
-                        y1={y + thickSlatStroke}
+                        y1={y + slatStroke}
                         x2={innerFrameX + innerFrameW - slatInset - 1}
-                        y2={y + thickSlatStroke}
+                        y2={y + slatStroke}
                         stroke={cSlatHighlight}
-                        strokeWidth={thickSlatStroke * 0.35}
+                        strokeWidth={slatStroke * 0.4}
                         strokeOpacity={0.5}
                       />
                     </g>
