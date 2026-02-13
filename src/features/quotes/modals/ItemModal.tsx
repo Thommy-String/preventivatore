@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, type ChangeEvent } from "react";
 import { Button } from "../../../components/ui/Button";
 import { registry } from "../registry";
 import type { QuoteItem } from "../types";
@@ -128,6 +128,7 @@ type Props = {
 };
 
 export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Props) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const entry = registry[draft.kind];
   if (!entry) return null;
 
@@ -151,17 +152,66 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
   const Title = editingId ? `Modifica ${entry.label}` : `Nuova ${entry.label}`;
   const Form = (draft.kind === "custom" ? CustomForm : entry.Form) as any;
 
+  const draftImage =
+    (typeof (draft as any)?.__previewUrl === "string" && (draft as any).__previewUrl) ||
+    (typeof (draft as any)?.image_url === "string" && (draft as any).image_url) ||
+    "";
+  const hasManualOverride = Boolean((draft as any)?.options?.manual_image_override);
+  const showUploadedPreview = Boolean(draftImage) && (draft.kind === "custom" || hasManualOverride || Boolean((draft as any)?.__pickedFile));
+
+  const onPickFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      e.target.value = "";
+      return;
+    }
+
+    const prev = (draft as any)?.__previewUrl as string | undefined;
+    if (typeof prev === "string" && prev.startsWith("blob:")) {
+      URL.revokeObjectURL(prev);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    onChange({
+      ...(draft as any),
+      __pickedFile: file,
+      __previewUrl: previewUrl,
+      image_url: previewUrl,
+      options: {
+        ...((draft as any)?.options || {}),
+        manual_image_override: true,
+      },
+    } as any);
+    e.target.value = "";
+  };
+
+  const clearManualImage = () => {
+    const prev = (draft as any)?.__previewUrl as string | undefined;
+    if (typeof prev === "string" && prev.startsWith("blob:")) {
+      URL.revokeObjectURL(prev);
+    }
+    const next: any = { ...(draft as any) };
+    delete next.__pickedFile;
+    delete next.__previewUrl;
+    next.image_url = undefined;
+    next.options = { ...(next.options || {}) };
+    delete next.options.manual_image_override;
+    onChange(next);
+  };
+
   // --- SALVATAGGIO CON GENERAZIONE PNG SOLO AL CLICK ---
   async function handleSave() {
     let finalDraft = { ...draft };
+    const manualOverride = Boolean((finalDraft as any)?.options?.manual_image_override || (finalDraft as any)?.__pickedFile);
 
     try {
       let blob: Blob | null = null;
 
-      if (isWindow) {
+      if (!manualOverride && isWindow) {
         const grid = (finalDraft as any).options.gridWindow;
         blob = await gridWindowToPngBlob(grid, 900, 900);
-      } else if (isCassonetto) {
+      } else if (!manualOverride && isCassonetto) {
         const cfg = (finalDraft as any)?.options?.cassonetto ?? buildCassonettoCfgFromDraft(finalDraft);
         const blobCass = await cassonettoToPngBlob(cfg, 900, 900);
         const dataUrlCass = await blobToDataUrl(blobCass);
@@ -171,7 +221,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           __previewUrl: dataUrlCass,
           image_url: dataUrlCass,
         } as QuoteItem;
-      } else if (isPersiana) {
+      } else if (!manualOverride && isPersiana) {
         const cfg = {
           width_mm: Number((finalDraft as any)?.width_mm) || 1000,
           height_mm: Number((finalDraft as any)?.height_mm) || 1400,
@@ -185,7 +235,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           __previewUrl: dataUrlPers,
           image_url: dataUrlPers,
         } as QuoteItem;
-      } else if (isTapparella) {
+      } else if (!manualOverride && isTapparella) {
         const cfg = {
           width_mm: Number((finalDraft as any)?.width_mm) || 1000,
           height_mm: Number((finalDraft as any)?.height_mm) || 1400,
@@ -198,7 +248,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           __previewUrl: dataUrlTap,
           image_url: dataUrlTap,
         } as QuoteItem;
-      } else if (isPortaBlindata) {
+      } else if (!manualOverride && isPortaBlindata) {
          const blobDoor = await portaBlindataToPngBlob(finalDraft as any, 900, 900);
          const dataUrlDoor = await blobToDataUrl(blobDoor);
          finalDraft = {
@@ -207,7 +257,7 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
            image_url: dataUrlDoor,
            __needsUpload: true,
          } as QuoteItem;
-      } else if (isPortaInterna) {
+      } else if (!manualOverride && isPortaInterna) {
          try {
            console.debug('Generazione PNG porta interna: start', finalDraft?.width_mm, finalDraft?.height_mm)
            blob = await portaInternaToPngBlob(finalDraft as any);
@@ -274,12 +324,44 @@ export function ItemModal({ draft, editingId, onChange, onCancel, onSave }: Prop
           {/* Body */}
           <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 transition-all">
             {/* Anteprima sempre a sinistra */}
-            <div className="order-1 md:order-1 w-full flex items-center justify-center p-2 bg-gray-50 rounded border">
+            <div className="order-1 md:order-1 relative w-full flex items-center justify-center p-2 bg-gray-50 rounded border">
+              <div className="absolute top-2 left-2 z-10 flex gap-2">
+                <button
+                  type="button"
+                  className="h-8 px-3 rounded-full border border-gray-300 bg-white/90 backdrop-blur-sm text-xs font-medium text-gray-700 hover:bg-white shadow-sm inline-flex items-center gap-1.5"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <circle cx="9" cy="10" r="1.6" />
+                    <path d="M21 15l-4.5-4.5a1 1 0 00-1.4 0L9 16.5" />
+                  </svg>
+                  <span>{showUploadedPreview ? 'Sostituisci foto' : 'Carica foto'}</span>
+                </button>
+                {showUploadedPreview ? (
+                  <button
+                    type="button"
+                    className="h-8 px-3 rounded-full border border-gray-300 bg-white/90 backdrop-blur-sm text-xs font-medium text-gray-700 hover:bg-white shadow-sm"
+                    onClick={clearManualImage}
+                  >
+                    Ripristina base
+                  </button>
+                ) : null}
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={onPickFile}
+                />
+              </div>
               <div
                 className="relative w-full flex items-center justify-center overflow-hidden max-h-[70vh] min-h-[400px]"
                 style={{ aspectRatio }}
               >
-                {isWindow ? (
+                {showUploadedPreview ? (
+                  <img src={draftImage} alt={entry?.label || 'Anteprima'} className="max-w-full max-h-full object-contain" />
+                ) : isWindow ? (
                   <WindowSvg cfg={(draft as any).options.gridWindow} stroke={(draft as any).options?.gridWindow?.frame_color ?? (draft as any).color ?? '#222'} />
                 ) : isCassonetto ? (
                   (typeof (draft as any)?.image_url === 'string' && (draft as any).image_url.startsWith('data:')) ? (

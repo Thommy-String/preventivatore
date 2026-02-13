@@ -20,6 +20,7 @@ import { TERMS_PROFILES, buildTermsDocument } from '../content/terms'
 import type { TermsProfile } from '../content/terms'
 import { normalizeSurfaceEntries } from '../features/quotes/utils/surfaceSelections'
 import { getActiveBrandProfile } from '../config/brand'
+import { uploadQuoteItemImage } from '../lib/uploadImages'
 
 // Types for the Quote header (DB)
 type Quote = {
@@ -425,16 +426,25 @@ export default function Editor() {
     let toSave: any = { ...rawDraft }
 
     const pickedFile: File | undefined = (toSave as any).__pickedFile
+    const hasManualOverride = Boolean((toSave as any)?.options?.manual_image_override)
     if (pickedFile) {
       try {
-        const dataUrl = await blobToDataURL(pickedFile)
-        toSave.image_url = dataUrl
-        // @ts-ignore
-        toSave.__previewUrl = dataUrl
+        if (quote?.id) {
+          const publicUrl = await uploadQuoteItemImage(pickedFile, String(quote.id))
+          toSave.image_url = publicUrl
+          // @ts-ignore
+          toSave.__previewUrl = publicUrl
+        } else {
+          const dataUrl = await blobToDataURL(pickedFile)
+          toSave.image_url = dataUrl
+          // @ts-ignore
+          toSave.__previewUrl = dataUrl
+        }
         // @ts-ignore
         delete toSave.__needsUpload
       } catch (err: any) {
-        console.warn('Conversione file → data URL fallita', err)
+        console.warn('Upload immagine manuale fallito', err)
+        toast.error('Upload foto fallito: verifica bucket e policy Storage')
       } finally {
         // @ts-ignore
         delete toSave.__pickedFile
@@ -447,7 +457,7 @@ export default function Editor() {
 
     // --- Genera o riallinea l'immagine per finestre (grid) e cassonetti ---
     const isCassonetto = String(toSave.kind).toLowerCase() === 'cassonetto'
-    if (!pickedFile && isCassonetto) {
+    if (!pickedFile && !hasManualOverride && isCassonetto) {
       try {
         const cfg = {
           width_mm: Number(toSave.width_mm) || 0,
@@ -471,7 +481,7 @@ export default function Editor() {
     }
 
     const hasGridWindow = Boolean((toSave as any)?.options?.gridWindow)
-    if (!pickedFile && hasGridWindow) {
+    if (!pickedFile && !hasManualOverride && hasGridWindow) {
       try {
         const blob = await gridWindowToPngBlob((toSave as any).options.gridWindow, 640, 640)
         const dataUrl = await blobToDataURL(blob)
@@ -485,7 +495,7 @@ export default function Editor() {
       }
     }
 
-    // Nota: __previewUrl può rimanere in memoria locale; la persistenza su DB lo rimuove già (vedi effetto items_json)
+    // Nota: __previewUrl può rimanere in memoria locale; in DB persistiamo solo URL stabili (http/https)
 
     if (editingId) {
       replaceItem(editingId, { ...toSave, id: editingId })
@@ -509,9 +519,10 @@ export default function Editor() {
       const itemsForPdf = await Promise.all(
         items.map(async (it: any) => {
           const { __previewUrl, __pickedFile, ...clean } = it ?? {};
+          const hasManualOverride = Boolean((clean as any)?.options?.manual_image_override);
 
           // Gestione rasterizzazione e normalizzazione immagini per PDF
-          if (clean?.options?.gridWindow) {
+          if (clean?.options?.gridWindow && !hasManualOverride) {
             try {
               const blob = await gridWindowToPngBlob(clean.options.gridWindow, 640, 640);
               const dataUrl = await blobToDataURL(blob);
@@ -523,7 +534,7 @@ export default function Editor() {
               const isData = /^data:image\//i.test(raw);
               clean.image_url = (isHttp || isData) ? raw : undefined;
             }
-          } else if (String(clean?.kind || '').toLowerCase() === 'cassonetto') {
+          } else if (String(clean?.kind || '').toLowerCase() === 'cassonetto' && !hasManualOverride) {
             try {
               const cfg = {
                 width_mm: Number(clean.width_mm) || 0,
@@ -550,7 +561,7 @@ export default function Editor() {
               const isData = /^data:image\//i.test(raw);
               clean.image_url = (isHttp || isData) ? raw : undefined;
             }
-          } else if (String(clean?.kind || '').toLowerCase() === 'persiana') {
+          } else if (String(clean?.kind || '').toLowerCase() === 'persiana' && !hasManualOverride) {
             try {
               const previewColor = (clean as any).options?.previewColor;
               const cfg = {
@@ -569,7 +580,7 @@ export default function Editor() {
               const isData = /^data:image\//i.test(raw);
               clean.image_url = (isHttp || isData) ? raw : undefined;
             }
-          } else if (String(clean?.kind || '').toLowerCase() === 'tapparella') {
+          } else if (String(clean?.kind || '').toLowerCase() === 'tapparella' && !hasManualOverride) {
             try {
               // Recupera il colore dalle options
               const previewColor = (clean as any).options?.previewColor;
@@ -588,7 +599,7 @@ export default function Editor() {
               const isData = /^data:image\//i.test(raw);
               clean.image_url = (isHttp || isData) ? raw : undefined;
             }
-          } else if (String(clean?.kind || '').toLowerCase() === 'porta_interna') {
+          } else if (String(clean?.kind || '').toLowerCase() === 'porta_interna' && !hasManualOverride) {
             try {
               const blob = await portaInternaToPngBlob(clean as any);
               const dataUrl = await blobToDataURL(blob);
@@ -796,12 +807,14 @@ export default function Editor() {
         }))
       : []
 
-    // Sanitize items before persistere: drop transient fields e URL temporanei
+    // Sanitize items before persistere: drop transient fields e mantieni solo URL persistenti
     const payload = entries.map(({ item }) => {
       if (!item || typeof item !== 'object') return item
       const { __pickedFile, __previewUrl, __needsUpload, ...rest } = item as any
       if (typeof rest.image_url === 'string') {
-        delete rest.image_url
+        const raw = rest.image_url.trim()
+        const isHttp = /^https?:\/\//i.test(raw)
+        rest.image_url = isHttp ? raw : undefined
       }
       return rest
     })

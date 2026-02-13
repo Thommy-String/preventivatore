@@ -254,7 +254,12 @@ function WindowSvg({ cfg }: WindowSvgProps) {
     const drawing = rows.reduce((acc, row, rowIdx) => {
         const rowH = (usableH * row.height_ratio) / totalRowRatios; // actual row height in mm
         const y0 = frame_mm + acc.offsetY;
-        const rowTopMm = acc.offsetMm;
+        const logicalRatio = Number.isFinite(row.height_ratio) && row.height_ratio > 0
+            ? row.height_ratio
+            : (1 / Math.max(1, rows.length));
+        const rowStartLogicalMm = acc.offsetLogicalMm;
+        const rowHeightLogicalMm = logicalRatio * height_mm;
+        const rowEndLogicalMm = rowStartLogicalMm + rowHeightLogicalMm;
         const rowHeightMm = rowH;
         acc.rowDimensions.push({ rowIdx, top: y0, bottom: y0 + rowH, heightMm: rowHeightMm });
 
@@ -274,12 +279,14 @@ function WindowSvg({ cfg }: WindowSvgProps) {
 
         let rowBarInfo = acc.rowBars.get(rowIdx);
         if (!rowBarInfo) {
+            const rowStartAbs = rowIdx === 0 ? 0 : (y0 - (mullion_mm / 2));
+            const rowEndAbs = rowIdx === rows.length - 1 ? height_mm : (y0 + rowH + (mullion_mm / 2));
             rowBarInfo = {
                 positions: [],
-                startMm: rowTopMm,
-                endMm: rowTopMm + rowHeightMm,
-                startPx: y0,
-                endPx: y0 + rowH,
+                startMm: rowStartLogicalMm,
+                endMm: rowEndLogicalMm,
+                startPx: rowStartAbs,
+                endPx: rowEndAbs,
             };
             acc.rowBars.set(rowIdx, rowBarInfo);
         }
@@ -378,18 +385,23 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     Math.min(barTop, maxTop);
 
                     if (pxPerMmRow > 0) {
-                        const barMmAbs = rowTopMm + offsetTopMm;
+                        const rawOffsetLogical = Number(bar?.offset_mm);
+                        const offsetBottomLogical = bar?.origin === 'bottom'
+                            ? rawOffsetLogical
+                            : rowHeightLogicalMm - rawOffsetLogical;
+                        const clampedBottomLogical = Math.max(0, Math.min(rowHeightLogicalMm, offsetBottomLogical));
+                        const barMmAbs = rowStartLogicalMm + (rowHeightLogicalMm - clampedBottomLogical);
                         rowBarInfo.positions.push({ absMm: barMmAbs, absPx: clampedY });
                     }
 
-                    // draw traverso as a filled piece matching the frame color, slightly thicker and inset horizontally,
-                    // with black contour lines above and below to match frame appearance
-                    const visualHeight = Math.max(2, Math.min(mullionPx * 1.15, barHeight * 0.95));
-                    const horizInset = Math.max(2, Math.min(colW * 0.06, frame_mm * 0.08));
-                    const rectX = startX + horizInset;
-                    const rectW = Math.max(1, colW - horizInset * 2);
+                    // Traverso integrato nell'anta: si appoggia all'area fermavetro con un lieve overlap,
+                    // evitando l'effetto "barra sospesa" nel vetro.
+                    const visualHeight = Math.max(beadProfileW * 1.2, Math.min(mullionPx * 1.25, barHeight));
+                    const overlap = Math.max(1.2, TECH_STYLE.STROKE_WIDTH_BEAD * 0.7);
+                    const rectX = bx - overlap;
+                    const rectW = Math.max(1, bw + overlap * 2);
                     const topY = clampedY - visualHeight / 2;
-                    const contourStroke = Math.max(1, strokeWidth / 1.2);
+                    const contourStroke = Math.max(1, strokeWidth * 0.9);
                     acc.nodes.push(
                         <g key={`hb-${rowIdx}-${colIdx}-${barIdx}`}>
                             <rect x={rectX} y={topY} width={rectW} height={visualHeight} fill={frameColor} />
@@ -592,11 +604,13 @@ function WindowSvg({ cfg }: WindowSvgProps) {
 
         acc.offsetY += rowH + mullion_mm;
         acc.offsetMm += rowH + (rowIdx < rows.length - 1 ? mullion_mm : 0);
+        acc.offsetLogicalMm += rowHeightLogicalMm;
         return acc;
     }, {
         nodes: [] as React.ReactNode[],
         offsetY: 0,
         offsetMm: 0,
+        offsetLogicalMm: 0,
         rowLabels: [] as Array<{ rowIdx: number; y: number; position: "top" | "bottom"; rowTop: number; rowBottom: number; labels: Array<{ x: number; text: string; start: number; end: number }>; }>,
         rowDimensions: [] as Array<{ rowIdx: number; top: number; bottom: number; heightMm: number }>,
         seenSegments: new Set<string>(),

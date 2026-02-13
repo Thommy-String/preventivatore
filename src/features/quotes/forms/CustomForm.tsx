@@ -1,5 +1,5 @@
 // src/features/quotes/forms/CustomForm.tsx
-import React, { useRef, useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import type { CustomItem, CustomField } from "../../quotes/types"
 
 type Props = {
@@ -10,8 +10,6 @@ type Props = {
 type FlexField = CustomField & { name?: string; label?: string } // tollera name/label
 
 export default function CustomForm({ draft, onChange }: Props) {
-    const fileRef = useRef<HTMLInputElement | null>(null)
-
     // Mobile-friendly numeric editing (allow empty while typing, commit on blur)
     const [widthStr, setWidthStr] = useState(draft.width_mm == null ? '' : String(draft.width_mm))
     const [heightStr, setHeightStr] = useState(draft.height_mm == null ? '' : String(draft.height_mm))
@@ -30,8 +28,6 @@ export default function CustomForm({ draft, onChange }: Props) {
     const details: FlexField[] = Array.isArray(draft.custom_fields)
         ? (draft.custom_fields as any)
         : []
-
-    const previewSrc: string | null = (draft as any).__previewUrl || draft.image_url || null
 
     const updateDetail = (idx: number, patch: Partial<FlexField>) => {
         const next = details.slice()
@@ -53,28 +49,6 @@ export default function CustomForm({ draft, onChange }: Props) {
         next.splice(idx, 1)
         set("custom_fields", next as any)
     }
-
-    // --- Mini uploader immagine (solo preview locale; upload avviene al salvataggio in ItemModal) ---
-    const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (!file.type.startsWith("image/")) { e.target.value = ""; return; }
-
-      // crea anteprima locale e memorizza anche il File (sarà caricato in ItemModal onSave)
-      const previewUrl = URL.createObjectURL(file);
-      onChange({ ...(draft as any), __pickedFile: file, __previewUrl: previewUrl } as any);
-      e.target.value = "";
-    };
-
-    const removeImage = () => {
-      const prev = (draft as any).__previewUrl as string | undefined;
-      if (prev) URL.revokeObjectURL(prev);
-      const next: any = { ...draft };
-      delete next.__pickedFile;
-      delete next.__previewUrl;
-      next.image_url = undefined;
-      onChange(next);
-    };
 
     return (
         <div className="space-y-4">
@@ -176,56 +150,6 @@ export default function CustomForm({ draft, onChange }: Props) {
                       placeholder="1"
                     />
                 </div>
-            </div>
-
-            {/* Immagine voce (mini uploader) */}
-            <div className="space-y-2">
-              <div className="text-xs font-medium text-gray-600">Immagine voce</div>
-
-              {previewSrc ? (
-                <div className="flex items-center gap-3">
-                  <img
-                    src={previewSrc}
-                    alt="Anteprima"
-                    className="h-24 w-24 object-contain rounded border bg-white"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      Cambia immagine
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={removeImage}
-                    >
-                      Rimuovi
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded border border-dashed p-4 text-sm text-gray-600 flex items-center justify-between">
-                  <span>Nessuna immagine. Caricane una dal dispositivo.</span>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    Carica immagine
-                  </button>
-                </div>
-              )}
-
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={onPickFile}
-              />
             </div>
 
             {/* Dettagli dinamici */}
