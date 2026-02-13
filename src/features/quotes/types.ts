@@ -61,6 +61,8 @@ export type GridWindowConfig = {
   glazing: 'singolo' | 'doppio' | 'triplo' | 'satinato'
   /** mostrare quote L/H sopra il disegno */
   showDims?: boolean
+  /** abilita texture effetto legno sul profilo */
+  wood_effect?: boolean
   /** altezza maniglia da terra in mm (default: metà altezza finestra) */
   handle_height_mm?: number
   /** colore maniglia per ante finestra (hex) */

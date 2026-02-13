@@ -337,6 +337,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                 width_mm: d.width_mm || 1200, height_mm: d.height_mm || 1500,
                 frame_mm: FRAME_MM, mullion_mm: MULLION_MM,
                 handle_color: '#ffffff',
+                wood_effect: false,
                 rows: [{
                     height_ratio: 1,
                     cols: [{ width_ratio: 1, leaf: { state: 'fissa' }, handle: false }]
@@ -361,6 +362,7 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
             frame_mm: FRAME_MM,
             mullion_mm: MULLION_MM,
             handle_color: '#ffffff',
+            wood_effect: false,
             rows: [{
                 height_ratio: (d.height_mm || 1500),
                 cols: [{ width_ratio: (d.width_mm || 1200), leaf: { state: 'fissa' } }]
@@ -996,7 +998,18 @@ export function WindowForm({ draft, onChange }: ItemFormProps<WindowItem>) {
                 
                 {/* Colore profilo su riga dedicata */}
                 <div>
-                    <div className="text-xs text-gray-500 mb-1">Colore profilo</div>
+                    <div className="mb-1 flex items-center justify-between gap-3">
+                        <div className="text-xs text-gray-500">Colore profilo</div>
+                        <label className="inline-flex items-center gap-2 text-xs text-gray-600">
+                            <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-gray-300 text-amber-700"
+                                checked={Boolean((grid as any)?.wood_effect)}
+                                onChange={(e) => applyPatch({}, ({ wood_effect: e.target.checked } as any))}
+                            />
+                            Effetto legno
+                        </label>
+                    </div>
                     <RalColorPicker
                         previewColor={(grid as any)?.frame_color ?? '#ffffff'}
                         labelValue={(d as any).color ?? ''}

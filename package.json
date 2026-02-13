@@ -10,6 +10,8 @@
     "build": "tsc -b && vite build",
     "build:xinfissi": "tsc -b && vite build --mode xinfissi",
     "build:ecosolution": "tsc -b && vite build --mode ecosolution",
+    "pdf:barda": "node ./experiments/barda-terms-pdf/generate.mjs",
+    "pdf:barda:download": "node ./experiments/barda-terms-pdf/generate.mjs --out \"%USERPROFILE%\\Downloads\\barda-condizioni-fornitura.pdf\"",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",

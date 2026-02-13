@@ -34,12 +34,17 @@ export function SummarySection({
 }: SummarySectionProps) {
   const discountedBg = theme?.soft || '#e8f7ec'
   const isEco = brandId === 'ecosolution'
+  const normalizePersianaNoFrameLabel = (value: string) => {
+    const clean = value.trim().replace(/[.:;,_-]+$/g, '')
+    return /^persian[ae]\s+senza\s+telaio$/i.test(clean) ? 'Telaio Senza' : value
+  }
 
   if (isEco) {
     const showIncl = !!showTotalIncl
     const vatPct = typeof vatPercent === 'number' && Number.isFinite(vatPercent) ? vatPercent : 22
     const displayedFinal = hasDiscount ? discountedTotal : originalTotal
     const totalIncl = displayedFinal * (1 + vatPct / 100)
+    const highlightBg = { backgroundColor: '#f7f7f7' }
 
     return (
       <View style={s.block}>
@@ -51,7 +56,7 @@ export function SummarySection({
           </View>
           {totals.length > 0 ? (
             totals.map((r, i) => {
-              const label = safeText(r.category, '-')
+              const label = normalizePersianaNoFrameLabel(safeText(r.category, '-'))
               const k = `eco-row-${label}-${Number.isFinite(r.amount) ? r.amount : 0}-${i}`
               const pieces = (r as any).pieces as number | null
               const surfaceRows = buildSurfaceSummary((r as any).surfaces, items as any)
@@ -90,8 +95,8 @@ export function SummarySection({
           {hasDiscount ? (
             <>
               <View style={[s.tr]}>
-                <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
-                <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
+                <Text style={[s.td, { flex: 2, fontWeight: 700 }, ...(showIncl ? [] : [highlightBg]) ]}>TOTALE (IVA ESCLUSA)</Text>
+                <Text style={[s.td, s.right, { fontWeight: 700 }, ...(showIncl ? [] : [highlightBg]) ]}>{euro(originalTotal)}</Text>
               </View>
 
               <View style={[s.tr, { borderBottomWidth: 0, backgroundColor: discountedBg }]}> 
@@ -117,8 +122,8 @@ export function SummarySection({
 
           {showIncl ? (
             <View style={[s.tr, { borderTopWidth: 0 }]}> 
-              <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>TOTALE (IVA INCLUSA)</Text>
-              <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(totalIncl)}</Text>
+              <Text style={[s.td, { flex: 2, fontWeight: 700 }, highlightBg]}>TOTALE (IVA INCLUSA)</Text>
+              <Text style={[s.td, s.right, { fontWeight: 700 }, highlightBg]}>{euro(totalIncl)}</Text>
             </View>
           ) : null}
         </View>
@@ -136,7 +141,7 @@ export function SummarySection({
         </View>
         {totals.length > 0 ? (
           totals.map((r, i) => {
-            const label = safeText(r.category, '-')
+            const label = normalizePersianaNoFrameLabel(safeText(r.category, '-'))
             const k = `row-${label}-${Number.isFinite(r.amount) ? r.amount : 0}-${i}`
             const pieces = (r as any).pieces as number | null
             const surfaceRows = buildSurfaceSummary((r as any).surfaces, items as any)
@@ -188,8 +193,8 @@ export function SummarySection({
         {hasDiscount ? (
           <>
             <View style={[s.tr]}>
-              <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
-              <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
+              <Text style={[s.td, { flex: 2, fontWeight: 700 }, ...((showTotalIncl ? [] : [{ backgroundColor: '#f7f7f7' }]) as any[])]}>TOTALE (IVA ESCLUSA)</Text>
+              <Text style={[s.td, s.right, { fontWeight: 700 }, ...((showTotalIncl ? [] : [{ backgroundColor: '#f7f7f7' }]) as any[])]}>{euro(originalTotal)}</Text>
             </View>
 
             <View style={[s.tr, { borderBottomWidth: 0, backgroundColor: '#e8f7ec' }]}> 
@@ -208,8 +213,8 @@ export function SummarySection({
           </>
         ) : (
           <View style={[s.tr, { borderBottomWidth: 0 }]}> 
-            <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA ESCLUSA)</Text>
-            <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(originalTotal)}</Text>
+            <Text style={[s.td, { flex: 2, fontWeight: 700 }, ...((showTotalIncl ? [] : [{ backgroundColor: '#f7f7f7' }]) as any[])]}>TOTALE (IVA ESCLUSA)</Text>
+            <Text style={[s.td, s.right, { fontWeight: 700 }, ...((showTotalIncl ? [] : [{ backgroundColor: '#f7f7f7' }]) as any[])]}>{euro(originalTotal)}</Text>
           </View>
         )}
         {(() => {
@@ -220,8 +225,8 @@ export function SummarySection({
           const totalIncl = displayedFinal * (1 + vatPct / 100)
           return (
             <View style={[s.tr, { borderTopWidth: 0 }]}> 
-              <Text style={[s.td, { flex: 2, fontWeight: 700 }]}>TOTALE (IVA INCLUSA)</Text>
-              <Text style={[s.td, s.right, { fontWeight: 700 }]}>{euro(totalIncl)}</Text>
+              <Text style={[s.td, { flex: 2, fontWeight: 700, backgroundColor: '#f7f7f7' }]}>TOTALE (IVA INCLUSA)</Text>
+              <Text style={[s.td, s.right, { fontWeight: 700, backgroundColor: '#f7f7f7' }]}>{euro(totalIncl)}</Text>
             </View>
           )
         })()}

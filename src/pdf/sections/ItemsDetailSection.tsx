@@ -14,6 +14,10 @@ type ItemsDetailSectionProps = {
 export function ItemsDetailSection({ companyLogoUrl, brandId, theme, items }: ItemsDetailSectionProps) {
   const isEco = brandId === 'ecosolution'
   const accent = theme?.accent || '#3fb26b'
+  const normalizePersianaNoFrameLabel = (value: string) => {
+    const clean = value.trim().replace(/[.:;,_-]+$/g, '')
+    return /^persian[ae]\s+senza\s+telaio$/i.test(clean) ? 'Telaio Senza' : value
+  }
 
   return (
     <>
@@ -55,6 +59,7 @@ export function ItemsDetailSection({ companyLogoUrl, brandId, theme, items }: It
             const qty = `Q.tà ${Number.isFinite(Number(it?.qty)) ? String(it.qty) : '1'}`
 
             const kindSlug = String(it?.kind || '').toLowerCase()
+            const normalizedTitle = normalizePersianaNoFrameLabel(title)
             const description = describeItem(it)
 
             const pairCount = pairs.length
@@ -150,7 +155,7 @@ export function ItemsDetailSection({ companyLogoUrl, brandId, theme, items }: It
                 <View style={s.itemContent}>
                   <View style={s.itemHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1 }}>
-                      <Text style={[s.itemKind, isEco ? { color: '#111827', fontSize: 14 } : {}]}>{title}</Text>
+                      <Text style={[s.itemKind, isEco ? { color: '#111827', fontSize: 14 } : {}]}>{normalizedTitle}</Text>
                       {(() => {
                         const dims = description
                         return dims ? <Text style={[s.itemDims, isEco ? { color: '#4b5563' } : {}]}>· {dims}</Text> : null

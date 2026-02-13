@@ -80,6 +80,7 @@ function makeFallbackCfg(): GridWindowConfig {
         mullion_mm: 20,
         glazing: 'doppio',
         showDims: true,
+        wood_effect: false,
         rows: [
             { height_ratio: 1, cols: [{ width_ratio: 1, leaf: { state: 'fissa' } }] }
         ]
@@ -261,6 +262,10 @@ function WindowSvg({ cfg }: WindowSvgProps) {
     const satinPatternId = React.useMemo(() => `satin-dots-pfeli3`, []);
     const dimensionLineDash = `${strokeWidth * 3.5} ${strokeWidth * 2.2}`;
     const frameColor = (safe as any).frame_color ?? '#ffffff';
+    const woodEnabled = Boolean((safe as any).wood_effect);
+    const woodPatternId = React.useMemo(() => `wood-grain-4m8h1`, []);
+    const woodPatternFill = `url(#${woodPatternId})`;
+    const woodTextureOpacity = 0.62;
     // Ensure a visible contour: prefer explicit `outline_color`, otherwise default to black
     const outlineColor = (safe as any).outline_color ?? '#000';
 
@@ -345,6 +350,16 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                         stroke={TECH_STYLE.FRAME_STROKE} 
                         strokeWidth={TECH_STYLE.STROKE_WIDTH_SASH} 
                     />
+                    {woodEnabled && (
+                        <rect
+                            x={sx}
+                            y={sy}
+                            width={sw}
+                            height={sh}
+                            fill={woodPatternFill}
+                            opacity={woodTextureOpacity}
+                        />
+                    )}
                     
                     {/* 2. Fermavetro (Colorato, bordo medio) */}
                     <rect 
@@ -353,6 +368,16 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                         stroke={TECH_STYLE.BEAD_STROKE || TECH_STYLE.FRAME_STROKE} 
                         strokeWidth={TECH_STYLE.STROKE_WIDTH_BEAD} 
                     />
+                    {woodEnabled && (
+                        <rect
+                            x={bx}
+                            y={by}
+                            width={bw}
+                            height={bh}
+                            fill={woodPatternFill}
+                            opacity={woodTextureOpacity}
+                        />
+                    )}
 
                     {/* 3. Vetro (Azzurro, bordo sottile) */}
                     <rect 
@@ -418,6 +443,16 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     acc.nodes.push(
                         <g key={`hb-${rowIdx}-${colIdx}-${barIdx}`}>
                             <rect x={rectX} y={topY} width={rectW} height={visualHeight} fill={frameColor} />
+                            {woodEnabled && (
+                                <rect
+                                    x={rectX}
+                                    y={topY}
+                                    width={rectW}
+                                    height={visualHeight}
+                                    fill={woodPatternFill}
+                                    opacity={woodTextureOpacity}
+                                />
+                            )}
                             <line x1={rectX} y1={topY} x2={rectX + rectW} y2={topY} stroke={outlineColor} strokeWidth={contourStroke} strokeLinecap="square" />
                             <line x1={rectX} y1={topY + visualHeight} x2={rectX + rectW} y2={topY + visualHeight} stroke={outlineColor} strokeWidth={contourStroke} strokeLinecap="square" />
                         </g>
@@ -737,6 +772,39 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     <rect x="0" y="0" width={30} height={30} fill="transparent" />
                     <circle cx={7.5} cy={7.5} r={3} fill="#d1d5db" />
                 </pattern>
+                <pattern id={woodPatternId} patternUnits="userSpaceOnUse" width={260} height={320}>
+                    <path d="M30 0 C 18 74, 40 168, 26 320" stroke="rgba(0,0,0,0.12)" strokeWidth="2.4" fill="none" />
+                    <path d="M66 0 C 78 82, 56 166, 70 320" stroke="rgba(0,0,0,0.1)" strokeWidth="2.1" fill="none" />
+                    <path d="M102 0 C 90 80, 114 170, 98 320" stroke="rgba(0,0,0,0.11)" strokeWidth="2.2" fill="none" />
+                    <path d="M140 0 C 154 84, 130 168, 146 320" stroke="rgba(0,0,0,0.095)" strokeWidth="2" fill="none" />
+                    <path d="M178 0 C 166 82, 190 170, 174 320" stroke="rgba(0,0,0,0.11)" strokeWidth="2.2" fill="none" />
+                    <path d="M214 0 C 226 86, 204 168, 218 320" stroke="rgba(0,0,0,0.095)" strokeWidth="2" fill="none" />
+                    <line x1="18" y1="0" x2="18" y2="320" stroke="rgba(0,0,0,0.07)" strokeWidth="0.6" />
+                    <line x1="50" y1="0" x2="50" y2="320" stroke="rgba(0,0,0,0.06)" strokeWidth="0.55" />
+                    <line x1="84" y1="0" x2="84" y2="320" stroke="rgba(0,0,0,0.07)" strokeWidth="0.6" />
+                    <line x1="122" y1="0" x2="122" y2="320" stroke="rgba(0,0,0,0.06)" strokeWidth="0.55" />
+                    <line x1="160" y1="0" x2="160" y2="320" stroke="rgba(0,0,0,0.07)" strokeWidth="0.6" />
+                    <line x1="196" y1="0" x2="196" y2="320" stroke="rgba(0,0,0,0.06)" strokeWidth="0.55" />
+                    <line x1="234" y1="0" x2="234" y2="320" stroke="rgba(0,0,0,0.07)" strokeWidth="0.6" />
+                    <line x1="12" y1="0" x2="12" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="28" y1="0" x2="28" y2="320" stroke="rgba(0,0,0,0.035)" strokeWidth="0.32" />
+                    <line x1="44" y1="0" x2="44" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="60" y1="0" x2="60" y2="320" stroke="rgba(0,0,0,0.035)" strokeWidth="0.32" />
+                    <line x1="76" y1="0" x2="76" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="92" y1="0" x2="92" y2="320" stroke="rgba(0,0,0,0.035)" strokeWidth="0.32" />
+                    <line x1="108" y1="0" x2="108" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="124" y1="0" x2="124" y2="320" stroke="rgba(0,0,0,0.035)" strokeWidth="0.32" />
+                    <line x1="140" y1="0" x2="140" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="156" y1="0" x2="156" y2="320" stroke="rgba(0,0,0,0.035)" strokeWidth="0.32" />
+                    <line x1="172" y1="0" x2="172" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="188" y1="0" x2="188" y2="320" stroke="rgba(0,0,0,0.035)" strokeWidth="0.32" />
+                    <line x1="204" y1="0" x2="204" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="220" y1="0" x2="220" y2="320" stroke="rgba(0,0,0,0.035)" strokeWidth="0.32" />
+                    <line x1="236" y1="0" x2="236" y2="320" stroke="rgba(0,0,0,0.04)" strokeWidth="0.34" />
+                    <line x1="38" y1="0" x2="38" y2="320" stroke="rgba(255,255,255,0.018)" strokeWidth="0.38" />
+                    <line x1="144" y1="0" x2="144" y2="320" stroke="rgba(255,255,255,0.017)" strokeWidth="0.36" />
+                    <line x1="222" y1="0" x2="222" y2="320" stroke="rgba(255,255,255,0.018)" strokeWidth="0.38" />
+                </pattern>
             </defs>
             {/* Telaio esterno: fill + stroke (Colorato) */}
             <rect 
@@ -745,6 +813,16 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                 stroke={TECH_STYLE.FRAME_STROKE} 
                 strokeWidth={TECH_STYLE.STROKE_WIDTH_FRAME} 
             />
+            {woodEnabled && (
+                <rect
+                    x={0}
+                    y={0}
+                    width={width_mm}
+                    height={height_mm}
+                    fill={woodPatternFill}
+                    opacity={woodTextureOpacity}
+                />
+            )}
             {/* Bordo interno telaio (separazione telaio/ante) */}
             <rect 
                 x={frame_mm} y={frame_mm} width={innerW} height={innerH} 

@@ -205,7 +205,7 @@ const RAL_LIST: RalColor[] = [
   { code: 'RAL 9018', name: 'Bianco papiro', hex: '#D0D0D0' },
   
   // Tinte Legno (Simulati)
-  { code: 'Golden Oak', name: 'Quercia Dorata', hex: '#D68029' },
+  { code: 'Golden Oak', name: 'Quercia Dorata', hex: '#B5833D' },
   { code: 'Noce', name: 'Noce Scuro', hex: '#5D3A25' },
   { code: 'Noce Chiaro', name: 'Noce Chiaro', hex: '#8F5E38' },
   { code: 'Winchester', name: 'Winchester', hex: '#A87B4E' },
