@@ -15,6 +15,7 @@ import { gridWindowToPngBlob } from '../features/quotes/svg/windowToPng'
 import { cassonettoToPngBlob } from '../features/quotes/cassonetto/cassonettoToPng'
 import { persianaToPngBlob } from '../features/quotes/persiana/persianaToPng'
 import { tapparellaToPngBlob } from '../features/quotes/tapparella/tapparellaToPng'
+import { portaBlindataToPngBlob } from '../features/quotes/porta-blindata/portaBlindataToPng'
 import { portaInternaToPngBlob } from '../features/quotes/porta-interna/portaInternaToPng'
 import { TERMS_PROFILES, buildTermsDocument } from '../content/terms'
 import type { TermsProfile } from '../content/terms'
@@ -518,7 +519,7 @@ export default function Editor() {
       // 1) Prepara gli items per il PDF: per le finestre genera PNG on-the-fly come data URL
       const itemsForPdf = await Promise.all(
         items.map(async (it: any) => {
-          const { __previewUrl, __pickedFile, ...clean } = it ?? {};
+          const { __previewUrl, __pickedFile, __needsUpload, ...clean } = it ?? {};
           const hasManualOverride = Boolean((clean as any)?.options?.manual_image_override);
 
           // Gestione rasterizzazione e normalizzazione immagini per PDF
@@ -594,6 +595,18 @@ export default function Editor() {
               clean.image_url = dataUrl;
             } catch (e) {
               console.warn('Rasterizzazione tapparella → PNG fallita', e);
+              const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
+              const isHttp = /^https?:\/\//i.test(raw);
+              const isData = /^data:image\//i.test(raw);
+              clean.image_url = (isHttp || isData) ? raw : undefined;
+            }
+          } else if (String(clean?.kind || '').toLowerCase() === 'porta_blindata' && !hasManualOverride) {
+            try {
+              const blob = await portaBlindataToPngBlob(clean as any, 640, 640);
+              const dataUrl = await blobToDataURL(blob);
+              clean.image_url = dataUrl;
+            } catch (e) {
+              console.warn('Rasterizzazione porta blindata → PNG fallita', e);
               const raw = typeof clean.image_url === 'string' ? clean.image_url.trim() : '';
               const isHttp = /^https?:\/\//i.test(raw);
               const isData = /^data:image\//i.test(raw);

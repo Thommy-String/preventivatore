@@ -269,6 +269,7 @@ export function detailPairs(it: any): Array<[string, string]> {
   for (const [k, v] of Object.entries(it)) {
     if (v === undefined || v === null || String(v).trim() === '') continue
     if (typeof v === 'object' || typeof v === 'function') continue
+    if (k.startsWith('__')) continue
     if (skip.has(k)) continue
     if (k === 'serratura' || k === 'spioncino' || k === 'handle_position') continue
 

@@ -8,6 +8,7 @@ import WindowSvg from "../window/WindowSvg"
 import CassonettoSvg from "../cassonetto/CassonettoSvg"
 import PersianaSvg from "../persiana/PersianaSvg"
 import TapparellaSvg from "../tapparella/TapparellaSvg"
+import { PortaBlindataSvg } from "../porta-blindata/PortaBlindataSvg"
 
 type Props = {
     item: QuoteItem
@@ -38,28 +39,32 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                 <div className="flex gap-4">
                     {/* Thumbnail più grande */}
                     <div className="relative w-24 h-24 sm:w-32 sm:h-32 shrink-0 rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50 to-white flex items-center justify-center shadow-sm overflow-hidden">
-                        {(
-                            // 1) Disegno live per FINESTRA con griglia
-                            (it.kind === 'finestra' && (it as any)?.options?.gridWindow)
-                        ) ? (
-                            <WindowSvg
-                                cfg={(it as any).options.gridWindow}
-                                stroke={(it as any).options?.gridWindow?.frame_color ?? (it as any).color ?? '#222'}
-                            />
-                        ) : (
-                            // 2) Disegno live per CASSONETTO (usa misure direttamente sull'item)
-                            it.kind === 'cassonetto' ? (
-                                <CassonettoSvg
-                                    cfg={{
-                                        width_mm: (it as any).width_mm ?? 1000,
-                                        height_mm: (it as any).height_mm ?? 250,
-                                        depth_mm: (it as any).depth_mm ?? null,
-                                        celino_mm: (it as any).celino_mm ?? (it as any).extension_mm ?? null,
-                                        color: (it as any).options?.previewColor,
-                                    }}
-                                />
-                            ) : (
-                                it.kind === 'persiana' ? (
+                        {(() => {
+                            if (it.kind === 'finestra' && (it as any)?.options?.gridWindow) {
+                                return (
+                                    <WindowSvg
+                                        cfg={(it as any).options.gridWindow}
+                                        stroke={(it as any).options?.gridWindow?.frame_color ?? (it as any).color ?? '#222'}
+                                    />
+                                )
+                            }
+
+                            if (it.kind === 'cassonetto') {
+                                return (
+                                    <CassonettoSvg
+                                        cfg={{
+                                            width_mm: (it as any).width_mm ?? 1000,
+                                            height_mm: (it as any).height_mm ?? 250,
+                                            depth_mm: (it as any).depth_mm ?? null,
+                                            celino_mm: (it as any).celino_mm ?? (it as any).extension_mm ?? null,
+                                            color: (it as any).options?.previewColor,
+                                        }}
+                                    />
+                                )
+                            }
+
+                            if (it.kind === 'persiana') {
+                                return (
                                     <PersianaSvg
                                         cfg={{
                                             width_mm: (it as any).width_mm ?? 1000,
@@ -68,24 +73,39 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                                             color: (it as any).options?.previewColor,
                                         }}
                                     />
-                                ) : (
-                                it.kind === 'tapparella' ? (
+                                )
+                            }
+
+                            if (it.kind === 'tapparella') {
+                                return (
                                     <TapparellaSvg
                                         cfg={{
                                             width_mm: (it as any).width_mm ?? 1000,
                                             height_mm: (it as any).height_mm ?? 1400,
-                                            color: (it as any).options?.previewColor
+                                            color: (it as any).options?.previewColor,
                                         }}
                                     />
-                                ) : (
-                                    // 3) Fallback immagine (preview/data/public) o icona di default
-                                    thumbSrc
-                                        ? <img src={thumbSrc} alt={label} loading="lazy" className="max-w-[85%] max-h-[85%] object-contain rounded" />
-                                        : <div className="text-gray-400 text-xs font-medium">Anteprima</div>
                                 )
-                            )
-                            )
-                        )}
+                            }
+
+                            if (it.kind === 'porta_blindata') {
+                                return (
+                                    <PortaBlindataSvg
+                                        width_mm={Number((it as any).width_mm) || 900}
+                                        height_mm={Number((it as any).height_mm) || 2100}
+                                        color={(it as any).options?.previewColor || (it as any).color}
+                                        serratura={(it as any).serratura}
+                                        spioncino={(it as any).spioncino}
+                                        handle_position={(it as any).handle_position}
+                                        handle_color={(it as any).options?.handleColor}
+                                    />
+                                )
+                            }
+
+                            return thumbSrc
+                                ? <img src={thumbSrc} alt={label} loading="lazy" className="max-w-[85%] max-h-[85%] object-contain rounded" />
+                                : <div className="text-gray-400 text-xs font-medium">Anteprima</div>
+                        })()}
                         {!shouldShowDimensions && (
                             <>
                                 <div className="absolute bottom-1 left-1 right-1 text-center text-xs text-gray-700 font-semibold bg-white/90 backdrop-blur-sm rounded py-0.5">

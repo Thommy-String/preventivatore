@@ -112,11 +112,12 @@ const termsPage2 = [
 const THEME = {
   black: '#1D1D1F',        // Apple "Rich Black"
   darkGray: '#4a4a50',     // Darker body gray for better readability
-  lightGray: '#D2D2D7',    // Apple "Divider Gray"
+  lightGray: '#000000',    // divider black"
   bgCard: '#F5F5F7',       // Apple "System Gray 6" (Light BG)
   accent: '#1E8E5A',       // Brand Green
   accentPastel: '#DFF3E8',
   accentText: '#195B3F',
+  darkRed: '#860707',
 }
 
 const FONT_SCALE = 1.18
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     marginBottom: 22,
-    borderBottomWidth: 0.5,
+    borderBottomWidth: 1,
     borderBottomColor: THEME.lightGray,
     paddingBottom: 9,
   },
@@ -193,7 +194,7 @@ const styles = StyleSheet.create({
   sectionLabelInline: {
     fontSize: fz(8),
     fontFamily: 'Helvetica-Bold',
-    color: THEME.darkGray,
+    color: THEME.darkRed,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
@@ -206,7 +207,16 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: fz(8),
     fontFamily: 'Helvetica-Bold',
-    color: THEME.darkGray,
+    color: THEME.darkRed,
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+    marginTop: 6,
+  },
+  sectionLabelSecondPage: {
+    fontSize: fz(8),
+    fontFamily: 'Helvetica-Bold',
+    color: THEME.darkRed,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
     marginBottom: 6,
@@ -233,8 +243,8 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 0.8,
-    borderColor: '#DCDDDF',
+    borderWidth: 1.35,
+    borderColor: '#1F1F22',
     borderRadius: 4,
     paddingTop: 9,
     paddingBottom: 8,
@@ -274,7 +284,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica',
   },
   cardDivider: {
-    height: 0.6,
+    height: 1,
     backgroundColor: '#E1E2E5',
     marginBottom: 5,
   },
@@ -328,7 +338,7 @@ const styles = StyleSheet.create({
   noteBox: {
     marginTop: 3,
     paddingTop: 6,
-    borderTopWidth: 0.5,
+    borderTopWidth: 1,
     borderTopColor: THEME.lightGray,
   },
   noteText: {
@@ -379,7 +389,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   signLine: {
-    height: 0.5,
+    height: 1,
     backgroundColor: THEME.lightGray,
     width: '90%',
   },
@@ -587,11 +597,11 @@ function BardaTermsPdf({ logoSrc }) {
       h(Text, { style: styles.mainTitle }, 'Condizioni di Fornitura'),
       h(Text, { style: styles.subTitle }, 'Segue da pagina precedente'),
 
-      h(Text, { style: styles.sectionLabel }, 'Termini Generali'),
+      h(Text, { style: styles.sectionLabelSecondPage }, 'Termini Generali'),
       ...termsPage1.map(t => h(TermSection, { key: `p2-${t.title}`, ...t })),
       h(View, { style: { height: 8 } }),
       
-      h(Text, { style: styles.sectionLabel }, 'Normative e Specifiche'),
+      h(Text, { style: styles.sectionLabelSecondPage }, 'Normative e Specifiche'),
       ...termsPage2.map(t => h(TermSection, { key: t.title, ...t })),
 
       h(View, { style: { height: 20 } }),
