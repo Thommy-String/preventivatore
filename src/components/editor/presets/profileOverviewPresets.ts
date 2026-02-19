@@ -1,7 +1,7 @@
 // src/components/editor/presets/profileOverviewPresets.ts
 import type { ProfileOverview, ProfileOverviewFeature } from "../../../stores/useQuoteStore";
 
-// ⬇️ importa le immagini (mettile in: src/assets/images/profiles/)
+
 import alumilS77Img from "../../../assets/images/profiles/alumil-s77.png";
 import wds76mdImg from "../../../assets/images/profiles/wds-76-md.jpg";
 import wds76adImg from "../../../assets/images/profiles/wds-76-ad.jpg";
@@ -12,6 +12,7 @@ import xPrem76PorteImg from "../../../assets/images/profiles/x-premium-76-porte.
 import xPrem76ScorrImg from "../../../assets/images/profiles/x-premium-76-scorrevole.jpg";
 import xUltra70Img from "../../../assets/images/profiles/x-ultra-70.jpg";
 import xUltra60Img from "../../../assets/images/profiles/x-ultra-60.jpg";
+
 
 const f = (eyebrow: string, title: string, description: string): ProfileOverviewFeature => ({
   id: crypto.randomUUID(),

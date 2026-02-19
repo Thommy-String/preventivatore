@@ -9,6 +9,7 @@ import CassonettoSvg from "../cassonetto/CassonettoSvg"
 import PersianaSvg from "../persiana/PersianaSvg"
 import TapparellaSvg from "../tapparella/TapparellaSvg"
 import { PortaBlindataSvg } from "../porta-blindata/PortaBlindataSvg"
+import { PortaInternaSvg } from "../porta-interna/PortaInternaSvg"
 
 type Props = {
     item: QuoteItem
@@ -97,6 +98,15 @@ export function ItemCard({ item: it, onEdit, onDuplicate, onRemove }: Props) {
                                         serratura={(it as any).serratura}
                                         spioncino={(it as any).spioncino}
                                         handle_position={(it as any).handle_position}
+                                        handle_color={(it as any).options?.handleColor}
+                                    />
+                                )
+                            }
+
+                            if (it.kind === 'porta_interna') {
+                                return (
+                                    <PortaInternaSvg
+                                        item={it as any}
                                         handle_color={(it as any).options?.handleColor}
                                     />
                                 )
