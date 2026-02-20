@@ -256,6 +256,10 @@ export function detailPairs(it: any): Array<[string, string]> {
     'serratura', // explicitly handled above
     'spioncino', // explicitly handled above
     'handle_position',
+    'handle_color',
+    'handlecolor',
+    'maniglia_colore',
+    'colore_maniglia',
   ])
   const kindLow = String(it.kind).toLowerCase()
   if (kindLow === 'persiana' || kindLow === 'cassonetto') {
@@ -270,6 +274,8 @@ export function detailPairs(it: any): Array<[string, string]> {
     if (v === undefined || v === null || String(v).trim() === '') continue
     if (typeof v === 'object' || typeof v === 'function') continue
     if (k.startsWith('__')) continue
+    const kNorm = k.replace(/[_\s-]/g, '').toLowerCase()
+    if (kNorm === 'handlecolor' || kNorm === 'manigliacolore' || kNorm === 'coloremaniglia') continue
     if (skip.has(k)) continue
     if (k === 'serratura' || k === 'spioncino' || k === 'handle_position') continue
 
