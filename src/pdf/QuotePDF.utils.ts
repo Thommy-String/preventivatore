@@ -199,7 +199,7 @@ export function detailPairs(it: any): Array<[string, string]> {
 
   const uwRaw = pickFirst(it, ['uw'])
   const uwLabel = uwRaw !== undefined && uwRaw !== null && String(uwRaw).trim() !== ''
-    ? `<= ${String(uwRaw)} W/m2K`
+    ? `<= ${String(uwRaw)} W/m²K`
     : undefined
 
   const showHandlePosition = kindLower !== 'porta_interna' && kindLower !== 'porta_blindata'
