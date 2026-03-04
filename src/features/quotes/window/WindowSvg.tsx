@@ -751,17 +751,31 @@ function WindowSvg({ cfg }: WindowSvgProps) {
         pushDimensionGroup(rowHeightSegments, Array.from(boundarySet));
     }
 
-    const totalLabelY = height_mm + bottomStackHeight + labelGap + totalFontSize * 0.9;
+    const bottomRowLabelYs = drawing.rowLabels
+        .filter(row => row.position === "bottom")
+        .map(row => row.y);
+    const hasBottomRowLabels = bottomRowLabelYs.length > 0;
+    const bottomReferenceY = hasBottomRowLabels
+        ? Math.max(...bottomRowLabelYs)
+        : height_mm + bottomStackHeight;
+    const totalWidthLabelGap = hasBottomRowLabels
+        ? Math.max(34, Math.min(52, totalFontSize * 0.55))
+        : (labelGap + totalFontSize * 0.9);
+    const totalLabelY = bottomReferenceY + totalWidthLabelGap;
     const leftLabelX = -(labelGap + totalFontSize * 0.75);
     const labelLineGap = totalFontSize * 0.6;
+    const totalWidthLineGap = Math.max(18, Math.min(28, totalFontSize * 0.32));
     
-    // Logic to hide total width if duplicate of bottom row (requested by user)
-    const isMultiRow = rows.length > 1;
-    const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
-    const lastRowIsSingle = lastRow 
-        ? (lastRow.cols.length === 1 || lastRow.cols.filter(c => (Number(c.width_ratio ?? 1)) > 0).length === 1)
-        : false;
-    const showTotalWidth = !isMultiRow || !lastRowIsSingle;
+    // Hide total width only when a real duplicate full-width label is already shown on a bottom row.
+    const fullWidthTolerance = 0.5;
+    const hasBottomFullWidthLabel = drawing.rowLabels.some(row =>
+        row.position === "bottom"
+        && row.labels.some(label =>
+            Math.abs(label.start) <= fullWidthTolerance
+            && Math.abs(label.end - width_mm) <= fullWidthTolerance
+        )
+    );
+    const showTotalWidth = !hasBottomFullWidthLabel;
 
     return (
         <svg
@@ -862,8 +876,8 @@ function WindowSvg({ cfg }: WindowSvgProps) {
                     <g stroke={outlineColor} strokeWidth={strokeWidth / 1.5} strokeDasharray={dimensionLineDash} fill="none">
                         {showTotalWidth && (
                             <>
-                                <line x1={0} y1={height_mm} x2={0} y2={totalLabelY - labelLineGap} />
-                                <line x1={width_mm} y1={height_mm} x2={width_mm} y2={totalLabelY - labelLineGap} />
+                                <line x1={0} y1={height_mm} x2={0} y2={totalLabelY - totalWidthLineGap} />
+                                <line x1={width_mm} y1={height_mm} x2={width_mm} y2={totalLabelY - totalWidthLineGap} />
                             </>
                         )}
                         <line x1={0} y1={0} x2={leftLabelX + labelLineGap} y2={0} />
